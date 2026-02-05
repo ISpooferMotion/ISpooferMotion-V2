@@ -84,6 +84,7 @@ function downloadAndInstallUpdate(downloadUrl) {
  */
 function performVersionCheck() {
   const currentVersion = app.getVersion();
+  const platform = process.platform;
 
   return new Promise((resolve) => {
     https.get(versionUrl, { timeout: 5000 }, (res) => {
@@ -96,16 +97,34 @@ function performVersionCheck() {
       res.on('end', () => {
         try {
           const release = JSON.parse(data);
-          const hasVersion = Boolean(release.version);
-          const updateAvailable = hasVersion && isVersionNewer(release.version, currentVersion);
+          let versionKey = 'version';
+          let downloadKey = 'downloadUrl';
+          let notesKey = 'releaseNotes';
+
+          if (platform === 'darwin') {
+            versionKey = 'macVersion';
+            downloadKey = 'macDownloadUrl';
+            notesKey = 'macReleaseNotes';
+          } else if (platform === 'linux') {
+            versionKey = 'linuxVersion';
+            downloadKey = 'linuxDownloadUrl';
+            notesKey = 'linuxReleaseNotes';
+          }
+
+          const selectedVersion = release[versionKey];
+          const selectedDownloadUrl = release[downloadKey];
+          const selectedReleaseNotes = release[notesKey];
+
+          const hasVersion = Boolean(selectedVersion);
+          const updateAvailable = hasVersion && isVersionNewer(selectedVersion, currentVersion);
 
           if (updateAvailable) {
             const mainWindow = getMainWindow();
             if (mainWindow) {
               mainWindow.webContents.send('update-available', {
-                version: release.version,
-                downloadUrl: release.downloadUrl,
-                releaseNotes: release.releaseNotes || '',
+                version: selectedVersion,
+                downloadUrl: selectedDownloadUrl,
+                releaseNotes: selectedReleaseNotes || '',
               });
             }
           }
@@ -113,8 +132,8 @@ function performVersionCheck() {
           resolve({
             ok: true,
             updateAvailable,
-            version: release.version || null,
-            downloadUrl: release.downloadUrl || null,
+            version: selectedVersion || null,
+            downloadUrl: selectedDownloadUrl || null,
           });
         } catch (err) {
           if (DEVELOPER_MODE) console.warn('[Version Check] Failed to parse version data:', err.message);
