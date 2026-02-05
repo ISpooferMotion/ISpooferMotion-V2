@@ -19,7 +19,25 @@ function setGetMainWindow(fn) {
  */
 async function downloadAndInstallUpdate(downloadUrl) {
   const tempDir = path.join(app.getPath('temp'), 'ispoofermotion-update');
-  const installerPath = path.join(tempDir, 'ISpooferMotion-Setup.exe');
+  const platform = process.platform;
+
+  const getExtensionFromUrl = (url) => {
+    try {
+      const parsed = new URL(url);
+      const ext = path.extname(parsed.pathname);
+      return ext || '';
+    } catch (e) {
+      return '';
+    }
+  };
+
+  let defaultExt = '.exe';
+  if (platform === 'darwin') defaultExt = '.dmg';
+  if (platform === 'linux') defaultExt = '.AppImage';
+
+  const urlExt = getExtensionFromUrl(downloadUrl);
+  const finalExt = urlExt || defaultExt;
+  const installerPath = path.join(tempDir, `ISpooferMotion-Update${finalExt}`);
 
   console.log('[Update] downloadAndInstallUpdate called with URL:', downloadUrl);
   console.log('[Update] Temp directory:', tempDir);
@@ -118,23 +136,41 @@ async function downloadAndInstallUpdate(downloadUrl) {
     }
 
     console.log('[Update] Starting installer:', installerPath);
-    console.log('[Update] Spawning cmd with args: ["/c", "' + installerPath + '"]');
 
-    // Use spawn with cmd /c to run installer via Windows shell
-    const child = spawn('cmd', ['/c', installerPath], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true
-    });
+    let child = null;
 
-    console.log('[Update] Spawn process created, PID:', child.pid);
+    if (platform === 'win32') {
+      console.log('[Update] Spawning cmd with args: ["/c", "' + installerPath + '"]');
+      // Use spawn with cmd /c to run installer via Windows shell
+      child = spawn('cmd', ['/c', installerPath], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      });
+    } else if (platform === 'darwin') {
+      console.log('[Update] Spawning open with args: ["' + installerPath + '"]');
+      child = spawn('open', [installerPath], {
+        detached: true,
+        stdio: 'ignore'
+      });
+    } else {
+      console.log('[Update] Spawning xdg-open with args: ["' + installerPath + '"]');
+      child = spawn('xdg-open', [installerPath], {
+        detached: true,
+        stdio: 'ignore'
+      });
+    }
 
-    child.on('error', (err) => {
-      console.error('[Update] Spawn error event:', err);
-    });
+    if (child) {
+      console.log('[Update] Spawn process created, PID:', child.pid);
 
-    child.unref();
-    console.log('[Update] Process unreferenced (detached)');
+      child.on('error', (err) => {
+        console.error('[Update] Spawn error event:', err);
+      });
+
+      child.unref();
+      console.log('[Update] Process unreferenced (detached)');
+    }
 
     // Give installer time to start, then quit the app
     console.log('[Update] Setting 1000ms timeout before app.quit()');
