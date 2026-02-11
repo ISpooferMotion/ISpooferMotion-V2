@@ -6,7 +6,7 @@ const { DEVELOPER_MODE } = require('./common');
 const { uploadAsset } = require('./roblox-api');
 
 /**
- * Downloads an animation asset with progress reporting
+ * Downloads stuff
  */
 async function downloadAnimationAssetWithProgress(url, robloxCookie, filePath, transferId, entryName, originalAssetId, sendTransferUpdate, placeId = null, options = {}) {
   sendTransferUpdate({ id: transferId, name: entryName, originalAssetId: originalAssetId, status: 'processing', direction: 'download', progress: 0, error: null, size: 0 });
