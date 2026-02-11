@@ -107,6 +107,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateError: (callback) => ipcRenderer.on('update-error', (event, ...args) => callback(...args)),
   checkForUpdates: () => ipcRenderer.invoke('manual-check-for-update'),
 
+  // Plugin updates
+  getInstalledPluginVersion: () => ipcRenderer.invoke('get-installed-plugin-version'),
+  onPluginUpdateAvailable: (callback) => ipcRenderer.on('plugin-update-available', (event, ...args) => callback(...args)),
+  onPluginUpdateProgress: (callback) => ipcRenderer.on('plugin-update-progress', (event, ...args) => callback(...args)),
+  onPluginUpdateComplete: (callback) => ipcRenderer.on('plugin-update-complete', (event, ...args) => callback(...args)),
+  onPluginUpdateError: (callback) => ipcRenderer.on('plugin-update-error', (event, ...args) => callback(...args)),
+
   // Generic invoke for dynamic IPC calls
   invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args)
   

@@ -8,8 +8,10 @@ const { registerIpcHandlers } = require('./modules/utils/ipc-handlers');
 const { DEVELOPER_MODE, initializeFileLogging } = require('./modules/utils/common');
 const { AssetServer } = require('./modules/utils/asset-server');
 const { setGetMainWindow } = require('./modules/utils/update-manager');
+const { compareVersions, getInstalledPluginInfo, downloadAndInstallPlugin } = require('./modules/utils/plugin-updater');
 
 const versionUrl = 'https://www.incredidev.com/api/v2/version-release';
+let pluginUpdateInProgress = false;
 
 // Initialize file logging
 const logsDir = path.join(app.getPath('userData'), 'ispoofer_logs');
@@ -79,6 +81,80 @@ function downloadAndInstallUpdate(downloadUrl) {
   download(downloadUrl);
 }
 
+async function performPluginUpdateCheck(release) {
+  const pluginVersion = release?.pluginVersion;
+  const pluginDownloadUrl = release?.pluginDownloadUrl;
+  const pluginReleaseNotes = release?.pluginReleaseNotes || '';
+
+  const installed = await getInstalledPluginInfo();
+  const installedVersion = installed.version;
+  if (!installed.directory) {
+    return {
+      updateAvailable: false,
+      installedVersion: null,
+      latestVersion: pluginVersion || null,
+      downloadUrl: null,
+    };
+  }
+
+  if (!pluginVersion || !pluginDownloadUrl) {
+    return {
+      updateAvailable: false,
+      installedVersion,
+      latestVersion: pluginVersion || null,
+      downloadUrl: pluginDownloadUrl || null,
+    };
+  }
+
+  const updateAvailable = !installedVersion || compareVersions(pluginVersion, installedVersion) > 0;
+
+  if (updateAvailable) {
+    const win = getMainWindow();
+    if (win && win.webContents) {
+      win.webContents.send('plugin-update-available', {
+        version: pluginVersion,
+        installedVersion: installedVersion || null,
+        downloadUrl: pluginDownloadUrl,
+        releaseNotes: pluginReleaseNotes,
+      });
+    }
+
+    if (!pluginUpdateInProgress) {
+      pluginUpdateInProgress = true;
+      try {
+        const winInner = getMainWindow();
+        const onProgress = (percent) => {
+          if (winInner && winInner.webContents) {
+            winInner.webContents.send('plugin-update-progress', { percent });
+          }
+        };
+
+        const installedPath = await downloadAndInstallPlugin(pluginDownloadUrl, pluginVersion, onProgress);
+        if (winInner && winInner.webContents) {
+          winInner.webContents.send('plugin-update-complete', {
+            version: pluginVersion,
+            filePath: installedPath,
+          });
+        }
+      } catch (err) {
+        const winInner = getMainWindow();
+        if (winInner && winInner.webContents) {
+          winInner.webContents.send('plugin-update-error', { message: err.message });
+        }
+      } finally {
+        pluginUpdateInProgress = false;
+      }
+    }
+  }
+
+  return {
+    updateAvailable,
+    installedVersion: installedVersion || null,
+    latestVersion: pluginVersion || null,
+    downloadUrl: pluginDownloadUrl || null,
+  };
+}
+
 /**
  * Check for version updates from custom endpoint
  */
@@ -94,7 +170,7 @@ function performVersionCheck() {
         data += chunk;
       });
 
-      res.on('end', () => {
+      res.on('end', async () => {
         try {
           const release = JSON.parse(data);
           let versionKey = 'version';
@@ -129,11 +205,17 @@ function performVersionCheck() {
             }
           }
 
+          const pluginInfo = await performPluginUpdateCheck(release);
+
           resolve({
             ok: true,
             updateAvailable,
             version: selectedVersion || null,
             downloadUrl: selectedDownloadUrl || null,
+            pluginUpdateAvailable: pluginInfo.updateAvailable,
+            pluginVersion: pluginInfo.latestVersion,
+            pluginInstalledVersion: pluginInfo.installedVersion,
+            pluginDownloadUrl: pluginInfo.downloadUrl,
           });
         } catch (err) {
           if (DEVELOPER_MODE) console.warn('[Version Check] Failed to parse version data:', err.message);
@@ -182,6 +264,16 @@ registerIpcHandlers(getMainWindow, sendTransferUpdate, sendSpooferResultToRender
 ipcMain.handle('manual-check-for-update', async () => {
   const result = await performVersionCheck();
   return result;
+});
+
+ipcMain.handle('get-installed-plugin-version', async () => {
+  try {
+    const info = await getInstalledPluginInfo();
+    return { ok: true, version: info.version || null };
+  } catch (err) {
+    if (DEVELOPER_MODE) console.warn('Failed to get installed plugin version:', err.message);
+    return { ok: false, error: err.message };
+  }
 });
 
 // Set the getMainWindow function for update-manager

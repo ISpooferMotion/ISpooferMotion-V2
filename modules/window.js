@@ -36,7 +36,7 @@ function createLoadingWindow() {
 function createWindow() {
   // Create loading screen first
   createLoadingWindow();
-  
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,

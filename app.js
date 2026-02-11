@@ -34,6 +34,7 @@ class AppManager {
     this.setupCookieSourceToggles();
     this.setupTransferModeControls();
     this.setupSpooferSelections();
+    this.setupPluginUpdates();
   }
 
   /**
@@ -56,6 +57,8 @@ class AppManager {
       runSpooferBtn: document.getElementById('run-spoofer-btn'),
       statusTextElement: document.getElementById('status-text'),
       versionTextElement: document.getElementById('version-text'),
+      settingsVersionElement: document.getElementById('settings-version'),
+      settingsPluginVersionElement: document.getElementById('settings-plugin-version'),
       logsBtn: document.getElementById('logs-btn'),
       discordBtn: document.getElementById('discord-btn'),
       autoCookieStudioToggle: document.getElementById('auto-cookie-studio'),
@@ -520,12 +523,97 @@ class AppManager {
           if (this.elements.versionTextElement) {
             this.elements.versionTextElement.textContent = `v${ver}`;
           }
+          if (this.elements.settingsVersionElement) {
+            this.elements.settingsVersionElement.textContent = `v${ver}`;
+          }
         })
         .catch((err) => {
           console.warn('Failed to get app version:', err);
         });
     } else {
       console.warn('electronAPI.getAppVersion not found');
+    }
+
+    if (window.electronAPI && window.electronAPI.getInstalledPluginVersion) {
+      window.electronAPI
+        .getInstalledPluginVersion()
+        .then((res) => {
+          const value = res && res.ok ? res.version : null;
+          if (this.elements.settingsPluginVersionElement) {
+            this.elements.settingsPluginVersionElement.textContent = value ? `v${value}` : 'Not installed';
+          }
+        })
+        .catch((err) => {
+          console.warn('Failed to get plugin version:', err);
+        });
+    } else {
+      console.warn('electronAPI.getInstalledPluginVersion not found');
+    }
+  }
+
+  /**
+   * Setup plugin update modal and events
+   */
+  setupPluginUpdates() {
+    const modal = document.getElementById('plugin-update-modal');
+    const statusEl = document.getElementById('plugin-update-status');
+    const currentVersionEl = document.getElementById('plugin-current-version-display');
+    const newVersionEl = document.getElementById('plugin-new-version-display');
+    const closeBtn = document.getElementById('plugin-update-close-btn');
+
+    const showModal = () => {
+      if (modal) modal.style.display = 'flex';
+    };
+
+    const hideModal = () => {
+      if (modal) modal.style.display = 'none';
+    };
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => hideModal());
+    }
+
+    if (window.electronAPI && window.electronAPI.onPluginUpdateAvailable) {
+      window.electronAPI.onPluginUpdateAvailable((info) => {
+        if (currentVersionEl) {
+          currentVersionEl.textContent = info.installedVersion ? `v${info.installedVersion}` : 'Not installed';
+        }
+        if (newVersionEl) {
+          newVersionEl.textContent = info.version ? `v${info.version}` : 'v?';
+        }
+        if (statusEl) {
+          statusEl.textContent = 'Downloading plugin update...';
+        }
+        showModal();
+      });
+    }
+
+    if (window.electronAPI && window.electronAPI.onPluginUpdateProgress) {
+      window.electronAPI.onPluginUpdateProgress((info) => {
+        if (statusEl && info && typeof info.percent === 'number') {
+          statusEl.textContent = `Downloading plugin update... ${info.percent}%`;
+        }
+      });
+    }
+
+    if (window.electronAPI && window.electronAPI.onPluginUpdateComplete) {
+      window.electronAPI.onPluginUpdateComplete((info) => {
+        if (statusEl) {
+          statusEl.textContent = 'Plugin updated. Restart Roblox Studio if it is open.';
+        }
+        if (this.elements.settingsPluginVersionElement && info?.version) {
+          this.elements.settingsPluginVersionElement.textContent = `v${info.version}`;
+        }
+      });
+    }
+
+    if (window.electronAPI && window.electronAPI.onPluginUpdateError) {
+      window.electronAPI.onPluginUpdateError((info) => {
+        if (statusEl) {
+          statusEl.textContent = `Plugin update failed: ${info?.message || 'Unknown error'}`;
+        }
+        showModal();
+      });
     }
   }
 
