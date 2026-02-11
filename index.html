@@ -589,6 +589,7 @@
             <p style="color: var(--label-color); font-size: 12px; line-height: 1.6;">
               <strong>ISpooferMotion</strong><br>
               Version: <span id="settings-version">v?</span><br>
+              Plugin Version: <span id="settings-plugin-version">v?</span><br>
               Made by @IncredibroXP on Discord<br>
               <a href="#" style="color: var(--green-accent); text-decoration: none;">Visit Repository</a> | 
               <a href="#" style="color: var(--green-accent); text-decoration: none;">Report Issue</a>
@@ -650,6 +651,24 @@
         <button id="update-now-btn" style="flex: 1; padding: 10px; background-color: var(--green-accent); border: none; border-radius: 4px; color: var(--accent-text); cursor: pointer; font-weight: bold;">
           Download Update
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============= PLUGIN UPDATE MODAL ============= -->
+  <div id="plugin-update-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); z-index: 10001; align-items: center; justify-content: center;">
+    <div style="background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; max-width: 420px; box-shadow: var(--shadow-lg);">
+      <h3 style="margin-top: 0; color: var(--green-accent);">New Plugin Version Detected</h3>
+      <p style="color: var(--text-color); line-height: 1.6; margin-bottom: 12px;">
+        Updating the Roblox Studio plugin now.
+      </p>
+      <p style="color: var(--label-color); font-size: 13px; margin-bottom: 12px;">
+        Current Plugin Version: <strong id="plugin-current-version-display">v?</strong><br>
+        New Plugin Version: <strong id="plugin-new-version-display">v?</strong>
+      </p>
+      <p id="plugin-update-status" style="color: var(--label-color); font-size: 12px; margin-bottom: 16px;">Preparing download...</p>
+      <div style="display: flex; gap: 10px;">
+        <button id="plugin-update-close-btn" style="flex: 1; padding: 10px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-color); cursor: pointer; font-weight: bold;">Close</button>
       </div>
     </div>
   </div>
