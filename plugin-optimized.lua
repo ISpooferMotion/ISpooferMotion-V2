@@ -172,6 +172,20 @@ print("[ISpooferMotion] Plugin loaded (OPTIMIZED), ready on port " .. currentPor
 
 -- Cache to avoid duplicate GetProductInfo calls
 local infoCache = {}
+local infoFailCache = {}
+local INFO_FAIL_TTL_SEC = 30
+
+local function logScanProgress(label, totalDesc, found, skippedOwned, skippedPublic, infoMissing)
+	print(string.format(
+		"[ISpooferMotion] %s progress: scanned=%d, found=%d, skippedOwned=%d, skippedPublic=%d, infoMissing=%d",
+		label,
+		totalDesc,
+		found,
+		skippedOwned,
+		skippedPublic,
+		infoMissing
+	))
+end
 
 -- Determine if an asset is owned by the place owner/group
 local function isOwnedByPlaceCreator(info)
@@ -205,16 +219,31 @@ local function isPublicAccessible(info)
 	return false
 end
 
-local function shouldSkipAsset(info)
-	if SKIP_OWNED_CHECK and isOwnedByPlaceCreator(info) then
-		return true
+local function getSkipReason(info)
+	if not info then
+		return nil
 	end
-	return isPublicAccessible(info)
+	if SKIP_OWNED_CHECK and isOwnedByPlaceCreator(info) then
+		return "owned"
+	end
+	if isPublicAccessible(info) then
+		return "public"
+	end
+	return nil
+end
+
+local function shouldSkipAsset(info)
+	return getSkipReason(info) ~= nil
 end
 
 local function getProductInfo(assetId)
 	if infoCache[assetId] then
 		return infoCache[assetId]
+	end
+
+	local lastFail = infoFailCache[assetId]
+	if lastFail and (os.time() - lastFail) < INFO_FAIL_TTL_SEC then
+		return nil
 	end
 
 	local ok, info = pcall(function()
@@ -223,8 +252,11 @@ local function getProductInfo(assetId)
 
 	if ok and info then
 		infoCache[assetId] = info
+		infoFailCache[assetId] = nil
 		return info
 	end
+
+	infoFailCache[assetId] = os.time()
 	return nil
 end
 
@@ -265,18 +297,32 @@ local function scanSoundsIncremental()
 	local batchSize = 100 -- 10x larger batches
 	local spooferOutput = game:GetService("ServerStorage"):FindFirstChild("Spoofer-Output")
 
+	local startClock = os.clock()
+	local scanned = 0
+	local skippedOwned = 0
+	local skippedPublic = 0
+	local infoMissing = 0
+	local scriptMatches = 0
+
 	print("[ISpooferMotion] Starting sound scan (fast mode)...")
+	print("[ISpooferMotion] Scanning: game descendants, excluding ServerStorage/Spoofer-Output")
 
 	-- PASS 1: Collect all assets WITHOUT GetProductInfo (FAST)
 	local allAssets = {}
 	for _, obj in ipairs(game:GetDescendants()) do
+		scanned = scanned + 1
+		if scanned % 5000 == 0 then
+			logScanProgress("Sounds", scanned, #allAssets, skippedOwned, skippedPublic, infoMissing)
+		end
 		if not obj:IsDescendantOf(spooferOutput or Instance.new("Folder")) then
 			if obj:IsA("Sound") then
 				local id = obj.SoundId:match("rbxassetid://(%d+)")
 				if id then
 					local info = getProductInfo(tonumber(id))
-					if shouldSkipAsset(info) then
-						print(string.format("[ISpooferMotion] Skipping sound %s (owned/public)", info and info.Name or id))
+					local skipReason = getSkipReason(info)
+					if skipReason then
+						if skipReason == "owned" then skippedOwned = skippedOwned + 1 else skippedPublic = skippedPublic + 1 end
+						print(string.format("[ISpooferMotion] Skipping sound %s (%s)", info and info.Name or id, skipReason))
 					else
 						table.insert(allAssets, {
 							kind = "SoundInstance",
@@ -292,11 +338,14 @@ local function scanSoundsIncremental()
 			end
 			if obj:IsA("LuaSourceContainer") then
 				for id in obj.Source:gmatch("rbxassetid://(%d+)") do
+					scriptMatches = scriptMatches + 1
 					local info = getProductInfo(tonumber(id))
 					-- Only include if it's actually a sound (AssetTypeId == 3)
 					if info and info.AssetTypeId == 3 then
-						if shouldSkipAsset(info) then
-							print(string.format("[ISpooferMotion] Skipping script sound %s (owned/public)", info.Name or id))
+						local skipReason = getSkipReason(info)
+						if skipReason then
+							if skipReason == "owned" then skippedOwned = skippedOwned + 1 else skippedPublic = skippedPublic + 1 end
+							print(string.format("[ISpooferMotion] Skipping script sound %s (%s)", info.Name or id, skipReason))
 						else
 							table.insert(allAssets, {
 								kind = "ScriptReference",
@@ -307,13 +356,27 @@ local function scanSoundsIncremental()
 								creator = info.Creator and info.Creator.Name or "Unknown",
 							})
 						end
+					elseif not info then
+						-- Fallback: include unknown IDs to improve scan coverage
+						infoMissing = infoMissing + 1
+						table.insert(allAssets, {
+							kind = "ScriptReference",
+							script = obj:GetFullName(),
+							assetId = id,
+							soundId = "rbxassetid://" .. id,
+							assetName = "Asset " .. id,
+							creator = "Unknown",
+							infoMissing = true,
+							typeHint = "Sound",
+						})
 					end
 				end
 			end
 		end
 	end
 
-	print(string.format("[ISpooferMotion] Found %d sounds, sending...", #allAssets))
+	logScanProgress("Sounds", scanned, #allAssets, skippedOwned, skippedPublic, infoMissing)
+	print(string.format("[ISpooferMotion] Found %d sounds (scriptMatches=%d) in %.2fs, sending...", #allAssets, scriptMatches, os.clock() - startClock))
 
 	-- Send in batches
 	for i = 1, #allAssets, batchSize do
@@ -332,18 +395,32 @@ local function scanAnimationsIncremental()
 	local batchSize = 100 -- 10x larger batches
 	local spooferOutput = game:GetService("ServerStorage"):FindFirstChild("Spoofer-Output")
 
+	local startClock = os.clock()
+	local scanned = 0
+	local skippedOwned = 0
+	local skippedPublic = 0
+	local infoMissing = 0
+	local scriptMatches = 0
+
 	print("[ISpooferMotion] Starting animation scan (fast mode)...")
+	print("[ISpooferMotion] Scanning: game descendants, excluding ServerStorage/Spoofer-Output")
 
 	-- PASS 1: Collect all assets WITHOUT GetProductInfo (FAST)
 	local allAssets = {}
 	for _, obj in ipairs(game:GetDescendants()) do
+		scanned = scanned + 1
+		if scanned % 5000 == 0 then
+			logScanProgress("Animations", scanned, #allAssets, skippedOwned, skippedPublic, infoMissing)
+		end
 		if not obj:IsDescendantOf(spooferOutput or Instance.new("Folder")) then
 			if obj:IsA("Animation") then
 				local id = obj.AnimationId:match("rbxassetid://(%d+)")
 				if id then
 					local info = getProductInfo(tonumber(id))
-					if shouldSkipAsset(info) then
-						print(string.format("[ISpooferMotion] Skipping animation %s (owned/public)", info and info.Name or id))
+					local skipReason = getSkipReason(info)
+					if skipReason then
+						if skipReason == "owned" then skippedOwned = skippedOwned + 1 else skippedPublic = skippedPublic + 1 end
+						print(string.format("[ISpooferMotion] Skipping animation %s (%s)", info and info.Name or id, skipReason))
 					else
 						table.insert(allAssets, {
 							kind = "AnimationInstance",
@@ -359,11 +436,14 @@ local function scanAnimationsIncremental()
 			end
 			if obj:IsA("LuaSourceContainer") then
 				for id in obj.Source:gmatch("rbxassetid://(%d+)") do
+					scriptMatches = scriptMatches + 1
 					local info = getProductInfo(tonumber(id))
 					-- Only include if it's actually an animation (AssetTypeId == 24)
 					if info and info.AssetTypeId == 24 then
-						if shouldSkipAsset(info) then
-							print(string.format("[ISpooferMotion] Skipping script animation %s (owned/public)", info.Name or id))
+						local skipReason = getSkipReason(info)
+						if skipReason then
+							if skipReason == "owned" then skippedOwned = skippedOwned + 1 else skippedPublic = skippedPublic + 1 end
+							print(string.format("[ISpooferMotion] Skipping script animation %s (%s)", info.Name or id, skipReason))
 						else
 							table.insert(allAssets, {
 								kind = "ScriptReference",
@@ -374,13 +454,27 @@ local function scanAnimationsIncremental()
 								creator = info.Creator and info.Creator.Name or "Unknown",
 							})
 						end
+					elseif not info then
+						-- Fallback: include unknown IDs to improve scan coverage
+						infoMissing = infoMissing + 1
+						table.insert(allAssets, {
+							kind = "ScriptReference",
+							script = obj:GetFullName(),
+							assetId = id,
+							animationId = "rbxassetid://" .. id,
+							assetName = "Asset " .. id,
+							creator = "Unknown",
+							infoMissing = true,
+							typeHint = "Animation",
+						})
 					end
 				end
 			end
 		end
 	end
 
-	print(string.format("[ISpooferMotion] Found %d animations, sending...", #allAssets))
+	logScanProgress("Animations", scanned, #allAssets, skippedOwned, skippedPublic, infoMissing)
+	print(string.format("[ISpooferMotion] Found %d animations (scriptMatches=%d) in %.2fs, sending...", #allAssets, scriptMatches, os.clock() - startClock))
 
 	-- Send in batches
 	for i = 1, #allAssets, batchSize do
@@ -401,7 +495,15 @@ local function scanImagesIncremental()
 	local coreGui = game:GetService("CoreGui")
 	local pluginGuiService = game:FindService("PluginGuiService") or game:GetService("PluginGuiService")
 
+	local startClock = os.clock()
+	local scanned = 0
+	local skippedOwned = 0
+	local skippedPublic = 0
+	local infoMissing = 0
+	local scriptMatches = 0
+
 	print("[ISpooferMotion] Starting image scan (fast mode)...")
+	print("[ISpooferMotion] Scanning: game descendants, excluding Spoofer-Output, CoreGui, PluginGui")
 
 	-- PASS 1: Collect all image assets
 	local allAssets = {}
@@ -412,8 +514,10 @@ local function scanImagesIncremental()
 		local id = propertyValue:match("rbxassetid://(%d+)") or propertyValue:match("rbxthumb://type=Asset&id=(%d+)") or propertyValue:match("^(%d+)$")
 		if id and not processedIds[id] then
 			local info = getProductInfo(tonumber(id))
-			if shouldSkipAsset(info) then
-				print(string.format("[ISpooferMotion] Skipping image %s (owned/public)", info and info.Name or id))
+			local skipReason = getSkipReason(info)
+			if skipReason then
+				if skipReason == "owned" then skippedOwned = skippedOwned + 1 else skippedPublic = skippedPublic + 1 end
+				print(string.format("[ISpooferMotion] Skipping image %s (%s)", info and info.Name or id, skipReason))
 				return
 			end
 			processedIds[id] = true
@@ -431,6 +535,10 @@ local function scanImagesIncremental()
 	end
 
 	for _, obj in ipairs(game:GetDescendants()) do
+		scanned = scanned + 1
+		if scanned % 5000 == 0 then
+			logScanProgress("Images", scanned, #allAssets, skippedOwned, skippedPublic, infoMissing)
+		end
 		local inOutput = spooferOutput and obj:IsDescendantOf(spooferOutput)
 		local inCoreGui = coreGui and obj:IsDescendantOf(coreGui)
 		local inPluginGui = pluginGuiService and obj:IsDescendantOf(pluginGuiService)
@@ -485,12 +593,15 @@ local function scanImagesIncremental()
 
 				-- Pattern 1: rbxassetid://12345
 				for id in scriptSource:gmatch("rbxassetid://(%d+)") do
+					scriptMatches = scriptMatches + 1
 					if not processedIds[id] then
 						local info = getProductInfo(tonumber(id))
 						-- Only include if it's actually an image (AssetTypeId == 1 for Image, 13 for Decal)
 						if info and (info.AssetTypeId == 1 or info.AssetTypeId == 13) then
-							if shouldSkipAsset(info) then
-								print(string.format("[ISpooferMotion] Skipping script image %s (owned/public)", info.Name or id))
+							local skipReason = getSkipReason(info)
+							if skipReason then
+								if skipReason == "owned" then skippedOwned = skippedOwned + 1 else skippedPublic = skippedPublic + 1 end
+								print(string.format("[ISpooferMotion] Skipping script image %s (%s)", info.Name or id, skipReason))
 							else
 								processedIds[id] = true
 								table.insert(allAssets, {
@@ -502,17 +613,33 @@ local function scanImagesIncremental()
 									creator = info.Creator and info.Creator.Name or "Unknown",
 								})
 							end
+						elseif not info then
+							processedIds[id] = true
+							infoMissing = infoMissing + 1
+							table.insert(allAssets, {
+								kind = "ScriptReference",
+								script = obj:GetFullName(),
+								assetId = id,
+								imageId = "rbxassetid://" .. id,
+								assetName = "Asset " .. id,
+								creator = "Unknown",
+								infoMissing = true,
+								typeHint = "Image",
+							})
 						end
 					end
 				end
 
 				-- Pattern 2: rbxthumb://type=Asset&id=12345
 				for id in scriptSource:gmatch("rbxthumb://type=Asset&id=(%d+)") do
+					scriptMatches = scriptMatches + 1
 					if not processedIds[id] then
 						local info = getProductInfo(tonumber(id))
 						if info and (info.AssetTypeId == 1 or info.AssetTypeId == 13) then
-							if shouldSkipAsset(info) then
-								print(string.format("[ISpooferMotion] Skipping script image %s (owned/public)", info.Name or id))
+							local skipReason = getSkipReason(info)
+							if skipReason then
+								if skipReason == "owned" then skippedOwned = skippedOwned + 1 else skippedPublic = skippedPublic + 1 end
+								print(string.format("[ISpooferMotion] Skipping script image %s (%s)", info.Name or id, skipReason))
 							else
 								processedIds[id] = true
 								table.insert(allAssets, {
@@ -524,17 +651,33 @@ local function scanImagesIncremental()
 									creator = info.Creator and info.Creator.Name or "Unknown",
 								})
 							end
+						elseif not info then
+							processedIds[id] = true
+							infoMissing = infoMissing + 1
+							table.insert(allAssets, {
+								kind = "ScriptReference",
+								script = obj:GetFullName(),
+								assetId = id,
+								imageId = "rbxthumb://type=Asset&id=" .. id,
+								assetName = "Asset " .. id,
+								creator = "Unknown",
+								infoMissing = true,
+								typeHint = "Image",
+							})
 						end
 					end
 				end
 
 				-- Pattern 3: http://www.roblox.com/asset/?id=12345 or https://
 				for id in scriptSource:gmatch("https?://[%w%.]*roblox%.com/[Aa]sset/%?[Ii][Dd]=(%d+)") do
+					scriptMatches = scriptMatches + 1
 					if not processedIds[id] then
 						local info = getProductInfo(tonumber(id))
 						if info and (info.AssetTypeId == 1 or info.AssetTypeId == 13) then
-							if shouldSkipAsset(info) then
-								print(string.format("[ISpooferMotion] Skipping script image %s (owned/public)", info.Name or id))
+							local skipReason = getSkipReason(info)
+							if skipReason then
+								if skipReason == "owned" then skippedOwned = skippedOwned + 1 else skippedPublic = skippedPublic + 1 end
+								print(string.format("[ISpooferMotion] Skipping script image %s (%s)", info.Name or id, skipReason))
 							else
 								processedIds[id] = true
 								table.insert(allAssets, {
@@ -546,6 +689,19 @@ local function scanImagesIncremental()
 									creator = info.Creator and info.Creator.Name or "Unknown",
 								})
 							end
+						elseif not info then
+							processedIds[id] = true
+							infoMissing = infoMissing + 1
+							table.insert(allAssets, {
+								kind = "ScriptReference",
+								script = obj:GetFullName(),
+								assetId = id,
+								imageId = "http://www.roblox.com/asset/?id=" .. id,
+								assetName = "Asset " .. id,
+								creator = "Unknown",
+								infoMissing = true,
+								typeHint = "Image",
+							})
 						end
 					end
 				end
@@ -553,7 +709,8 @@ local function scanImagesIncremental()
 		end
 	end
 
-	print(string.format("[ISpooferMotion] Found %d images, sending...", #allAssets))
+	logScanProgress("Images", scanned, #allAssets, skippedOwned, skippedPublic, infoMissing)
+	print(string.format("[ISpooferMotion] Found %d images (scriptMatches=%d) in %.2fs, sending...", #allAssets, scriptMatches, os.clock() - startClock))
 
 	-- Send in batches
 	for i = 1, #allAssets, batchSize do
