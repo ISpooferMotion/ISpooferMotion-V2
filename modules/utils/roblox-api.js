@@ -10,7 +10,7 @@ const { DEVELOPER_MODE } = require('./common');
  * Retrieves Roblox cookie from Roblox Studio or Windows Credential Manager
  */
 async function getCookieFromRobloxStudio(userId = null) {
-  if (!['darwin', 'win32'].includes(process.platform)) return undefined;
+  if (!['darwin', 'win32', 'linux'].includes(process.platform)) return undefined;
 
   if (process.platform === 'darwin') {
     try {
@@ -308,6 +308,31 @@ async function listRobloxCookies() {
     } catch (err) {
       if (DEVELOPER_MODE) console.warn('(Dev) listRobloxCookies error (darwin):', err.message);
     }
+  } else if (process.platform === 'linux') {
+    // Linux: Try reading from Roblox Studio's cookie storage locations
+    try {
+      const homePath = os.homedir();
+      // Roblox Studio on Linux typically stores cookies in ~/.config/roblox-studio
+      const possiblePaths = [
+        path.join(homePath, '.config', 'roblox-studio', 'cookies'),
+        path.join(homePath, '.local', 'share', 'roblox-studio', 'cookies')
+      ];
+      
+      for (const cookiePath of possiblePaths) {
+        try {
+          const cookieData = await fs.readFile(cookiePath, { encoding: 'utf-8' });
+          const matches = cookieData.match(
+            /_\|WARNING:-DO-NOT-SHARE-THIS\.-\-Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items\.\|_[A-F\d]+/g
+          );
+          if (matches && matches.length) cookies.push(...matches);
+        } catch (err) {
+          // Try next path
+          continue;
+        }
+      }
+    } catch (err) {
+      if (DEVELOPER_MODE) console.warn('(Dev) listRobloxCookies error (linux):', err.message);
+    }
   }
   return cookies;
 }
@@ -334,10 +359,10 @@ async function validateCookieAndGetUser(cookie) {
 }
 
 /**
- * Lists Roblox cookies from Firefox browser (simple SQLite, no encryption)
+ * Lists Roblox cookies from Firefox and Chrome browsers
  * Returns an array of cookie strings
  * SAFETY: Cookies are never logged in full, only validated and discarded
- * NOTE: Chrome/Edge require native DPAPI modules - use Studio/Credentials toggle for those
+ * NOTE: Chrome on Windows uses DPAPI encryption (supported), Linux uses libsecret (limited support - recommend Firefox)
  */
 async function listBrowserRobloxCookies() {
   const cookies = [];
@@ -350,14 +375,16 @@ async function listBrowserRobloxCookies() {
   };
 
   // Firefox support (cookies are NOT encrypted, pure SQLite)
-  if (process.platform === 'win32' || process.platform === 'darwin') {
+  if (process.platform === 'win32' || process.platform === 'darwin' || process.platform === 'linux') {
     try {
       const homePath = os.homedir();
       let firefoxProfilesPath;
       if (process.platform === 'win32') {
         firefoxProfilesPath = path.join(homePath, 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles');
-      } else {
+      } else if (process.platform === 'darwin') {
         firefoxProfilesPath = path.join(homePath, 'Library', 'Application Support', 'Firefox', 'Profiles');
+      } else {
+        firefoxProfilesPath = path.join(homePath, '.mozilla', 'firefox');
       }
 
       const profiles = await fs.readdir(firefoxProfilesPath).catch(() => []);
@@ -396,11 +423,13 @@ async function listBrowserRobloxCookies() {
     }
   }
 
-  // Chrome/Edge support (Windows only, cookies are DPAPI encrypted)
-  if (process.platform === 'win32') {
+  // Chrome/Edge support (Windows and Linux - Linux cookies may be encrypted with libsecret/keyring)
+  if (process.platform === 'win32' || process.platform === 'linux') {
     try {
       const homePath = os.homedir();
-      const chromeProfilesPath = path.join(homePath, 'AppData', 'Local', 'Google', 'Chrome', 'User Data');
+      const chromeProfilesPath = process.platform === 'win32'
+        ? path.join(homePath, 'AppData', 'Local', 'Google', 'Chrome', 'User Data')
+        : path.join(homePath, '.config', 'google-chrome');
       
       // Check if Chrome is installed
       if (await fs.stat(chromeProfilesPath).catch(() => null)) {
@@ -435,14 +464,20 @@ async function listBrowserRobloxCookies() {
                   let decryptedValue = null;
                   
                   try {
-                    // Try to decrypt using win-dpapi
-                    const dpapi = require('win-dpapi');
-                    if (dpapi && typeof dpapi.unprotectData === 'function') {
-                      decryptedValue = dpapi.unprotectData(encryptedValue, null, 'CurrentUser');
-                      if (DEVELOPER_MODE) console.log(`(Dev) Successfully decrypted Chrome cookie`);
+                    // Try to decrypt using win-dpapi (Windows only)
+                    if (process.platform === 'win32') {
+                      const dpapi = require('win-dpapi');
+                      if (dpapi && typeof dpapi.unprotectData === 'function') {
+                        decryptedValue = dpapi.unprotectData(encryptedValue, null, 'CurrentUser');
+                        if (DEVELOPER_MODE) console.log(`(Dev) Successfully decrypted Chrome cookie`);
+                      }
+                    } else if (process.platform === 'linux') {
+                      // Linux: Chrome cookies are encrypted with libsecret/gnome-keyring
+                      // This is more complex to decrypt - recommend using Firefox or manual cookie entry
+                      if (DEVELOPER_MODE) console.log(`(Dev) Chrome on Linux uses libsecret encryption - consider using Firefox`);
                     }
                   } catch (dpapiErr) {
-                    if (DEVELOPER_MODE) console.warn(`(Dev) DPAPI decryption failed:`, dpapiErr.message);
+                    if (DEVELOPER_MODE) console.warn(`(Dev) Cookie decryption failed:`, dpapiErr.message);
                   }
                   
                   // If decryption succeeded
