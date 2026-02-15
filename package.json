@@ -43,6 +43,14 @@
         "zip"
       ],
       "icon": "assets/app_icon.icns"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/app_icon.png",
+      "category": "Utility"
     }
   }
 }

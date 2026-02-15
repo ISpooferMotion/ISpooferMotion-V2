@@ -129,6 +129,16 @@ async function downloadAndInstallUpdate(downloadUrl) {
     // Wait a moment for file to be fully released before executing
     await new Promise(resolve => setTimeout(resolve, 500));
 
+    // On Linux, make AppImage executable
+    if (platform === 'linux' && installerPath.endsWith('.AppImage')) {
+      try {
+        console.log('[Update] Making AppImage executable:', installerPath);
+        fs.chmodSync(installerPath, 0o755);
+      } catch (chmodErr) {
+        console.warn('[Update] Could not chmod AppImage:', chmodErr.message);
+      }
+    }
+
     const mainWindow = getMainWindow && getMainWindow();
     if (mainWindow) {
       console.log('[Update] Sending update-installing event');
