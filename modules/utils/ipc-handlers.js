@@ -974,11 +974,13 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
 
   // Advanced setting: allow adjusting how many placeIds to search per creator (default 50 for faster batch success)
   const placeIdSearchLimit = (data && data.advancedSettings && Number(data.advancedSettings.placeIdSearchLimit)) || 50;
-  const rawForcedPlaceId = data && data.advancedSettings ? data.advancedSettings.forcePlaceId : undefined;
-  const forcedPlaceId = Number(rawForcedPlaceId);
-  const useForcedPlaceId = Number.isFinite(forcedPlaceId) && forcedPlaceId > 0;
-  if (useForcedPlaceId) {
-    log('INFO', `Force placeId enabled: ${forcedPlaceId} (skipping placeId discovery)`);
+  const rawForcedPlaceIds = data && data.advancedSettings ? data.advancedSettings.forcePlaceIds : undefined;
+  const forcedPlaceIds = Array.isArray(rawForcedPlaceIds) && rawForcedPlaceIds.length > 0 
+    ? rawForcedPlaceIds.filter(id => Number.isFinite(id) && id > 0)
+    : undefined;
+  const useForcedPlaceIds = forcedPlaceIds && forcedPlaceIds.length > 0;
+  if (useForcedPlaceIds) {
+    log('INFO', `Force placeIds enabled: [${forcedPlaceIds.join(', ')}] (skipping placeId discovery)`);
   }
 
   // Audio quota check (only if we have audio assets to upload)
@@ -1084,11 +1086,11 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
       let [creatorType, creatorIdentifier] = creatorKey.split(':');
       const firstAsset = creatorMap[creatorKey][0];
 
-      if (useForcedPlaceId) {
-        creatorPlaceIds[creatorKey] = { placeIds: [forcedPlaceId], creatorType, creatorId: firstAsset.creatorId || creatorIdentifier || 'Unknown' };
+      if (useForcedPlaceIds) {
+        creatorPlaceIds[creatorKey] = { placeIds: forcedPlaceIds, creatorType, creatorId: firstAsset.creatorId || creatorIdentifier || 'Unknown' };
         placeDone++;
         const eta = formatEta(placeResolveStart, placeDone, placeTotal);
-        sendStatusMessage(`Forced place ID ${placeDone}/${placeTotal} (ETA ${eta})`);
+        sendStatusMessage(`Forced place IDs ${placeDone}/${placeTotal} (ETA ${eta})`);
         return;
       }
       
