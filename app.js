@@ -8,6 +8,7 @@ class AppManager {
     this.elements = {};
     this.spooferProgress = 0; // Track overall progress 0-100
     this.currentStage = null; // Track current stage for cumulative progress
+    this.lastMappings = null; // Store last mappings for retry
     // Stage progress ranges (percentages of total)
     this.stages = {
       'creator': { start: 0, end: 15, name: 'Resolving creators' },
@@ -35,6 +36,7 @@ class AppManager {
     this.setupTransferModeControls();
     this.setupSpooferSelections();
     this.setupPluginUpdates();
+    this.setupRetryButton();
   }
 
   /**
@@ -55,6 +57,7 @@ class AppManager {
       selectedGroupSelect: document.getElementById('selected-group'),
       enableSpoofingToggle: document.getElementById('enable-spoofing'),
       runSpooferBtn: document.getElementById('run-spoofer-btn'),
+      retryReplaceBtn: document.getElementById('retry-replace-btn'),
       statusTextElement: document.getElementById('status-text'),
       versionTextElement: document.getElementById('version-text'),
       settingsVersionElement: document.getElementById('settings-version'),
@@ -349,7 +352,12 @@ class AppManager {
       window.electronAPI.onApplyIdReplacements((data) => {
         console.log('Renderer received apply-id-replacements:', data);
         if (data && data.mappings) {
+          this.lastMappings = data.mappings; // Store for retry
           this.applyIdReplacements(data.mappings);
+          // Enable retry button
+          if (this.elements.retryReplaceBtn) {
+            this.elements.retryReplaceBtn.disabled = false;
+          }
         }
       });
     }
@@ -397,6 +405,30 @@ class AppManager {
       this.updateStatus(isRunning ? 'Spoofer running…' : 'Ready');
     } catch (e) {
       console.warn('Failed to toggle running state:', e);
+    }
+  }
+
+  /**
+   * Setup retry button for retrying replacements
+   */
+  setupRetryButton() {
+    if (this.elements.retryReplaceBtn) {
+      this.elements.retryReplaceBtn.addEventListener('click', () => {
+        if (this.lastMappings && this.lastMappings.length > 0) {
+          console.log('Retrying ID replacements...');
+          if (this.elements.outputDataTextarea) {
+            this.elements.outputDataTextarea.value += `\n🔄 Retrying ID replacements...\n`;
+            this.elements.outputDataTextarea.scrollTop = this.elements.outputDataTextarea.scrollHeight;
+          }
+          this.applyIdReplacements(this.lastMappings);
+        } else {
+          console.warn('No mappings available to retry');
+          if (this.elements.outputDataTextarea) {
+            this.elements.outputDataTextarea.value += `\n⚠ No mappings available to retry\n`;
+            this.elements.outputDataTextarea.scrollTop = this.elements.outputDataTextarea.scrollHeight;
+          }
+        }
+      });
     }
   }
 
@@ -484,8 +516,12 @@ class AppManager {
     }
 
     const forcePlaceIdRaw = (this.elements.forcePlaceIdInput?.value || '').trim();
-    const parsedForcePlaceId = forcePlaceIdRaw ? parseInt(forcePlaceIdRaw, 10) : undefined;
-    const forcePlaceId = Number.isFinite(parsedForcePlaceId) && parsedForcePlaceId > 0 ? parsedForcePlaceId : undefined;
+    // Parse comma-separated place IDs into an array
+    const forcePlaceIds = forcePlaceIdRaw 
+      ? forcePlaceIdRaw.split(',')
+          .map(id => parseInt(id.trim(), 10))
+          .filter(id => Number.isFinite(id) && id > 0)
+      : undefined;
     const transferMode = this.elements.transferModeSelect?.value || 'upload';
     const downloadDirectory = (this.elements.downloadDirectoryInput?.value || '').trim();
 
@@ -496,7 +532,7 @@ class AppManager {
       assets: selectedAssets,
       advancedSettings: {
         placeIdSearchLimit: parseInt(this.elements.placeIdSearchLimitInput?.value, 10) || undefined,
-        forcePlaceId,
+        forcePlaceIds,
         transferMode,
         downloadOnly: transferMode === 'download',
         downloadDirectory,
