@@ -5,252 +5,177 @@ const fs = require('fs').promises;
 const { DEVELOPER_MODE } = require('./common');
 const { getMultiplePlaceIds, validateCookieAndGetUser } = require('./roblox-api');
 
+const CHUNK_SIZE = 100;        // assets per batch API request (was 50)
+const CHUNK_CONCURRENCY = 4;   // parallel chunk requests per placeId attempt (was 1)
+const IMAGE_CONCURRENCY = 15;  // parallel image downloads (was 10)
+const INDIVIDUAL_CONCURRENCY = 8; // parallel individual downloads (was 3)
+
 /**
  * Downloads multiple assets using batch API endpoint
- * @param {Array} assets - Assets to download
- * @param {Array} placeIds - Array of placeIds to try
- * @param {string} cookie - Roblox cookie
- * @param {string} downloadsDir - Download directory
- * @param {Function} sendOutput - Output callback
- * @param {Function} sendTransferUpdate - Transfer update callback
- * @returns {Promise<Object>} - { success: boolean, downloadedAssets: {} }
  */
 async function downloadAssetsBatch(assets, placeIds, cookie, downloadsDir, sendOutput, sendTransferUpdate, onProgress) {
   const downloadedAssets = {};
-  
-  // Separate images/decals from other assets - they use asset delivery endpoint directly
+  // Track which assets have already been counted in progress to avoid double-counting
+  // across multiple placeId retry attempts
+  const progressReported = new Set();
+
+  // Separate images/decals — they use asset delivery directly and don't need a placeId
   const imageAssets = assets.filter(a => a.assetType === 'Image' || a.assetType === 'Decal');
   const otherAssets = assets.filter(a => a.assetType !== 'Image' && a.assetType !== 'Decal');
-  
-  // Download images directly first (in parallel)
+
+  // Download images in parallel
   if (imageAssets.length > 0) {
-    if (DEVELOPER_MODE) console.log(`(Dev) Downloading ${imageAssets.length} image assets directly via asset delivery`);
-    sendOutput({ output: `  Downloading ${imageAssets.length} image assets directly...\n`, success: null });
-    
-    // Download images in parallel (up to 5 at a time)
+    sendOutput({ output: `  📷 Downloading ${imageAssets.length} image(s)...\n`, success: null });
+    let imageOk = 0, imageFail = 0;
+
     const downloadImage = async (asset) => {
       const transferId = crypto.randomUUID();
       try {
         const sanitizedName = (asset.name || `Image_${asset.assetId}`).replace(/[<>:"/\\|?*]/g, '_').substring(0, 200);
         const downloadPath = path.join(downloadsDir, `${sanitizedName}.png`);
-        const assetDeliveryUrl = `https://assetdelivery.roblox.com/v1/asset/?id=${asset.assetId}`;
-        
-        sendOutput({ output: `    ↓ Downloading image ${asset.name} (${asset.assetId})...\n`, success: null });
-        if (DEVELOPER_MODE) console.log(`(Dev) Image download URL: ${assetDeliveryUrl}`);
-        
-        sendTransferUpdate({
-          id: transferId,
-          name: asset.name,
-          direction: 'download',
-          status: 'processing',
-          progress: 0,
-        });
-        
-        const assetResp = await fetch(assetDeliveryUrl, { 
-          redirect: 'follow',
-          headers: {
-            'Cookie': `.ROBLOSECURITY=${cookie}`,
-          }
-        });
-        
-        if (!assetResp.ok) {
-          throw new Error(`Asset delivery failed with status ${assetResp.status}`);
-        }
-        
-        const arrayBuffer = await assetResp.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        if (DEVELOPER_MODE) console.log(`(Dev) Image downloaded: ${asset.assetId}, Size: ${buffer.length} bytes`);
-        
-        await fs.writeFile(downloadPath, buffer);
-        
-        sendTransferUpdate({
-          id: transferId,
-          name: asset.name,
-          direction: 'download',
-          status: 'completed',
-          progress: 100,
-        });
-        
-        sendOutput({ output: `      ✓ Downloaded to ${downloadPath}\n`, success: true });
-        if (onProgress) onProgress();
+        sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'processing', progress: 0 });
 
-        return {
-          assetId: asset.assetId,
-          data: {
-            filePath: downloadPath,
-            name: asset.name,
-            type: asset.assetType,
-            transferId: transferId,
-          }
-        };
+        const assetResp = await fetch(`https://assetdelivery.roblox.com/v1/asset/?id=${asset.assetId}`, {
+          redirect: 'follow',
+          headers: { 'Cookie': `.ROBLOSECURITY=${cookie}` },
+        });
+        if (!assetResp.ok) throw new Error(`Status ${assetResp.status}`);
+
+        const buffer = Buffer.from(await assetResp.arrayBuffer());
+        await fs.writeFile(downloadPath, buffer);
+
+        sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'completed', progress: 100 });
+        imageOk++;
+        if (onProgress && !progressReported.has(asset.assetId)) { progressReported.add(asset.assetId); onProgress(); }
+        return { assetId: asset.assetId, data: { filePath: downloadPath, name: asset.name, type: asset.assetType, transferId } };
       } catch (err) {
         if (DEVELOPER_MODE) console.error(`(Dev) Failed to download image ${asset.assetId}:`, err.message);
-        sendOutput({ output: `      ✗ Failed to download: ${err.message}\n`, success: false });
-        if (onProgress) onProgress();
+        sendOutput({ output: `    ✗ ${asset.name} (${asset.assetId}): ${err.message}\n`, success: false });
+        imageFail++;
+        if (onProgress && !progressReported.has(asset.assetId)) { progressReported.add(asset.assetId); onProgress(); }
         return null;
       }
     };
-    
-    // Process in batches of 10 concurrent downloads
-    const concurrency = 10;
-    for (let i = 0; i < imageAssets.length; i += concurrency) {
-      const batch = imageAssets.slice(i, i + concurrency);
-      const results = await Promise.all(batch.map(downloadImage));
-      results.forEach(result => {
-        if (result) downloadedAssets[result.assetId] = result.data;
-      });
+
+    for (let i = 0; i < imageAssets.length; i += IMAGE_CONCURRENCY) {
+      const results = await Promise.all(imageAssets.slice(i, i + IMAGE_CONCURRENCY).map(downloadImage));
+      results.forEach(r => { if (r) downloadedAssets[r.assetId] = r.data; });
     }
+    sendOutput({ output: `  ✓ Images: ${imageOk} downloaded${imageFail > 0 ? `, ${imageFail} failed` : ''}\n`, success: imageFail === 0 });
   }
-  
-  // If no other assets to batch download, return early
+
   if (otherAssets.length === 0) {
     return { success: Object.keys(downloadedAssets).length > 0, downloadedAssets };
   }
-  
+
+  // Try each placeId in sequence, but only for assets not yet downloaded
+  let placeIdAttempt = 0;
   for (const placeId of placeIds) {
+    const remainingAssets = otherAssets.filter(a => !downloadedAssets[a.assetId]);
+    if (remainingAssets.length === 0) break;
+    placeIdAttempt++;
+
+    const beforeCount = Object.keys(downloadedAssets).length;
+
     try {
-      sendOutput({ output: `  Trying batch download with placeId ${placeId}...\n`, success: null });
-      if (DEVELOPER_MODE) console.log(`(Dev) Attempting batch download with placeId ${placeId} for ${otherAssets.length} assets`);
+      if (DEVELOPER_MODE) console.log(`(Dev) Batch attempt #${placeIdAttempt} placeId=${placeId} for ${remainingAssets.length} assets`);
 
-      // Split into chunks of 50 assets to avoid overwhelming the API
-      const chunkSize = 50;
       const chunks = [];
-      for (let i = 0; i < otherAssets.length; i += chunkSize) {
-        chunks.push(otherAssets.slice(i, i + chunkSize));
-      }
-      
-      if (DEVELOPER_MODE && chunks.length > 1) {
-        console.log(`(Dev) Splitting ${otherAssets.length} assets into ${chunks.length} chunks of max ${chunkSize}`);
+      for (let i = 0; i < remainingAssets.length; i += CHUNK_SIZE) {
+        chunks.push(remainingAssets.slice(i, i + CHUNK_SIZE));
       }
 
-      // Process each chunk
-      for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-        const chunk = chunks[chunkIndex];
-        const batchPayload = chunk.map(a => ({
-          requestId: crypto.randomUUID(),
-          assetId: a.assetId,
-          assetType: a.assetType,
-        }));
-        const batchUrl = 'https://assetdelivery.roblox.com/v2/assets/batch';
-        const batchHeaders = {
-          'Content-Type': 'application/json',
-          'Cookie': `.ROBLOSECURITY=${cookie}`,
-          'User-Agent': 'Roblox/WinInet',
-          'Roblox-Place-Id': String(placeId),
-        };
+      let batchFailed = false;
+      for (let i = 0; i < chunks.length; i += CHUNK_CONCURRENCY) {
+        const parallelChunks = chunks.slice(i, i + CHUNK_CONCURRENCY);
 
-        if (chunks.length > 1) {
-          sendOutput({ output: `    Processing chunk ${chunkIndex + 1}/${chunks.length} (${chunk.length} assets)...\n`, success: null });
-        }
+        await Promise.all(parallelChunks.map(async (chunk) => {
+          if (batchFailed) return;
 
-        const batchResp = await fetch(batchUrl, {
-          method: 'POST',
-          headers: batchHeaders,
-          body: JSON.stringify(batchPayload),
-        });
+          const batchPayload = chunk.map(a => ({
+            requestId: crypto.randomUUID(),
+            assetId: a.assetId,
+            assetType: a.assetType,
+          }));
 
-        if (!batchResp.ok) {
-          const errText = await batchResp.text();
-          if (DEVELOPER_MODE) {
-            console.warn('[BATCH DEBUG] URL:', batchUrl);
-            console.warn('[BATCH DEBUG] Headers:', JSON.stringify(batchHeaders));
-            console.warn('[BATCH DEBUG] Payload:', JSON.stringify(batchPayload));
-            console.warn('[BATCH DEBUG] Error:', errText);
-          }
-          throw new Error(`Batch failed (${batchResp.status}): ${errText.substring(0, 200)}`);
-        }
-
-        const batchData = await batchResp.json();
-        if (!Array.isArray(batchData)) {
-          throw new Error('Invalid batch response format');
-        }
-
-      // Download each asset from the batch response (in parallel)
-      const downloadAsset = async (item) => {
-        const asset = otherAssets.find(a => a.assetId === item.assetId);
-        if (!asset || !item.location) return { assetId: item.assetId, success: false };
-
-        const transferId = crypto.randomUUID();
-        const extensions = {
-          'Sound': '.ogg',
-          'Audio': '.ogg',
-          'Animation': '.rbxm',
-        };
-        const ext = extensions[asset.assetType] || '.dat';
-        const sanitizedName = (asset.name || `Asset_${asset.assetId}`).replace(/[<>:"/\\|?*]/g, '_').substring(0, 200);
-        const downloadPath = path.join(downloadsDir, `${sanitizedName}${ext}`);
-
-        sendOutput({ output: `    ↓ Downloading ${asset.name} (${asset.assetId})...\n`, success: null });
-
-        sendTransferUpdate({
-          id: transferId,
-          name: asset.name,
-          direction: 'download',
-          status: 'processing',
-          progress: 0,
-        });
-
-        try {
-          const assetResp = await fetch(item.location, { redirect: 'follow' });
-          if (!assetResp.ok) {
-            throw new Error(`Asset download failed: ${assetResp.status}`);
-          }
-
-          const buffer = await assetResp.buffer();
-          await fs.writeFile(downloadPath, buffer);
-
-          sendTransferUpdate({
-            id: transferId,
-            name: asset.name,
-            direction: 'download',
-            status: 'completed',
-            progress: 100,
+          const batchResp = await fetch('https://assetdelivery.roblox.com/v2/assets/batch', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cookie': `.ROBLOSECURITY=${cookie}`,
+              'User-Agent': 'Roblox/WinInet',
+              'Roblox-Place-Id': String(placeId),
+            },
+            body: JSON.stringify(batchPayload),
           });
 
-          sendOutput({ output: `      ✓ Downloaded to ${downloadPath}\n`, success: true });
-          
-          return {
-            assetId: asset.assetId,
-            success: true,
-            data: {
-              filePath: downloadPath,
-              name: asset.name,
-              type: asset.assetType,
-              transferId: transferId,
+          if (!batchResp.ok) {
+            const errText = await batchResp.text();
+            throw new Error(`Batch API error (${batchResp.status}): ${errText.substring(0, 200)}`);
+          }
+
+          const batchData = await batchResp.json();
+          if (!Array.isArray(batchData)) throw new Error('Invalid batch response format');
+
+          const downloadItem = async (item) => {
+            const asset = remainingAssets.find(a => a.assetId === item.assetId);
+            if (!asset || !item.location) return;
+
+            const transferId = crypto.randomUUID();
+            const ext = { Sound: '.ogg', Audio: '.ogg', Animation: '.rbxm' }[asset.assetType] || '.dat';
+            const sanitizedName = (asset.name || `Asset_${asset.assetId}`).replace(/[<>:"/\\|?*]/g, '_').substring(0, 200);
+            const downloadPath = path.join(downloadsDir, `${sanitizedName}${ext}`);
+
+            sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'processing', progress: 0 });
+
+            try {
+              const assetResp = await fetch(item.location, { redirect: 'follow' });
+              if (!assetResp.ok) throw new Error(`CDN error ${assetResp.status}`);
+
+              const buffer = Buffer.from(await assetResp.arrayBuffer());
+              await fs.writeFile(downloadPath, buffer);
+
+              sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'completed', progress: 100 });
+              downloadedAssets[asset.assetId] = { filePath: downloadPath, name: asset.name, type: asset.assetType, transferId };
+              if (onProgress && !progressReported.has(asset.assetId)) { progressReported.add(asset.assetId); onProgress(); }
+            } catch (err) {
+              sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'error', progress: 0 });
+              if (DEVELOPER_MODE) console.warn(`(Dev) CDN download failed for ${asset.assetId}: ${err.message}`);
+              // Do NOT call onProgress — asset may succeed on the next placeId attempt
             }
           };
-        } catch (err) {
-          sendOutput({ output: `      ✗ Failed: ${err.message}\n`, success: false });
-          
-          sendTransferUpdate({
-            id: transferId,
-            name: asset.name,
-            direction: 'download',
-            status: 'error',
-            progress: 0,
-          });
-          
-          return { assetId: asset.assetId, success: false };
-        }
-      };
-      
-        // Download all batch assets in parallel
-        const results = await Promise.all(batchData.map(downloadAsset));
-        results.forEach(result => {
-          if (result && result.success && result.data) {
-            downloadedAssets[result.assetId] = result.data;
-          }
-          if (onProgress) onProgress();
-        });
-      }
 
-      if (Object.keys(downloadedAssets).length === assets.length) {
-        sendOutput({ output: `  ✓ Batch download successful\n`, success: true });
-        return { success: true, downloadedAssets };
+          await Promise.all(batchData.map(downloadItem));
+        }));
+
+        if (batchFailed) break;
       }
     } catch (err) {
-      if (DEVELOPER_MODE) console.warn(`(Dev) Batch download failed with placeId ${placeId}:`, err.message);
-      sendOutput({ output: `  ✗ Batch failed: ${err.message}\n`, success: false });
+      if (DEVELOPER_MODE) console.warn(`(Dev) Batch failed with placeId ${placeId}:`, err.message);
+      sendOutput({ output: `  ✗ Batch attempt #${placeIdAttempt} failed: ${err.message}\n`, success: false });
+    }
+
+    const afterCount = Object.keys(downloadedAssets).length;
+    const gained = afterCount - beforeCount;
+    const stillNeeded = otherAssets.filter(a => !downloadedAssets[a.assetId]).length;
+
+    if (gained > 0 || stillNeeded === 0) {
+      sendOutput({
+        output: `  ✓ Batch #${placeIdAttempt}: ${gained} downloaded${stillNeeded > 0 ? `, ${stillNeeded} remaining` : ', all done'}\n`,
+        success: true,
+      });
+    }
+
+    if (stillNeeded === 0) break;
+  }
+
+  // Count progress for any non-image assets that failed all placeId attempts
+  if (onProgress) {
+    for (const asset of otherAssets) {
+      if (!progressReported.has(asset.assetId)) {
+        progressReported.add(asset.assetId);
+        onProgress();
+      }
     }
   }
 
@@ -259,41 +184,29 @@ async function downloadAssetsBatch(assets, placeIds, cookie, downloadsDir, sendO
 
 /**
  * Downloads assets individually (fallback when batch fails or creator unknown)
- * @param {Array} assets - Assets to download
- * @param {string} cookie - Roblox cookie
- * @param {string} downloadsDir - Download directory
- * @param {Function} sendOutput - Output callback
- * @param {Function} sendTransferUpdate - Transfer update callback
- * @returns {Promise<Object>} - { success: boolean, downloadedAssets: {} }
  */
 async function downloadAssetsIndividual(assets, cookie, downloadsDir, sendOutput, sendTransferUpdate, placeIdsFromCreator = [], placeIdSearchLimit = 20, onProgress) {
   const downloadedAssets = {};
-  
-  sendOutput({ output: `  Resolving creators for individual downloads...\n`, success: null });
-  
-  // Process individual downloads in parallel (3 at a time to avoid rate limits)
+
+  sendOutput({ output: `  📥 Individual download mode (${assets.length} assets)...\n`, success: null });
+  let indivOk = 0, indivFail = 0;
+
   const downloadAsset = async (asset) => {
     const transferId = crypto.randomUUID();
-    
+
     try {
-      // First, get the asset's creator info if we don't have it
       let assetCreatorId = asset.creatorId;
       let assetCreatorType = asset.creatorType || 'User';
-      
+
+      // Look up creator only if we don't already have it
       if (!assetCreatorId) {
-        sendOutput({ output: `    Looking up creator for asset ${asset.assetId}...\n`, success: null });
-        
-        // Retry logic for rate limiting
         let assetDetailsResp;
         let retryCount = 0;
         const maxRetries = 3;
-        
+
         while (retryCount < maxRetries) {
-          const delay = 300 + (retryCount * 500); // Reduced delays: 300ms, 800ms, 1300ms
-          await new Promise(resolve => setTimeout(resolve, delay));
-          
           assetDetailsResp = await fetch(`https://apis.roblox.com/assets/user-auth/v1/assets/${asset.assetId}`, {
-            headers: { 
+            headers: {
               'Host': 'apis.roblox.com',
               'Sec-Ch-Ua-Platform': '"Windows"',
               'Accept-Language': 'en-US,en;q=0.9',
@@ -306,186 +219,100 @@ async function downloadAssetsIndividual(assets, cookie, downloadsDir, sendOutput
               'Sec-Fetch-Mode': 'cors',
               'Sec-Fetch-Dest': 'empty',
               'Referer': 'https://create.roblox.com/',
-              'Accept-Encoding': 'gzip, deflate, br',
-              'Priority': 'u=1, i',
-              'Cookie': `.ROBLOSECURITY=${cookie}`
-            }
+              'Cookie': `.ROBLOSECURITY=${cookie}`,
+            },
           });
-          
+
           if (assetDetailsResp.status !== 429) break;
+
+          // Only delay on actual 429s
           retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 500 * retryCount));
         }
-        
-        if (assetDetailsResp.ok) {
+
+        if (assetDetailsResp && assetDetailsResp.ok) {
           const assetDetails = await assetDetailsResp.json();
-          if (assetDetails.creationContext && assetDetails.creationContext.creator) {
-            const creator = assetDetails.creationContext.creator;
-            if (creator.userId) {
-              assetCreatorId = creator.userId;
-              assetCreatorType = 'User';
-              sendOutput({ output: `      ✓ Found creator: User ${assetCreatorId}\n`, success: true });
-            } else if (creator.groupId) {
-              assetCreatorId = creator.groupId;
-              assetCreatorType = 'Group';
-              sendOutput({ output: `      ✓ Found creator: Group ${assetCreatorId}\n`, success: true });
-            }
+          const creator = assetDetails?.creationContext?.creator;
+          if (creator?.userId) {
+            assetCreatorId = creator.userId;
+            assetCreatorType = 'User';
+          } else if (creator?.groupId) {
+            assetCreatorId = creator.groupId;
+            assetCreatorType = 'Group';
           }
         }
       }
-      
-      // Build candidate placeIds to try (use provided list first, then fetch minimal if empty)
+
+      // Build list of placeIds to try
       let candidatePlaceIds = Array.isArray(placeIdsFromCreator)
-        ? Array.from(
-            new Set(
-              placeIdsFromCreator
-                .map((p) => Number(p))
-                .filter((p) => Number.isFinite(p) && p > 0)
-            )
-          )
+        ? Array.from(new Set(placeIdsFromCreator.map(Number).filter(p => Number.isFinite(p) && p > 0)))
         : [];
 
       if (candidatePlaceIds.length === 0 && assetCreatorId) {
         try {
           const placeIds = await getMultiplePlaceIds(assetCreatorType, assetCreatorId, cookie, placeIdSearchLimit);
           candidatePlaceIds.push(...placeIds);
-          if (DEVELOPER_MODE && placeIds.length > 0) console.log(`(Dev) Got placeIds ${placeIds.join(',')} for asset ${asset.assetId} from ${assetCreatorType} ${assetCreatorId}`);
         } catch (err) {
-          if (DEVELOPER_MODE) console.warn(`(Dev) Failed to get placeId for creator ${assetCreatorId}:`, err.message);
-        }
-      }
-
-      // If still none, try user's own games as last resort
-      if (candidatePlaceIds.length === 0) {
-        try {
-          const userInfo = await validateCookieAndGetUser(cookie);
-          if (userInfo && userInfo.userId) {
-            const userPlaceIds = await getMultiplePlaceIds('User', userInfo.userId, cookie, placeIdSearchLimit);
-            candidatePlaceIds.push(...userPlaceIds);
-            if (DEVELOPER_MODE && userPlaceIds.length > 0) console.log(`(Dev) Using fallback placeIds ${userPlaceIds.join(',')} from user ${userInfo.userId}`);
-          }
-        } catch (err) {
-          if (DEVELOPER_MODE) console.warn(`(Dev) Failed to get fallback placeId:`, err.message);
+          if (DEVELOPER_MODE) console.warn(`(Dev) Failed to get placeIds for creator ${assetCreatorId}:`, err.message);
         }
       }
 
       if (candidatePlaceIds.length === 0) {
-        candidatePlaceIds.push(null); // Try without placeId as last resort
+        candidatePlaceIds.push(null); // try without placeId as last resort
       }
-      
-      const extensions = {
-        'Sound': '.ogg',
-        'Audio': '.ogg',
-        'Animation': '.rbxm',
-        'Image': '.png',
-        'Decal': '.png',
-      };
-      const ext = extensions[asset.assetType] || '.dat';
+
+      const ext = { Sound: '.ogg', Audio: '.ogg', Animation: '.rbxm', Image: '.png', Decal: '.png' }[asset.assetType] || '.dat';
       const sanitizedName = (asset.name || `Asset_${asset.assetId}`).replace(/[<>:"/\\|?*]/g, '_').substring(0, 200);
       const downloadPath = path.join(downloadsDir, `${sanitizedName}${ext}`);
 
-      sendOutput({ output: `    ↓ Downloading ${asset.name} (${asset.assetId})...\n`, success: null });
-
-      sendTransferUpdate({
-        id: transferId,
-        name: asset.name,
-        direction: 'download',
-        status: 'processing',
-        progress: 0,
-      });
+      sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'processing', progress: 0 });
 
       let downloaded = false;
       for (const placeId of candidatePlaceIds) {
         try {
-          // Use individual asset endpoint with placeId header
-          const assetUrl = `https://assetdelivery.roblox.com/v1/asset/?id=${asset.assetId}`;
-          const headers = {
-            'Cookie': `.ROBLOSECURITY=${cookie}`,
-            'User-Agent': 'Roblox/WinInet',
-          };
-          
-          if (placeId) {
-            headers['Roblox-Place-Id'] = String(placeId);
-            sendOutput({ output: `      Using placeId: ${placeId}\n`, success: null });
-            if (DEVELOPER_MODE) console.log(`(Dev) Downloading ${asset.assetId} with placeId ${placeId}`);
-          } else {
-            sendOutput({ output: `      ⚠ No placeId available\n`, success: false });
-            if (DEVELOPER_MODE) console.log(`(Dev) Downloading ${asset.assetId} without placeId`);
-          }
-          
-          const downloadResp = await fetch(assetUrl, {
-            headers: headers,
+          const headers = { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'User-Agent': 'Roblox/WinInet' };
+          if (placeId) headers['Roblox-Place-Id'] = String(placeId);
+
+          const downloadResp = await fetch(`https://assetdelivery.roblox.com/v1/asset/?id=${asset.assetId}`, {
+            headers,
             redirect: 'follow',
           });
 
-          if (!downloadResp.ok) {
-            throw new Error(`Download failed: ${downloadResp.status}`);
-          }
+          if (!downloadResp.ok) throw new Error(`Download failed: ${downloadResp.status}`);
 
-          // In Electron/Node fetch, use arrayBuffer → Buffer to avoid undefined buffer()
-          const arrayBuffer = await downloadResp.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
+          const buffer = Buffer.from(await downloadResp.arrayBuffer());
           await fs.writeFile(downloadPath, buffer);
 
-          downloadedAssets[asset.assetId] = {
-            filePath: downloadPath,
-            name: asset.name,
-            type: asset.assetType,
-            transferId: transferId,
-          };
-
-          sendTransferUpdate({
-            id: transferId,
-            name: asset.name,
-            direction: 'download',
-            status: 'completed',
-            progress: 100,
-          });
-
-          sendOutput({ output: `      ✓ Downloaded\n`, success: true });
-                    if (onProgress) onProgress();
+          downloadedAssets[asset.assetId] = { filePath: downloadPath, name: asset.name, type: asset.assetType, transferId };
+          sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'completed', progress: 100 });
+          if (onProgress) onProgress();
+          indivOk++;
           downloaded = true;
           break;
         } catch (errInner) {
           if (DEVELOPER_MODE) console.warn(`(Dev) Individual download failed for ${asset.assetId} with placeId ${placeId}:`, errInner.message);
-          sendOutput({ output: `      ✗ Download failed${placeId ? ` (placeId ${placeId})` : ''}: ${errInner.message}\n`, success: false });
-          // try next placeId
         }
       }
 
-      if (!downloaded) {
-        throw new Error('All placeId attempts failed');
-      }
-      
-      return { assetId: asset.assetId, success: true };
+      if (!downloaded) throw new Error('All placeId attempts failed');
     } catch (err) {
       if (DEVELOPER_MODE) console.warn(`(Dev) Individual download failed for ${asset.assetId}:`, err.message);
-      sendOutput({ output: `      ✗ Download failed: ${err.message}\n`, success: false });
-      
-      sendTransferUpdate({
-        id: transferId,
-        name: asset.name,
-        direction: 'download',
-        status: 'error',
-        progress: 0,
-      });
-      
+      sendOutput({ output: `    ✗ ${asset.name} (${asset.assetId}): ${err.message}\n`, success: false });
+      sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'error', progress: 0 });
       if (onProgress) onProgress();
-      return { assetId: asset.assetId, success: false };
+      indivFail++;
     }
   };
-  
-  // Process 3 downloads at a time to avoid overwhelming the API
-  const concurrency = 3;
-  for (let i = 0; i < assets.length; i += concurrency) {
-    const batch = assets.slice(i, i + concurrency);
-    await Promise.all(batch.map(downloadAsset));
+
+  for (let i = 0; i < assets.length; i += INDIVIDUAL_CONCURRENCY) {
+    await Promise.all(assets.slice(i, i + INDIVIDUAL_CONCURRENCY).map(downloadAsset));
   }
-  
-  const success = Object.keys(downloadedAssets).length > 0;
-  return { success, downloadedAssets };
+
+  sendOutput({ output: `  ✓ Individual: ${indivOk} downloaded${indivFail > 0 ? `, ${indivFail} failed` : ''}\n`, success: indivFail === 0 });
+  return { success: Object.keys(downloadedAssets).length > 0, downloadedAssets };
 }
 
 module.exports = {
   downloadAssetsBatch,
-  downloadAssetsIndividual
+  downloadAssetsIndividual,
 };

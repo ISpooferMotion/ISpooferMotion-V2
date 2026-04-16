@@ -1029,6 +1029,19 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
     return;
   }
 
+  // Validate that animation uploads have an API key (required since legacy endpoint was deprecated early 2026)
+  const animationAssets = (data.assets || []).filter(a => a && a.assetType === 'Animation');
+  if (!downloadOnly && animationAssets.length > 0 && !data.apiKey) {
+    const ts = new Date().toLocaleTimeString();
+    sendStatusMessage('API key required for animation uploads');
+    sendSpooferResultToRenderer({
+      output: `[${ts}] [ERROR] Animation uploads now require an Open Cloud API key.\n\nThe legacy Roblox upload endpoint was deprecated in early 2026.\n\nTo fix this:\n1. Go to create.roblox.com → Open Cloud → API Keys\n2. Create a key with Assets Read & Write permissions\n3. Paste the key into the "Open Cloud API Key" field\n`,
+      success: false,
+      completed: true,
+    });
+    return;
+  }
+
   sendStatusMessage(downloadOnly ? 'Starting download-only run...' : 'Starting spoofing process...');
   log('INFO', `${downloadOnly ? 'Download-only' : 'Spoofing'} process for ${data.assets.length} assets...`);
 
@@ -1324,7 +1337,8 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
       continue;
     }
 
-    const uploadConcurrency = Math.min(15, assets.length);
+    // Open Cloud API rate limit is 60 requests/min — keep concurrency low for animation-heavy runs
+    const uploadConcurrency = Math.min(6, assets.length);
 
     await runWithConcurrency(assets, uploadConcurrency, async (asset) => {
       const downloadData = downloadedAssets[asset.assetId];
@@ -1358,7 +1372,8 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
               uploadTransferId,
               sendTransferUpdate,
               downloadData.type,
-              validatedUser ? validatedUser.id : null
+              validatedUser ? validatedUser.id : null,
+              data.apiKey || null
             );
 
             if (!uploadResult.success) {

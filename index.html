@@ -173,13 +173,26 @@
             placeholder="Enter .ROBLOSECURITY cookie">
         </div>
 
+        <!-- Open Cloud API Key Input -->
+        <div class="form-group" id="api-key-group">
+          <label for="openCloudApiKey" style="display: flex; align-items: center; gap: 6px;">
+            Open Cloud API Key
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--label-color,#888);color:#fff;font-size:11px;font-weight:bold;cursor:default;flex-shrink:0;" title="Required for animation uploads. Go to create.roblox.com → Open Cloud → API Keys. Create a key and enable 'Assets' with Read &amp; Write access. Not needed for audio-only spoofing.">?</span>
+          </label>
+          <input
+            type="text"
+            id="openCloudApiKey"
+            name="openCloudApiKey"
+            placeholder="Required for animation uploads (create.roblox.com → Open Cloud → API Keys)">
+        </div>
+
         <!-- Group ID Input -->
         <div class="form-group">
           <label for="groupId">GroupID</label>
-          <input 
-            type="text" 
-            id="groupId" 
-            name="groupId" 
+          <input
+            type="text"
+            id="groupId"
+            name="groupId"
             placeholder="Leave empty if you dont want to upload to group">
         </div>
 

@@ -7,6 +7,7 @@ local assets = pluginEnvironment.Assets
 
 local HttpService = game:GetService("HttpService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local ScriptEditorService = game:GetService("ScriptEditorService")
 
 --[[Toolbar Stuff]]--
 local toolbar = plugin:CreateToolbar("AssetCollection Test")
@@ -352,8 +353,15 @@ local function replaceIds(mappings)
 
 	local replaced = 0
 	local descendants = game:GetDescendants()
+	local processedCount = 0
+	local YIELD_EVERY = 200 -- yield every N objects to prevent Studio freezing
 
 	for _, obj in ipairs(descendants) do
+		processedCount += 1
+		if processedCount % YIELD_EVERY == 0 then
+			task.wait()
+		end
+
 		-- Animation instances
 		if obj:IsA("Animation") then
 			local id = obj.AnimationId:match("rbxassetid://(%d+)")
@@ -424,9 +432,19 @@ local function replaceIds(mappings)
 					newSource = newSource:gsub("(roblox%.com/[Aa]sset/%?[Ii][Dd]=)" .. oldId, "%1" .. newId)
 				end
 				if newSource ~= source then
-					local writeOk, writeErr = pcall(function()
-						obj.Source = newSource
-					end)
+					local writeOk, writeErr
+					if #newSource >= 200000 then
+						-- Source too large for direct property assignment; use ScriptEditorService instead
+						writeOk, writeErr = pcall(function()
+							ScriptEditorService:UpdateSourceAsync(obj, function()
+								return newSource
+							end)
+						end)
+					else
+						writeOk, writeErr = pcall(function()
+							obj.Source = newSource
+						end)
+					end
 					if writeOk then
 						replaced += 1
 						print("[Replace] Script source", obj:GetFullName())

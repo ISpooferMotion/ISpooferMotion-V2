@@ -102,9 +102,10 @@ async function downloadAnimationAssetWithProgress(url, robloxCookie, filePath, t
 }
 
 /**
- * Publishes an animation RBXM file to Roblox via /ide/publish/uploadnewanimation
+ * Publishes an animation RBXM file to Roblox via the Open Cloud Assets API.
+ * The legacy /ide/publish/uploadnewanimation endpoint was deprecated in early 2026.
  */
-async function publishAnimationRbxmWithProgress(filePath, name, cookie, csrfToken, groupId = null, transferId, sendTransferUpdate, assetTypeName = 'Animation') {
+async function publishAnimationRbxmWithProgress(filePath, name, cookie, csrfToken, groupId = null, transferId, sendTransferUpdate, assetTypeName = 'Animation', apiKey = null, userId = null) {
   let fileBuffer;
   let fileSize = 0;
   try {
@@ -125,42 +126,99 @@ async function publishAnimationRbxmWithProgress(filePath, name, cookie, csrfToke
     error: null,
   });
 
-  const uploadUrl = new URL('https://www.roblox.com/ide/publish/uploadnewanimation');
-  uploadUrl.searchParams.set('assetTypeName', assetTypeName);
-  uploadUrl.searchParams.set('name', name);
-  uploadUrl.searchParams.set('description', 'Placeholder');
-  uploadUrl.searchParams.set('ispublic', 'false');
-  uploadUrl.searchParams.set('allowComments', 'true');
-  uploadUrl.searchParams.set('isGamesAsset', 'false');
-  if (groupId) uploadUrl.searchParams.set('groupId', groupId);
+  if (!apiKey) {
+    const errorMsg = 'Animation uploads require an Open Cloud API key. The legacy Roblox upload endpoint was deprecated in early 2026. Go to create.roblox.com → Open Cloud → API Keys, create a key with Assets Read & Write permissions, and paste it into the "Open Cloud API Key" field.';
+    sendTransferUpdate({ id: transferId, status: 'error', error: errorMsg, progress: 0 });
+    return { success: false, error: errorMsg };
+  }
 
-  const headers = {
-    'Content-Type': 'application/octet-stream',
-    'Cookie': `.ROBLOSECURITY=${cookie}`,
-    'X-CSRF-TOKEN': csrfToken,
-    'User-Agent': 'RobloxStudio/WinInet',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+  const creatorObj = groupId ? { groupId: String(groupId) } : { userId: String(userId) };
+  const requestMetadata = {
+    assetType: 'Animation',
+    displayName: name,
+    description: 'Placeholder',
+    creationContext: { creator: creatorObj },
   };
 
-  if (DEVELOPER_MODE) console.log(`[UPLOAD DEBUG - FETCH] Attempting ${assetTypeName} upload for "${name}" to: ${uploadUrl.toString()}`);
+  if (DEVELOPER_MODE) console.log(`[UPLOAD DEBUG] Attempting Animation upload for "${name}" via Open Cloud Assets API`);
+
+  const MAX_RATE_LIMIT_RETRIES = 4;
 
   try {
-    const response = await fetch(uploadUrl.toString(), {
-      method: 'POST',
-      headers,
-      body: fileBuffer,
-    });
-    const bodyText = await response.text();
-    if (!response.ok) {
-      throw new Error(`Upload failed (Status: ${response.status}). Response: ${bodyText.substring(0, 350)}`);
+    let response, responseData;
+
+    // Retry loop — handles 429 rate limits by waiting the retry-after duration
+    for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+      // FormData must be rebuilt each attempt since the body stream is consumed after fetch
+      const formData = new FormData();
+      formData.append('request', JSON.stringify(requestMetadata));
+      formData.append('fileContent', new Blob([fileBuffer], { type: 'model/x-rbxm' }), 'animation.rbxm');
+
+      response = await fetch('https://apis.roblox.com/assets/v1/assets', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey },
+        body: formData,
+      });
+
+      if (response.status === 429) {
+        if (attempt >= MAX_RATE_LIMIT_RETRIES) {
+          throw new Error(`Rate limit hit after ${MAX_RATE_LIMIT_RETRIES} retries. Try reducing the number of concurrent uploads or wait a minute and try again.`);
+        }
+        const retryAfter = Math.min(parseInt(response.headers.get('retry-after') || '60', 10), 120);
+        if (DEVELOPER_MODE) console.log(`[UPLOAD] Rate limited on "${name}". Waiting ${retryAfter}s (attempt ${attempt + 1}/${MAX_RATE_LIMIT_RETRIES})...`);
+        // Keep the transfer in processing state while waiting
+        sendTransferUpdate({ id: transferId, status: 'processing', progress: 0 });
+        await new Promise(r => setTimeout(r, retryAfter * 1000));
+        continue;
+      }
+
+      responseData = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(`API key unauthorized (${response.status}). Verify your Open Cloud API key has Assets Read & Write permissions.`);
+        } else if (response.status >= 500) {
+          throw new Error(`Server error (${response.status}). Response: ${JSON.stringify(responseData)}`);
+        } else {
+          throw new Error(`Upload failed (Status: ${response.status}). Response: ${JSON.stringify(responseData)}`);
+        }
+      }
+
+      break; // success — exit retry loop
     }
-    const newAssetId = bodyText.trim();
-    if (newAssetId && /^\d+$/.test(newAssetId)) {
-      sendTransferUpdate({ id: transferId, progress: 100, status: 'completed', newAssetId: newAssetId });
-      return { success: true, assetId: newAssetId };
-    } else {
-      throw new Error(`Upload successful (Status ${response.status}) but the response was not a valid Asset ID. Response: "${bodyText.substring(0, 350)}"`);
+
+    // Synchronous success: done=true with assetId in response
+    if (responseData.done && responseData.response) {
+      const assetId = responseData.response.assetId || responseData.response.Id;
+      if (assetId) {
+        sendTransferUpdate({ id: transferId, progress: 100, status: 'completed', newAssetId: String(assetId) });
+        return { success: true, assetId: String(assetId) };
+      }
     }
+
+    // Asynchronous: poll the operation path until done
+    if (responseData.path && !responseData.done) {
+      const operationPath = responseData.path;
+      if (DEVELOPER_MODE) console.log(`[UPLOAD DEBUG] Polling operation: ${operationPath}`);
+      for (let attempt = 1; attempt <= 15; attempt++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const pollResp = await fetch(`https://apis.roblox.com/assets/v1/${operationPath}`, {
+          headers: { 'x-api-key': apiKey },
+        });
+        const pollData = await pollResp.json();
+        if (pollData.done && pollData.response) {
+          const assetId = pollData.response.assetId || pollData.response.Id;
+          if (assetId) {
+            sendTransferUpdate({ id: transferId, progress: 100, status: 'completed', newAssetId: String(assetId) });
+            return { success: true, assetId: String(assetId) };
+          }
+        }
+        if (DEVELOPER_MODE) console.log(`[UPLOAD DEBUG] Poll attempt ${attempt}/15, done=${pollData.done}`);
+      }
+      throw new Error('Upload timed out waiting for Roblox to process the animation.');
+    }
+
+    throw new Error(`Unexpected response from Open Cloud API: ${JSON.stringify(responseData)}`);
   } catch (err) {
     const errorMsg = err.message || `Upload failed for "${name}" due to an unknown error.`;
     console.error(`[UPLOAD ERROR - ANIMATION] ${errorMsg}`, err.cause || err);
@@ -274,7 +332,7 @@ async function publishAudioWithProgress(filePath, name, cookie, csrfToken, group
  * Router function that selects the appropriate upload method based on asset type
  * @param {string} assetType - 'Sound', 'Audio', 'Animation', 'Image', 'Decal'
  */
-async function publishAssetWithProgress(filePath, name, cookie, csrfToken, groupId = null, transferId, sendTransferUpdate, assetType, userId = null) {
+async function publishAssetWithProgress(filePath, name, cookie, csrfToken, groupId = null, transferId, sendTransferUpdate, assetType, userId = null, apiKey = null) {
   // Route based on asset type
   if (assetType === 'Sound' || assetType === 'Audio') {
     return await publishAudioWithProgress(filePath, name, cookie, csrfToken, groupId, transferId, sendTransferUpdate);
@@ -288,9 +346,9 @@ async function publishAssetWithProgress(filePath, name, cookie, csrfToken, group
       sendTransferUpdate({ id: transferId, name, size, status: 'processing', direction: 'upload', progress: 0, error: null });
 
       if (DEVELOPER_MODE) console.log(`[IMAGE UPLOAD] Starting upload: ${name}, groupId=${groupId}, userId=${userId}`);
-      
+
       const result = await uploadAsset(filePath, assetType, name, groupId, userId, cookie, null);
-      
+
       if (result.success && result.assetId) {
         if (DEVELOPER_MODE) console.log(`[IMAGE UPLOAD] ✓ Success: ${name} → assetId ${result.assetId}`);
         sendTransferUpdate({ id: transferId, progress: 100, status: 'completed', newAssetId: result.assetId.toString() });
@@ -307,10 +365,10 @@ async function publishAssetWithProgress(filePath, name, cookie, csrfToken, group
     }
   }
 
-  // For animations (and other types by fallback), use the RBXM uploader
+  // For animations (and other types by fallback), use the Open Cloud RBXM uploader
   const assetTypeName = assetType === 'Animation' ? 'Animation' : (assetType || 'Animation');
   if (assetType !== 'Animation' && DEVELOPER_MODE) console.warn(`[UPLOAD WARNING] No specific handler for ${assetType}, using animation endpoint`);
-  return await publishAnimationRbxmWithProgress(filePath, name, cookie, csrfToken, groupId, transferId, sendTransferUpdate, assetTypeName);
+  return await publishAnimationRbxmWithProgress(filePath, name, cookie, csrfToken, groupId, transferId, sendTransferUpdate, assetTypeName, apiKey, userId);
 }
 
 module.exports = {
