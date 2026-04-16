@@ -541,6 +541,7 @@ class AppManager {
       userId: selectedUserId,
       groupId: selectedGroupId,
       cookie: manualCookie,
+      apiKey: (document.getElementById('openCloudApiKey')?.value || '').trim(),
       assets: selectedAssets,
       advancedSettings: {
         placeIdSearchLimit: parseInt(this.elements.placeIdSearchLimitInput?.value, 10) || undefined,

@@ -42,7 +42,13 @@ function sanitizeLogMessage(message) {
   sanitized = sanitized.replace(/"session"\s*:\s*"[^"]*"/gi, '"session":"{Cookie:Here}"');
   sanitized = sanitized.replace(/"token"\s*:\s*"[^"]*"/gi, '"token":"{Cookie:Here}"');
   sanitized = sanitized.replace(/"accessToken"\s*:\s*"[^"]*"/gi, '"accessToken":"{Cookie:Here}"');
-  
+
+  // Replace Open Cloud API keys
+  sanitized = sanitized.replace(/"x-api-key"\s*:\s*"[^"]*"/gi, '"x-api-key":"{ApiKey:Here}"');
+  sanitized = sanitized.replace(/x-api-key[=:]\s*[^\s,;},"]*([,}"\s]|$)/gi, 'x-api-key:{ApiKey:Here}$1');
+  sanitized = sanitized.replace(/"openCloudApiKey"\s*:\s*"[^"]*"/gi, '"openCloudApiKey":"{ApiKey:Here}"');
+  sanitized = sanitized.replace(/"apiKey"\s*:\s*"[^"]*"/gi, '"apiKey":"{ApiKey:Here}"');
+
   return sanitized;
 }
 
