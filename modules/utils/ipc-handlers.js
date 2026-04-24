@@ -11,6 +11,25 @@ const { resolveAssetCreators } = require('./asset-creator-resolver');
 const { downloadAssetsBatch, downloadAssetsIndividual } = require('./asset-downloader');
 const fs = require('fs').promises;
 
+// ── Pause / Resume ────────────────────────────────────────────────────────────
+let _isPaused = false;
+let _pauseResolvers = [];
+function pauseSpoofer() { _isPaused = true; }
+function resumeSpoofer() { _isPaused = false; _pauseResolvers.splice(0).forEach(r => r()); }
+async function checkPaused() {
+  if (_isPaused) await new Promise(resolve => _pauseResolvers.push(resolve));
+}
+
+// ── Session (crash recovery) ──────────────────────────────────────────────────
+function getSessionPath() { return path.join(app.getPath('userData'), 'ispoofer_v2_session.json'); }
+async function saveSession(session) {
+  try { await fs.writeFile(getSessionPath(), JSON.stringify(session)); } catch {}
+}
+async function loadSession() {
+  try { return JSON.parse(await fs.readFile(getSessionPath(), 'utf8')); } catch { return null; }
+}
+async function clearSession() { await fs.unlink(getSessionPath()).catch(() => {}); }
+
 // Prevent running the spoofer multiple times concurrently
 let isSpooferRunning = false;
 
@@ -200,6 +219,11 @@ function registerIpcHandlers(getMainWindowFn, sendTransferUpdate, sendSpooferRes
       if (DEVELOPER_MODE) console.warn('Failed to play sound:', err);
     }
   });
+
+  ipcMain.on('spoofer-pause', () => { pauseSpoofer(); sendStatusMessage('Paused'); });
+  ipcMain.on('spoofer-resume', () => { resumeSpoofer(); sendStatusMessage('Resuming...'); });
+  ipcMain.handle('check-session', () => loadSession());
+  ipcMain.on('clear-session', () => clearSession());
 
   ipcMain.on('run-spoofer-action', async (event, data) => {
     // Guard: avoid concurrent spoofer runs
@@ -1207,11 +1231,28 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
     })
   );
 
+  // ── Session setup (crash recovery + resume) ──────────────────────────────
+  const isResume = data.resumeSession === true;
+  let session = isResume ? await loadSession() : null;
+  if (isResume && session && session.pendingIds) {
+    const pendingSet = new Set(session.pendingIds.map(String));
+    data.assets = data.assets.filter(a => pendingSet.has(String(a.assetId)));
+    sendSpooferResultToRenderer({ output: `Resuming — ${data.assets.length} asset(s) remaining from previous session.\n`, success: true });
+  } else {
+    session = {
+      sessionId: crypto.randomUUID(),
+      startedAt: new Date().toISOString(),
+      pendingIds: data.assets.map(a => String(a.assetId)),
+      completedMappings: [],
+    };
+    await saveSession(session);
+  }
+
   const results = {
     total: data.assets.length,
     successful: 0,
     failed: 0,
-    mappings: [], // [{ originalId, newId, name, type }]
+    mappings: (session.completedMappings || []).map(m => ({ originalId: m.originalId, newId: m.newId, name: m.name || m.originalId, type: m.type || 'Animation' })),
   };
 
   // Process assets by creator (batch downloads per creator)
@@ -1253,7 +1294,8 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
         sendTransferUpdate,
         creatorInfo.placeIds,
         placeIdSearchLimit,
-        updateDownloadProgress
+        updateDownloadProgress,
+        downloadOnly
       );
     } else {
       // Batch download with multiple placeId fallback
@@ -1264,7 +1306,8 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
         downloadsDir,
         sendSpooferResultToRenderer,
         sendTransferUpdate,
-        updateDownloadProgress
+        updateDownloadProgress,
+        downloadOnly
       );
     }
 
@@ -1286,7 +1329,8 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
             downloadsDir,
             sendSpooferResultToRenderer,
             sendTransferUpdate,
-            updateDownloadProgress
+            updateDownloadProgress,
+            downloadOnly
           );
           downloadedAssets = retryResult.downloadedAssets;
         } catch (err) {
@@ -1307,7 +1351,8 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
           sendTransferUpdate,
           creatorInfo.placeIds,
           placeIdSearchLimit,
-          updateDownloadProgress
+          updateDownloadProgress,
+          downloadOnly
         );
         downloadedAssets = fallbackResult.downloadedAssets || {};
 
@@ -1336,8 +1381,17 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
       continue;
     }
 
-    // Open Cloud API rate limit is 60 requests/min — keep concurrency low for animation-heavy runs
-    const uploadConcurrency = Math.min(6, assets.length);
+    // Open Cloud API rate limit is 60 req/min on POSTs. With ~10s average processing time,
+    // 10 concurrent slots yields ~60 POSTs/min — right at the limit but safe given async polling.
+    const uploadConcurrency = Math.min(10, assets.length);
+
+    // Fetch CSRF token once per creator batch — it is session-scoped and reusable.
+    // Only mesh uploads need it; Open Cloud uploads ignore it. Avoids one HTTP round-trip per asset.
+    let creatorCsrfToken = null;
+    const getCreatorCsrfToken = async () => {
+      if (!creatorCsrfToken) creatorCsrfToken = await getCsrfToken(cookie);
+      return creatorCsrfToken;
+    };
 
     await runWithConcurrency(assets, uploadConcurrency, async (asset) => {
       const downloadData = downloadedAssets[asset.assetId];
@@ -1361,7 +1415,8 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
         let lastError;
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
-            const csrfToken = await getCsrfToken(cookie);
+            await checkPaused();
+            const csrfToken = await getCreatorCsrfToken();
             const uploadResult = await publishAssetWithProgress(
               downloadData.filePath,
               assetName,
@@ -1372,7 +1427,8 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
               sendTransferUpdate,
               downloadData.type,
               validatedUser ? validatedUser.id : null,
-              data.apiKey || null
+              data.apiKey || null,
+              downloadData.assetId || asset.assetId || null
             );
 
             if (!uploadResult.success) {
@@ -1388,6 +1444,10 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
               name: assetName,
               type: downloadData.type,
             });
+            // Save progress after each successful upload
+            session.pendingIds = session.pendingIds.filter(id => String(id) !== String(asset.assetId));
+            session.completedMappings.push({ originalId: String(asset.assetId), newId: uploadResult.assetId, name: assetName, type: downloadData.type });
+            await saveSession(session);
             uploadProcessed++;
             const eta = formatEta(uploadStart, uploadProcessed, data.assets.length);
             sendStatusMessage(`Uploading ${uploadProcessed}/${data.assets.length} (ETA ${eta})`);
@@ -1418,6 +1478,7 @@ async function handleSpooferAction(data, getMainWindowFn, sendTransferUpdate, se
 
   // Summary
   log('INFO', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  await clearSession();
   log('INFO', 'SPOOFING COMPLETE', results.successful > 0);
   log('INFO', `Total: ${results.total} | Success: ${results.successful} | Failed: ${results.failed}`);
   

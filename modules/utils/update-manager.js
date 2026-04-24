@@ -129,13 +129,12 @@ async function downloadAndInstallUpdate(downloadUrl) {
     // Wait a moment for file to be fully released before executing
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    // On Linux, make AppImage executable
-    if (platform === 'linux' && installerPath.endsWith('.AppImage')) {
+    // On Linux, make the downloaded file executable (AppImage or deb)
+    if (platform === 'linux') {
       try {
-        console.log('[Update] Making AppImage executable:', installerPath);
         fs.chmodSync(installerPath, 0o755);
       } catch (chmodErr) {
-        console.warn('[Update] Could not chmod AppImage:', chmodErr.message);
+        console.warn('[Update] Could not chmod installer:', chmodErr.message);
       }
     }
 
@@ -150,25 +149,46 @@ async function downloadAndInstallUpdate(downloadUrl) {
     let child = null;
 
     if (platform === 'win32') {
-      console.log('[Update] Spawning cmd with args: ["/c", "' + installerPath + '"]');
-      // Use spawn with cmd /c to run installer via Windows shell
+      console.log('[Update] Spawning Windows installer:', installerPath);
       child = spawn('cmd', ['/c', installerPath], {
         detached: true,
         stdio: 'ignore',
-        windowsHide: true
+        windowsHide: true,
       });
     } else if (platform === 'darwin') {
-      console.log('[Update] Spawning open with args: ["' + installerPath + '"]');
+      // dmg: mount and let user drag-install
+      // zip: open in Finder (user replaces app manually)
+      console.log('[Update] Spawning open for macOS:', installerPath);
       child = spawn('open', [installerPath], {
         detached: true,
-        stdio: 'ignore'
+        stdio: 'ignore',
       });
-    } else {
-      console.log('[Update] Spawning xdg-open with args: ["' + installerPath + '"]');
-      child = spawn('xdg-open', [installerPath], {
-        detached: true,
-        stdio: 'ignore'
-      });
+    } else if (platform === 'linux') {
+      if (installerPath.endsWith('.deb')) {
+        // Try pkexec (polkit) for passwordless-prompt dpkg install, fall back to xdg-open
+        console.log('[Update] Installing .deb with pkexec dpkg:', installerPath);
+        child = spawn('pkexec', ['dpkg', '-i', installerPath], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        child.on('error', () => {
+          console.warn('[Update] pkexec not available, falling back to xdg-open');
+          const fb = spawn('xdg-open', [installerPath], { detached: true, stdio: 'ignore' });
+          fb.unref();
+        });
+      } else {
+        // AppImage: replace current binary then relaunch
+        const currentExec = process.execPath;
+        console.log('[Update] Replacing AppImage:', currentExec, '←', installerPath);
+        try {
+          fs.copyFileSync(installerPath, currentExec);
+          fs.chmodSync(currentExec, 0o755);
+          app.relaunch();
+        } catch (replaceErr) {
+          console.warn('[Update] AppImage replace failed, falling back to xdg-open:', replaceErr.message);
+          child = spawn('xdg-open', [installerPath], { detached: true, stdio: 'ignore' });
+        }
+      }
     }
 
     if (child) {

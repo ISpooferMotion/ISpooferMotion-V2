@@ -29,15 +29,15 @@
       <div class="sidebar-nav">
         <button class="nav-button active" data-section="home">
           <img class="nav-icon" src="assets/icons/Dark/Standard/MeshPart.png" alt="Home" />
-          <span>Home</span>
+          <span data-i18n="nav.home">Home</span>
         </button>
         <button class="nav-button" data-section="spoofing">
           <img class="nav-icon" src="assets/icons/Dark/Standard/ChatInputBarConfiguration.png" alt="Spoofing" />
-          <span>Spoofing</span>
+          <span data-i18n="nav.spoofing">Spoofing</span>
         </button>
         <button class="nav-button" data-section="settings">
           <img class="nav-icon" src="assets/icons/Dark/Standard/GameSettings.png" alt="Settings" />
-          <span>Settings</span>
+          <span data-i18n="nav.settings">Settings</span>
         </button>
       </div>
     </div>
@@ -49,11 +49,11 @@
 
       <!-- ============= HOME SECTION ============= -->
       <div id="section-home" class="content-section active">
-        <h2>Welcome to ISpooferMotion</h2>
-        
+        <h2 data-i18n="home.title">Welcome to ISpooferMotion</h2>
+
         <div style="padding: 20px; background-color: var(--input-bg); border-radius: 8px; margin-bottom: 20px;">
-          <h3 style="margin-top: 0; color: var(--green-accent);">Quick Start Guide</h3>
-          <p style="color: var(--label-color); line-height: 1.6;">
+          <h3 style="margin-top: 0; color: var(--green-accent);" data-i18n="home.quickstartTitle">Quick Start Guide</h3>
+          <p style="color: var(--label-color); line-height: 1.6;" data-i18n="home.quickstartBody" data-i18n-html>
             1. Navigate to the <strong>Spoofing</strong> tab to configure and run the spoofer<br>
             2. Select what you want to spoof (Animation, Audio, Images, etc.)<br>
             3. Enter your animation ID and credentials<br>
@@ -62,7 +62,7 @@
         </div>
 
         <div style="padding: 20px; background-color: var(--input-bg); border-radius: 8px; margin-bottom: 20px;">
-          <h3 style="margin-top: 0; color: var(--green-accent);">Features</h3>
+          <h3 style="margin-top: 0; color: var(--green-accent);" data-i18n="home.featuresTitle">Features</h3>
           <ul style="color: var(--label-color); line-height: 1.8;">
             <li><strong>Animation Spoofing:</strong> Modify and upload Roblox animations</li>
             <li><strong>Audio Spoofing:</strong> Spoof audio files and metadata</li>
@@ -73,28 +73,28 @@
         </div>
 
         <div style="padding: 20px; background-color: var(--input-bg); border-radius: 8px;">
-          <h3 style="margin-top: 0; color: var(--green-accent);">Need Help?</h3>
+          <h3 style="margin-top: 0; color: var(--green-accent);" data-i18n="home.helpTitle">Need Help?</h3>
           <p style="color: var(--label-color); line-height: 1.6;">
-            Join our Discord server for support, updates, and community discussions.<br>
-            <button id="discord-home-btn" style="margin-top: 10px; padding: 8px 16px; background-color: #5865F2; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold;">Join Discord</button>
+            <span data-i18n="home.helpBody">Join our Discord server for support, updates, and community discussions.</span><br>
+            <button id="discord-home-btn" style="margin-top: 10px; padding: 8px 16px; background-color: #5865F2; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold;" data-i18n="home.discordBtn">Join Discord</button>
           </p>
         </div>
       </div>
 
       <!-- ============= SPOOFING SECTION ============= -->
       <div id="section-spoofing" class="content-section">
-        <h2>Spoofer Configuration</h2>
-        
+        <h2 data-i18n="spoof.title">Spoofer Configuration</h2>
+
         <!-- Top controls: Selected User and Group -->
         <div class="spoofer-top-controls">
           <div class="form-group">
-            <label for="selected-user">Selected User</label>
+            <label for="selected-user" data-i18n="spoof.selectedUser">Selected User</label>
             <select id="selected-user">
               <option value="">None</option>
             </select>
           </div>
           <div class="form-group">
-            <label for="selected-group">Selected Group</label>
+            <label for="selected-group" data-i18n="spoof.selectedGroup">Selected Group</label>
             <select id="selected-group">
               <option value="">None</option>
             </select>
@@ -103,11 +103,11 @@
         
         <!-- What to Spoof Selection -->
         <div style="background-color: var(--input-bg); padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-          <label style="display: block; color: var(--label-color); font-size: 14px; margin-bottom: 12px; font-weight: 600;">Select What to Spoof:</label>
+          <label style="display: block; color: var(--label-color); font-size: 14px; margin-bottom: 12px; font-weight: 600;" data-i18n="spoof.selectWhat">Select What to Spoof:</label>
           <div class="toggles-container" style="margin-top: 0; margin-bottom: 0;">
             <div class="toggle-group">
               <img class="toggle-icon" src="assets/icons/Dark/Standard/Animation.png" alt="" />
-              <label for="spoof-animation" class="toggle-label">Animation</label>
+              <label for="spoof-animation" class="toggle-label" data-i18n="spoof.animation">Animation</label>
               <label class="switch">
                 <input type="checkbox" id="spoof-animation" checked>
                 <span class="slider"></span>
@@ -115,7 +115,7 @@
             </div>
             <div class="toggle-group">
               <img class="toggle-icon" src="assets/icons/Dark/Standard/Sound.png" alt="" />
-              <label for="spoof-audio" class="toggle-label">Audio</label>
+              <label for="spoof-audio" class="toggle-label" data-i18n="spoof.audio">Audio</label>
               <label class="switch">
                 <input type="checkbox" id="spoof-audio">
                 <span class="slider"></span>
@@ -123,7 +123,7 @@
             </div>
             <div class="toggle-group">
               <img class="toggle-icon" src="assets/icons/Dark/Standard/Decal.png" alt="" />
-              <label for="spoof-images" class="toggle-label">Images</label>
+              <label for="spoof-images" class="toggle-label" data-i18n="spoof.images">Images</label>
               <label class="switch">
                 <input type="checkbox" id="spoof-images">
                 <span class="slider"></span>
@@ -131,7 +131,7 @@
             </div>
             <div class="toggle-group">
               <img class="toggle-icon" src="assets/icons/Dark/Standard/MeshPart.png" alt="" />
-              <label for="spoof-meshes" class="toggle-label">Meshes</label>
+              <label for="spoof-meshes" class="toggle-label" data-i18n="spoof.meshes">Meshes</label>
               <label class="switch">
                 <input type="checkbox" id="spoof-meshes">
                 <span class="slider"></span>
@@ -139,7 +139,7 @@
             </div>
             <div class="toggle-group">
               <img class="toggle-icon" src="assets/icons/Dark/Standard/Script.png" alt="" />
-              <label for="spoof-script-refs" class="toggle-label">Script Refs</label>
+              <label for="spoof-script-refs" class="toggle-label" data-i18n="spoof.scriptRefs">Script Refs</label>
               <label class="switch">
                 <input type="checkbox" id="spoof-script-refs">
                 <span class="slider"></span>
@@ -165,7 +165,7 @@
 
         <!-- Roblox Cookie Input -->
         <div class="form-group">
-          <label for="robloxCookie">Roblox Cookie</label>
+          <label for="robloxCookie" data-i18n="spoof.cookie">Roblox Cookie</label>
           <input 
             type="text" 
             id="robloxCookie" 
@@ -188,7 +188,7 @@
 
         <!-- Group ID Input -->
         <div class="form-group">
-          <label for="groupId">GroupID</label>
+          <label for="groupId" data-i18n="spoof.groupId">GroupID</label>
           <input
             type="text"
             id="groupId"
@@ -199,7 +199,7 @@
         <!-- Toggles -->
         <div class="toggles-container">
           <div class="toggle-group">
-            <label for="enable-spoofing" class="toggle-label">Enable Spoofing</label>
+            <label for="enable-spoofing" class="toggle-label" data-i18n="spoof.enableSpoofing">Enable Spoofing</label>
             <label class="switch">
               <input type="checkbox" id="enable-spoofing" checked>
               <span class="slider"></span>
@@ -207,15 +207,23 @@
           </div>
         </div>
 
+        <!-- Session recovery banner -->
+        <div id="session-banner" style="display:none; background:var(--input-bg); border:1px solid var(--border-color); border-radius:6px; padding:10px 14px; margin-bottom:12px; font-size:13px; color:var(--text-color);">
+          ⚠️ Incomplete session found — <strong id="session-pending-count"></strong> asset(s) still pending.
+          <button id="session-resume-btn" style="margin-left:10px; padding:4px 12px; background:var(--green-accent); color:var(--text-color); border:none; border-radius:4px; cursor:pointer; font-size:12px;">Resume</button>
+          <button id="session-discard-btn" style="margin-left:6px; padding:4px 10px; background:var(--input-bg); color:var(--label-color); border:1px solid var(--border-color); border-radius:4px; cursor:pointer; font-size:12px;">Discard</button>
+        </div>
+
         <!-- Run Spoofer Button -->
         <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-          <button id="run-spoofer-btn" style="flex: 1; margin-bottom: 0;">Run Spoofer</button>
-          <button id="retry-replace-btn" style="flex: 0 0 auto; padding: 12px 20px; margin-bottom: 0;" disabled>Retry Replacing</button>
+          <button id="run-spoofer-btn" style="flex: 1; margin-bottom: 0;" data-i18n="spoof.runSpoofer">Run Spoofer</button>
+          <button id="pause-spoofer-btn" style="display:none;">⏸ Pause</button>
+          <button id="retry-replace-btn" style="flex: 0 0 auto; padding: 12px 20px; margin-bottom: 0;" disabled data-i18n="spoof.retryReplacing">Retry Replacing</button>
         </div>
 
         <!-- Output Area -->
         <div class="output-area">
-          <label for="output-data" style="color: var(--label-color); font-size: 13px; margin-bottom: 6px; display: block;">Output</label>
+          <label for="output-data" style="color: var(--label-color); font-size: 13px; margin-bottom: 6px; display: block;" data-i18n="spoof.output">Output</label>
           <div class="input-with-button-container">
             <textarea 
               id="output-data" 
@@ -361,38 +369,38 @@
 
       <!-- ============= SETTINGS SECTION ============= -->
       <div id="section-settings" class="content-section">
-        <h2>Application Settings</h2>
-        
+        <h2 data-i18n="settings.title">Application Settings</h2>
+
         <!-- Settings Dropdown 1 -->
         <div class="dropdown" id="dropdown-settings-1">
           <div class="dropdown-header">
-            <span>General Settings</span>
+            <span data-i18n="settings.general">General Settings</span>
             <span class="dropdown-toggle">▼</span>
           </div>
           <div class="dropdown-content">
             <div class="toggle-group" style="margin-bottom: 10px;">
-              <label for="auto-update" class="toggle-label">Auto Update</label>
+              <label for="auto-update" class="toggle-label" data-i18n="settings.autoUpdate">Auto Update</label>
               <label class="switch">
                 <input type="checkbox" id="auto-update" checked>
                 <span class="slider"></span>
               </label>
             </div>
             <div class="toggle-group" style="margin-bottom: 10px;">
-              <label for="start-on-boot" class="toggle-label">Start on Boot</label>
+              <label for="start-on-boot" class="toggle-label" data-i18n="settings.startOnBoot">Start on Boot</label>
               <label class="switch">
                 <input type="checkbox" id="start-on-boot">
                 <span class="slider"></span>
               </label>
             </div>
             <div class="toggle-group" style="margin-bottom: 10px;">
-              <label for="lock-aspect-ratio" class="toggle-label">Lock Window Aspect Ratio</label>
+              <label for="lock-aspect-ratio" class="toggle-label" data-i18n="settings.lockAspect">Lock Window Aspect Ratio</label>
               <label class="switch">
                 <input type="checkbox" id="lock-aspect-ratio" checked>
                 <span class="slider"></span>
               </label>
             </div>
             <div class="form-group">
-              <label for="theme-select">Theme</label>
+              <label for="theme-select" data-i18n="settings.theme">Theme</label>
               <select 
                 id="theme-select"
                 style="width: 100%; padding: 10px 12px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color); font-size: 14px; font-family: var(--font-main); transition: all 0.3s ease; cursor: pointer;">
@@ -402,7 +410,7 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="theme-import-btn">Import Custom Theme</label>
+              <label for="theme-import-btn" data-i18n="settings.importTheme">Import Custom Theme</label>
               <input 
                 type="file" 
                 id="theme-import-file" 
@@ -414,45 +422,57 @@
                 accept="image/*" 
                 style="display: none;">
               <button 
-                id="theme-import-btn" 
-                style="width: 100%; padding: 10px 12px; background-color: var(--green-accent); border: none; border-radius: 6px; color: var(--text-color); cursor: pointer; font-weight: bold; font-size: 14px; transition: all 0.2s; margin-bottom: 8px;">
+                id="theme-import-btn"
+                style="width: 100%; padding: 10px 12px; background-color: var(--green-accent); border: none; border-radius: 6px; color: var(--text-color); cursor: pointer; font-weight: bold; font-size: 14px; transition: all 0.2s; margin-bottom: 8px;"
+                data-i18n="settings.importThemeBtn">
                 📁 Import Theme JSON
               </button>
-              <button 
-                id="theme-icon-btn" 
-                style="width: 100%; padding: 10px 12px; background-color: var(--green-accent); border: none; border-radius: 6px; color: var(--text-color); cursor: pointer; font-weight: bold; font-size: 14px; transition: all 0.2s; opacity: 0.7;">
+              <button
+                id="theme-icon-btn"
+                style="width: 100%; padding: 10px 12px; background-color: var(--green-accent); border: none; border-radius: 6px; color: var(--text-color); cursor: pointer; font-weight: bold; font-size: 14px; transition: all 0.2s; opacity: 0.7;"
+                data-i18n="settings.importIconBtn">
                 🎨 Import Theme Icon (Optional)
               </button>
             </div>
             <p id="theme-import-status" style="font-size: 12px; color: var(--label-color); margin-top: 8px;"></p>
+            <div class="form-group" style="margin-top: 12px;">
+              <label for="language-select" data-i18n="settings.language">Language</label>
+              <select
+                id="language-select"
+                style="width: 100%; padding: 10px 12px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-color); font-size: 14px; font-family: var(--font-main); transition: all 0.3s ease; cursor: pointer;">
+                <option value="en">🇬🇧 English</option>
+                <option value="es">🇪🇸 Español</option>
+                <option value="ru">🇷🇺 Русский</option>
+              </select>
+            </div>
           </div>
         </div>
 
         <!-- Settings Dropdown 2 -->
         <div class="dropdown" id="dropdown-settings-2">
           <div class="dropdown-header">
-            <span>Advanced Options</span>
+            <span data-i18n="settings.advanced">Advanced Options</span>
             <span class="dropdown-toggle">▼</span>
           </div>
           <div class="dropdown-content">
-            <p style="color: var(--label-color); font-size: 12px; font-weight: 700; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.5px;">Debug & Display</p>
+            <p style="color: var(--label-color); font-size: 12px; font-weight: 700; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="settings.debugDisplay">Debug &amp; Display</p>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-bottom: 12px;">
               <div class="toggle-group">
-                <label for="debug-mode" class="toggle-label">Debug Mode</label>
+                <label for="debug-mode" class="toggle-label" data-i18n="settings.debugMode">Debug Mode</label>
                 <label class="switch">
                   <input type="checkbox" id="debug-mode">
                   <span class="slider"></span>
                 </label>
               </div>
               <div class="toggle-group">
-                <label for="cache-enabled" class="toggle-label">Enable Cache</label>
+                <label for="cache-enabled" class="toggle-label" data-i18n="settings.enableCache">Enable Cache</label>
                 <label class="switch">
                   <input type="checkbox" id="cache-enabled" checked>
                   <span class="slider"></span>
                 </label>
               </div>
               <div class="toggle-group">
-                <label for="show-id-input" class="toggle-label">Show ID Input Box</label>
+                <label for="show-id-input" class="toggle-label" data-i18n="settings.showIdInput">Show ID Input Box</label>
                 <label class="switch">
                   <input type="checkbox" id="show-id-input">
                   <span class="slider"></span>
@@ -612,7 +632,7 @@
         <!-- Settings Dropdown 3 -->
         <div class="dropdown" id="dropdown-settings-3">
           <div class="dropdown-header">
-            <span>About</span>
+            <span data-i18n="settings.about">About</span>
             <span class="dropdown-toggle">▼</span>
           </div>
           <div class="dropdown-content">
@@ -624,8 +644,8 @@
               <a href="#" style="color: var(--green-accent); text-decoration: none;">Visit Repository</a> | 
               <a href="#" style="color: var(--green-accent); text-decoration: none;">Report Issue</a>
             </p>
-            <button id="check-update-btn" style="width: 100%; padding: 8px; background-color: var(--green-accent); border: none; border-radius: 4px; color: var(--text-color); cursor: pointer; font-weight: bold; margin-top: 0px;">Check for Updates</button>
-            <button id="credits-btn" style="width: 100%; padding: 8px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-color); cursor: pointer; font-weight: bold; margin-top: 8px;">Credits</button>
+            <button id="check-update-btn" style="width: 100%; padding: 8px; background-color: var(--green-accent); border: none; border-radius: 4px; color: var(--text-color); cursor: pointer; font-weight: bold; margin-top: 0px;" data-i18n="settings.checkUpdate">Check for Updates</button>
+            <button id="credits-btn" style="width: 100%; padding: 8px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-color); cursor: pointer; font-weight: bold; margin-top: 8px;" data-i18n="settings.credits">Credits</button>
           </div>
         </div>
       </div>
@@ -634,8 +654,8 @@
       <div id="debug-terminal" class="debug-terminal" style="display: none;">
         <div class="debug-resize-handle" id="debug-resize-handle" title="Drag to resize"></div>
         <div class="debug-terminal-header">
-          <span>🐛 Debug Console</span>
-          <button id="clear-debug-btn" class="debug-btn" title="Clear Console">Clear</button>
+          <span data-i18n="debug.title">🐛 Debug Console</span>
+          <button id="clear-debug-btn" class="debug-btn" title="Clear Console" data-i18n="debug.clear">Clear</button>
         </div>
         <div id="debug-output" class="debug-output"></div>
       </div>
@@ -646,13 +666,13 @@
         <div id="asset-explorer" class="asset-explorer">
           <div class="asset-header">
             <div class="asset-header-left">
-              <span class="asset-title">Explorer</span>
-              <span id="asset-progress" class="asset-progress" aria-live="polite">Idle</span>
+              <span class="asset-title" data-i18n="explorer.title">Explorer</span>
+              <span id="asset-progress" class="asset-progress" aria-live="polite" data-i18n="explorer.idle">Idle</span>
             </div>
             <div class="asset-header-right">
               <label class="assets-only-toggle" title="Show only assets">
                 <input type="checkbox" id="assets-only-toggle-input">
-                <span class="toggle-label">Assets Only</span>
+                <span class="toggle-label" data-i18n="explorer.assetsOnly">Assets Only</span>
               </label>
               <button id="asset-refresh-btn" class="asset-btn" title="Load selected assets">🔄</button>
               <button id="asset-collapse-btn" class="asset-btn secondary" title="Collapse">⯈</button>
@@ -767,6 +787,7 @@
   </div>
 
   <!-- Scripts -->
+  <script src="locales.js"></script>
   <script src="ui.js"></script>
   <script src="app.js"></script>
 

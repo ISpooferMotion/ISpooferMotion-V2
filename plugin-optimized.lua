@@ -7,6 +7,64 @@ local assets = pluginEnvironment.Assets
 local HttpService = game:GetService("HttpService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ScriptEditorService = game:GetService("ScriptEditorService")
+local AssetService = game:GetService("AssetService")
+local CollectionService = game:GetService("CollectionService")
+
+-- Copies all relevant BasePart + MeshPart properties, attributes, tags, and
+-- children from src to dst, then re-wires any external Part0/Part1 references.
+local function copyMeshPartInto(src, dst, overrideTextureId)
+	-- BasePart properties
+	dst.Name                    = src.Name
+	dst.CFrame                  = src.CFrame
+	dst.Size                    = src.Size
+	dst.Anchored                = src.Anchored
+	dst.CanCollide              = src.CanCollide
+	dst.CanTouch                = src.CanTouch
+	dst.CanQuery                = src.CanQuery
+	dst.CastShadow              = src.CastShadow
+	dst.Color                   = src.Color
+	dst.Material                = src.Material
+	dst.MaterialVariant         = src.MaterialVariant
+	dst.Transparency            = src.Transparency
+	dst.Reflectance             = src.Reflectance
+	dst.Locked                  = src.Locked
+	dst.Massless                = src.Massless
+	dst.RootPriority            = src.RootPriority
+	dst.CustomPhysicalProperties = src.CustomPhysicalProperties
+	-- MeshPart-specific
+	dst.TextureID               = overrideTextureId or src.TextureID
+
+	-- Attributes
+	for k, v in pairs(src:GetAttributes()) do
+		dst:SetAttribute(k, v)
+	end
+
+	-- CollectionService tags
+	for _, tag in ipairs(CollectionService:GetTags(src)) do
+		CollectionService:AddTag(dst, tag)
+	end
+
+	-- Move all children
+	for _, child in ipairs(src:GetChildren()) do
+		child.Parent = dst
+	end
+
+	-- Re-wire external constraints/welds that reference src as Part0 or Part1
+	local function rewire(container)
+		for _, obj in ipairs(container:GetDescendants()) do
+			if obj ~= dst then
+				pcall(function()
+					if obj.Part0 == src then obj.Part0 = dst end
+				end)
+				pcall(function()
+					if obj.Part1 == src then obj.Part1 = dst end
+				end)
+			end
+		end
+	end
+	if src.Parent then rewire(src.Parent) end
+	rewire(game:GetService("Workspace"))
+end
 
 local toolbar = plugin:CreateToolbar("AssetCollection Test")
 local button = toolbar:CreateButton("Run", "Gets the stuff", "rbxassetid://137844667859456")
@@ -333,7 +391,14 @@ local function scan()
 
 		elseif obj:IsA("MeshPart") then
 			table.insert(Meshes, obj)
+			-- Prefer MeshId (legacy string); fall back to MeshContent (newer Content type)
 			local meshId = obj.MeshId ~= "" and obj.MeshId:match("rbxassetid://(%d+)") or nil
+			if not meshId then
+				local ok, contentStr = pcall(function() return tostring(obj.MeshContent) end)
+				if ok and contentStr then
+					meshId = contentStr:match("rbxassetid://(%d+)") or contentStr:match("^(%d+)$")
+				end
+			end
 			local texId = obj.TextureID ~= "" and obj.TextureID:match("rbxassetid://(%d+)") or nil
 			if meshId and not seenMeshes[meshId] then
 				seenMeshes[meshId] = true
@@ -453,17 +518,44 @@ local function replaceIds(mappings)
 			end
 
 		elseif obj:IsA("MeshPart") then
-			local meshId = obj.MeshId:match("rbxassetid://(%d+)")
-			if meshId and idMap[meshId] then
-				obj.MeshId = "rbxassetid://" .. idMap[meshId]
-				replaced += 1
-				print("[Replace] MeshPart.MeshId", obj:GetFullName(), meshId, "→", idMap[meshId])
+			-- MeshId and MeshContent are both NotAccessible from scripts.
+			-- The only way to replace the mesh is CreateMeshPartAsync + instance swap.
+			local meshId = obj.MeshId ~= "" and obj.MeshId:match("rbxassetid://(%d+)") or nil
+			if not meshId then
+				local ok, contentStr = pcall(function() return tostring(obj.MeshContent) end)
+				if ok and contentStr then
+					meshId = contentStr:match("rbxassetid://(%d+)") or contentStr:match("^(%d+)$")
+				end
 			end
-			local texId = obj.TextureID:match("rbxassetid://(%d+)")
-			if texId and idMap[texId] then
-				obj.TextureID = "rbxassetid://" .. idMap[texId]
+			local targetMeshId = meshId and idMap[meshId]
+			local texId = obj.TextureID ~= "" and obj.TextureID:match("rbxassetid://(%d+)") or nil
+			local targetTexId = texId and idMap[texId]
+
+			if targetMeshId then
+				local ok, newPart = pcall(function()
+					return AssetService:CreateMeshPartAsync("rbxassetid://" .. targetMeshId, {
+						CollisionFidelity = obj.CollisionFidelity,
+						RenderFidelity    = obj.RenderFidelity,
+					})
+				end)
+				if ok and newPart then
+					local overrideTex = targetTexId and ("rbxassetid://" .. targetTexId) or nil
+					copyMeshPartInto(obj, newPart, overrideTex)
+					newPart.Parent = obj.Parent
+					obj:Destroy()
+					replaced += 1
+					print("[Replace] MeshPart", newPart:GetFullName(), meshId, "→", targetMeshId)
+					if targetTexId then
+						replaced += 1
+						print("[Replace] MeshPart.TextureID", newPart:GetFullName(), texId, "→", targetTexId)
+					end
+				else
+					warn("[Replace] MeshPart swap failed for", obj:GetFullName(), ":", tostring(newPart))
+				end
+			elseif targetTexId then
+				obj.TextureID = "rbxassetid://" .. targetTexId
 				replaced += 1
-				print("[Replace] MeshPart.TextureID", obj:GetFullName(), texId, "→", idMap[texId])
+				print("[Replace] MeshPart.TextureID", obj:GetFullName(), texId, "→", targetTexId)
 			end
 
 		elseif obj:IsA("SpecialMesh") then

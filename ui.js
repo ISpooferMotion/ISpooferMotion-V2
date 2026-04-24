@@ -20,6 +20,15 @@ class UIManager {
     this.setupAssetExplorer();
     this.setupIdInputToggle();
     this.setupIdInputListener();
+    this.setupLanguage();
+  }
+
+  setupLanguage() {
+    window.initLocale();
+    const sel = document.getElementById('language-select');
+    if (sel) {
+      sel.addEventListener('change', (e) => window.applyLocale(e.target.value));
+    }
   }
 
   /**

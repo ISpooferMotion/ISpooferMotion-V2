@@ -130,6 +130,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onPluginUpdateError: (callback) => ipcRenderer.on('plugin-update-error', (event, ...args) => callback(...args)),
 
   // Generic invoke for dynamic IPC calls
-  invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args)
-  
+  invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
+
+  // Pause / Resume
+  pauseSpoofer: () => ipcRenderer.send('spoofer-pause'),
+  resumeSpoofer: () => ipcRenderer.send('spoofer-resume'),
+
+  // Session (crash recovery)
+  checkSession: () => ipcRenderer.invoke('check-session'),
+  clearSession: () => ipcRenderer.send('clear-session'),
 });

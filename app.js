@@ -375,6 +375,48 @@ class AppManager {
       }
       console.warn('Run Spoofer button or electronAPI.runSpooferAction not available');
     }
+
+    // Pause / Resume button
+    const pauseBtn = document.getElementById('pause-spoofer-btn');
+    if (pauseBtn && window.electronAPI) {
+      pauseBtn._paused = false;
+      pauseBtn.addEventListener('click', () => {
+        if (pauseBtn._paused) {
+          pauseBtn._paused = false;
+          pauseBtn.textContent = '⏸ Pause';
+          pauseBtn.classList.remove('is-paused');
+          window.electronAPI.resumeSpoofer();
+        } else {
+          pauseBtn._paused = true;
+          pauseBtn.textContent = '▶ Resume';
+          pauseBtn.classList.add('is-paused');
+          window.electronAPI.pauseSpoofer();
+        }
+      });
+    }
+
+    // Session recovery banner
+    const sessionBanner = document.getElementById('session-banner');
+    const sessionPendingCount = document.getElementById('session-pending-count');
+    if (sessionBanner && window.electronAPI?.checkSession) {
+      window.electronAPI.checkSession().then(session => {
+        if (session && session.pendingIds && session.pendingIds.length > 0) {
+          this._pendingSession = session;
+          sessionPendingCount.textContent = session.pendingIds.length;
+          sessionBanner.style.display = 'block';
+        }
+      }).catch(() => {});
+    }
+    document.getElementById('session-discard-btn')?.addEventListener('click', () => {
+      sessionBanner.style.display = 'none';
+      this._pendingSession = null;
+      window.electronAPI?.clearSession();
+    });
+    document.getElementById('session-resume-btn')?.addEventListener('click', () => {
+      if (!this._pendingSession) return;
+      sessionBanner.style.display = 'none';
+      this.runSpoofer({ resumeSession: true });
+    });
   }
 
   /**
@@ -383,6 +425,11 @@ class AppManager {
   setRunningState(isRunning) {
     try {
       this.isRunning = isRunning;
+      const pauseBtn = document.getElementById('pause-spoofer-btn');
+      if (pauseBtn) {
+        pauseBtn.style.display = isRunning ? 'inline-block' : 'none';
+        if (!isRunning) { pauseBtn._paused = false; pauseBtn.textContent = '⏸ Pause'; pauseBtn.classList.remove('is-paused'); }
+      }
       if (this.elements.runSpooferBtn) {
         this.elements.runSpooferBtn.disabled = !!isRunning;
         if (isRunning) {
@@ -485,7 +532,7 @@ class AppManager {
   /**
    * Execute spoofer action
    */
-  runSpoofer() {
+  runSpoofer(overrides = {}) {
     if (!this.elements.runSpooferBtn) return;
 
     // Prevent multiple simultaneous runs - set flag immediately
@@ -551,6 +598,8 @@ class AppManager {
         downloadDirectory,
       },
     };
+
+    if (overrides.resumeSession) data.resumeSession = true;
 
     console.log('Renderer sending spoof data to main:', data);
     if (window.electronAPI && window.electronAPI.runSpooferAction) {

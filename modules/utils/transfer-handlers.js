@@ -3,8 +3,19 @@ const path = require('path');
 const fsSync = require('fs');
 const fs = require('fs').promises;
 const { DEVELOPER_MODE } = require('./common');
+const { getCsrfToken } = require('./roblox-api');
 
 const MAX_RATE_LIMIT_RETRIES = 4;
+
+// Shared rate-limit gate for Open Cloud uploads.
+// When any concurrent slot hits a 429, it sets this timestamp so all other
+// slots pause before their next POST, preventing the thundering-herd retry loop.
+let _rlUntil = 0;
+function setRateLimit(ms) { _rlUntil = Math.max(_rlUntil, Date.now() + ms); }
+async function waitRateLimit() {
+  const wait = _rlUntil - Date.now();
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+}
 
 // Open Cloud asset type + content type mapping
 const OPEN_CLOUD_TYPE_MAP = {
@@ -13,8 +24,8 @@ const OPEN_CLOUD_TYPE_MAP = {
   Sound:     { assetType: 'Audio',     contentType: 'audio/ogg',              fileName: 'audio.ogg'      },
   Image:     { assetType: 'Decal',     contentType: 'image/png',              fileName: 'image.png'      },
   Decal:     { assetType: 'Decal',     contentType: 'image/png',              fileName: 'image.png'      },
-  Mesh:      { assetType: 'Model',     contentType: 'application/octet-stream', fileName: 'mesh.mesh'    },
-  Model:     { assetType: 'Model',     contentType: 'application/octet-stream', fileName: 'mesh.mesh'    },
+  Mesh:      { assetType: 'Mesh',      contentType: 'model/x-file-mesh-data',   fileName: 'mesh.mesh'    },
+  Model:     { assetType: 'Mesh',      contentType: 'model/x-file-mesh-data',   fileName: 'mesh.mesh'    },
 };
 
 /**
@@ -136,6 +147,7 @@ async function uploadViaOpenCloud({ fileBuffer, contentType, fileName, assetType
     formData.append('request', JSON.stringify(requestMetadata));
     formData.append('fileContent', new Blob([fileBuffer], { type: contentType }), fileName);
 
+    await waitRateLimit();
     response = await fetch('https://apis.roblox.com/assets/v1/assets', {
       method: 'POST',
       headers: { 'x-api-key': apiKey },
@@ -146,10 +158,12 @@ async function uploadViaOpenCloud({ fileBuffer, contentType, fileName, assetType
       if (attempt >= MAX_RATE_LIMIT_RETRIES) {
         throw new Error(`Rate limit hit after ${MAX_RATE_LIMIT_RETRIES} retries. Wait a minute and try again.`);
       }
-      const retryAfter = Math.min(parseInt(response.headers.get('retry-after') || '60', 10), 120);
-      if (DEVELOPER_MODE) console.log(`[UPLOAD] Rate limited on "${name}". Waiting ${retryAfter}s (attempt ${attempt + 1}/${MAX_RATE_LIMIT_RETRIES})...`);
+      const retryAfter = Math.min(parseInt(response.headers.get('retry-after') || '30', 10), 60);
+      const jitter = Math.floor(Math.random() * 8000);
+      if (DEVELOPER_MODE) console.log(`[UPLOAD] Rate limited on "${name}". Pausing all slots for ${retryAfter}s + ${jitter}ms jitter (attempt ${attempt + 1}/${MAX_RATE_LIMIT_RETRIES})`);
       sendTransferUpdate({ id: transferId, status: 'processing', progress: 0 });
-      await new Promise(r => setTimeout(r, retryAfter * 1000));
+      setRateLimit(retryAfter * 1000 + jitter);
+      await waitRateLimit();
       continue;
     }
 
@@ -178,22 +192,31 @@ async function uploadViaOpenCloud({ fileBuffer, contentType, fileName, assetType
   }
 
   // Async operation — poll until done
+  // Roblox may return path as "operations/{id}" (short form) or "assets/v1/operations/{id}".
+  // The correct poll endpoint is always https://apis.roblox.com/assets/v1/operations/{id}.
   if (responseData.path && !responseData.done) {
     const operationPath = responseData.path;
-    if (DEVELOPER_MODE) console.log(`[UPLOAD DEBUG] Polling operation: ${operationPath}`);
-    for (let attempt = 1; attempt <= 15; attempt++) {
-      await new Promise(r => setTimeout(r, 2000));
-      const pollResp = await fetch(`https://apis.roblox.com/assets/v1/${operationPath}`, {
+    const normalizedPath = operationPath.startsWith('assets/')
+      ? operationPath
+      : `assets/v1/${operationPath}`;
+    const pollUrl = `https://apis.roblox.com/${normalizedPath}`;
+    if (DEVELOPER_MODE) console.log(`[UPLOAD DEBUG] Polling operation: ${pollUrl} (raw path: ${operationPath})`);
+    for (let attempt = 1; attempt <= 30; attempt++) {
+      await new Promise(r => setTimeout(r, 1000));
+      const pollResp = await fetch(pollUrl, {
         headers: { 'x-api-key': apiKey },
       });
       const pollData = await pollResp.json();
-      if (DEVELOPER_MODE) console.log(`[UPLOAD DEBUG] Poll attempt ${attempt}/15, done=${pollData.done}`);
+      if (DEVELOPER_MODE) console.log(`[UPLOAD DEBUG] Poll attempt ${attempt}/30, done=${pollData.done}`);
       if (pollData.done && pollData.response) {
         const assetId = pollData.response.assetId || pollData.response.Id;
         if (assetId) {
           sendTransferUpdate({ id: transferId, progress: 100, status: 'completed', newAssetId: String(assetId) });
           return { success: true, assetId: String(assetId) };
         }
+      }
+      if (pollData.done && pollData.error) {
+        throw new Error(`Roblox rejected the ${assetType.toLowerCase()} upload: ${pollData.error.message || JSON.stringify(pollData.error)}`);
       }
     }
     throw new Error(`Upload timed out waiting for Roblox to process the ${assetType.toLowerCase()}.`);
@@ -260,18 +283,100 @@ async function publishAudioWithProgress(filePath, name, cookie, csrfToken, group
 }
 
 /**
- * Router — selects the correct Open Cloud upload for each asset type.
- * All types (Animation, Audio, Sound, Image, Decal) now use the Open Cloud Assets API with an API key.
+ * Detects whether a buffer is an RBXM model file or a raw Roblox mesh binary.
+ * RBXM (binary): starts with the magic bytes "<roblox!" (0x3C 0x72 0x6F 0x62 0x6C 0x6F 0x78 0x21)
+ * RBXMX (XML):   starts with "<roblox " as ASCII text
+ * Raw mesh:       starts with "version " as ASCII text
  */
-async function publishAssetWithProgress(filePath, name, cookie, csrfToken, groupId = null, transferId, sendTransferUpdate, assetType, userId = null, apiKey = null) {
-  const typeInfo = OPEN_CLOUD_TYPE_MAP[assetType];
+function detectMeshFileFormat(buffer) {
+  if (!buffer || buffer.length < 8) return 'unknown';
+  // Binary RBXM magic: <roblox!
+  if (buffer[0] === 0x3C && buffer[1] === 0x72 && buffer[2] === 0x6F &&
+      buffer[3] === 0x62 && buffer[4] === 0x6C && buffer[5] === 0x6F &&
+      buffer[6] === 0x78 && buffer[7] === 0x21) return 'rbxm';
+  const header = buffer.slice(0, 20).toString('ascii');
+  if (header.startsWith('<roblox')) return 'rbxm';
+  if (header.startsWith('version ')) return 'mesh';
+  return 'unknown';
+}
 
-  if (!typeInfo) {
-    const errorMsg = `Unsupported asset type for upload: ${assetType}`;
-    sendTransferUpdate({ id: transferId, name, status: 'error', direction: 'upload', error: errorMsg, progress: 0 });
-    return { success: false, error: errorMsg };
+/**
+ * Uploads a raw Roblox .mesh binary via the legacy endpoint.
+ * Tries data.roblox.com first, falls back to www.roblox.com.
+ * Refreshes CSRF token and retries once on 403.
+ */
+async function uploadMeshLegacy({ fileBuffer, name, groupId, cookie, transferId, sendTransferUpdate }) {
+  const params = new URLSearchParams({ name: name || 'Mesh' });
+  if (groupId) params.set('groupId', String(groupId));
+  const queryString = params.toString();
+
+  const endpoints = [
+    `https://data.roblox.com/ide/publish/UploadNewMesh?${queryString}`,
+    `https://www.roblox.com/ide/publish/UploadNewMesh?${queryString}`,
+  ];
+
+  let token;
+  try {
+    token = await getCsrfToken(cookie);
+  } catch (err) {
+    throw new Error(`Failed to get CSRF token for mesh upload: ${err.message}`);
   }
 
+  let lastError;
+  for (const url of endpoints) {
+    if (DEVELOPER_MODE) console.log(`[MESH UPLOAD] POST ${url}`);
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Cookie': `.ROBLOSECURITY=${cookie}`,
+          'X-CSRF-Token': token,
+          'User-Agent': 'Roblox/WinInet',
+        },
+        body: fileBuffer,
+      });
+
+      const responseText = await response.text();
+      if (DEVELOPER_MODE) console.log(`[MESH UPLOAD] ${url} → ${response.status}: ${responseText.substring(0, 120)}`);
+
+      // Stale CSRF — refresh and retry once
+      if (response.status === 403 && attempt === 0) {
+        try {
+          token = await getCsrfToken(cookie);
+          continue;
+        } catch (err) {
+          lastError = new Error(`CSRF refresh failed: ${err.message}`);
+          break;
+        }
+      }
+
+      if (!response.ok) {
+        lastError = new Error(`Legacy mesh upload failed (${response.status}): ${responseText.substring(0, 200)}`);
+        break;
+      }
+
+      const assetId = responseText.trim();
+      if (!assetId || isNaN(Number(assetId))) {
+        lastError = new Error(`Unexpected response from mesh upload endpoint: ${responseText.substring(0, 200)}`);
+        break;
+      }
+
+      sendTransferUpdate({ id: transferId, progress: 100, status: 'completed', newAssetId: assetId });
+      return { success: true, assetId };
+    }
+  }
+
+  throw lastError || new Error('All legacy mesh upload endpoints failed');
+}
+
+/**
+ * Router — selects the correct upload path for each asset type.
+ * Mesh/Model: RBXM files → Open Cloud; raw .mesh binaries → legacy endpoint.
+ * All others: Open Cloud Assets API.
+ */
+async function publishAssetWithProgress(filePath, name, cookie, csrfToken, groupId = null, transferId, sendTransferUpdate, assetType, userId = null, apiKey = null, originalAssetId = null) {
   let fileBuffer, fileSize = 0;
   try {
     fileBuffer = await fs.readFile(filePath);
@@ -282,6 +387,31 @@ async function publishAssetWithProgress(filePath, name, cookie, csrfToken, group
   }
 
   sendTransferUpdate({ id: transferId, name, size: fileSize, status: 'processing', direction: 'upload', progress: 0, error: null });
+
+  if (assetType === 'Mesh' || assetType === 'Model') {
+    if (DEVELOPER_MODE) console.log(`[MESH] Uploading "${name}" as Mesh via Open Cloud API`);
+    try {
+      return await uploadViaOpenCloud({
+        fileBuffer,
+        contentType: 'model/x-file-mesh-data',
+        fileName: 'mesh.mesh',
+        assetType: 'Mesh',
+        name, groupId, userId, apiKey, transferId, sendTransferUpdate,
+      });
+    } catch (err) {
+      const errorMsg = err.message || `Mesh upload failed for "${name}".`;
+      console.error(`[UPLOAD ERROR - MESH] ${errorMsg}`);
+      sendTransferUpdate({ id: transferId, status: 'error', error: errorMsg, progress: 0 });
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  const typeInfo = OPEN_CLOUD_TYPE_MAP[assetType];
+  if (!typeInfo) {
+    const errorMsg = `Unsupported asset type for upload: ${assetType}`;
+    sendTransferUpdate({ id: transferId, name, status: 'error', direction: 'upload', error: errorMsg, progress: 0 });
+    return { success: false, error: errorMsg };
+  }
 
   try {
     return await uploadViaOpenCloud({
@@ -294,6 +424,35 @@ async function publishAssetWithProgress(filePath, name, cookie, csrfToken, group
   } catch (err) {
     const errorMsg = err.message || `Upload failed for "${name}" due to an unknown error.`;
     const isRateLimit = errorMsg.includes('429') || errorMsg.includes('Rate limit');
+    const isContentInvalid = /content is invalid/i.test(errorMsg);
+
+    // If Roblox says the animation content is invalid, the asset was likely mislabelled
+    // as Animation in the source game but is actually a Model/Mesh — retry as Model.
+    if (typeInfo.assetType === 'Animation' && isContentInvalid && originalAssetId && cookie) {
+      if (DEVELOPER_MODE) console.log(`[UPLOAD] "${name}" rejected as Animation, re-fetching as raw mesh via v1/asset (id: ${originalAssetId})`);
+      try {
+        const meshResp = await fetch(`https://assetdelivery.roblox.com/v1/asset/?id=${originalAssetId}`, {
+          headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'User-Agent': 'Roblox/WinInet' },
+          redirect: 'follow',
+        });
+        if (!meshResp.ok) throw new Error(`v1/asset returned ${meshResp.status}`);
+        const meshBuffer = Buffer.from(await meshResp.arrayBuffer());
+        if (!meshBuffer.toString('ascii', 0, 8).startsWith('version')) throw new Error('v1/asset did not return raw mesh data');
+        return await uploadViaOpenCloud({
+          fileBuffer: meshBuffer,
+          contentType: 'model/x-file-mesh-data',
+          fileName: 'mesh.mesh',
+          assetType: 'Mesh',
+          name, groupId, userId, apiKey, transferId, sendTransferUpdate,
+        });
+      } catch (meshErr) {
+        const meshErrMsg = meshErr.message || `Mesh fallback upload failed for "${name}".`;
+        console.error(`[UPLOAD ERROR - MESH FALLBACK] ${meshErrMsg}`);
+        sendTransferUpdate({ id: transferId, status: 'error', error: meshErrMsg, progress: 0 });
+        return { success: false, error: meshErrMsg };
+      }
+    }
+
     console.error(`[UPLOAD ERROR - ${assetType.toUpperCase()}] ${errorMsg}${isRateLimit ? ' (RATE LIMIT)' : ''}`, err.cause || err);
     sendTransferUpdate({ id: transferId, status: 'error', error: errorMsg, progress: 0 });
     return { success: false, error: errorMsg };

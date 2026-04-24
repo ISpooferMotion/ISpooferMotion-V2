@@ -4,6 +4,34 @@ const crypto = require('crypto');
 const fs = require('fs').promises;
 const { DEVELOPER_MODE } = require('./common');
 const { getMultiplePlaceIds, validateCookieAndGetUser } = require('./roblox-api');
+const { convertMeshToObj } = require('./mesh-converter');
+
+function isMeshType(assetType) {
+  return assetType === 'Mesh' || assetType === 'Model';
+}
+
+function looksLikeMesh(buffer) {
+  const header = buffer.toString('ascii', 0, 8);
+  // Raw mesh format starts with "version ", RBXM container starts with "<roblox!"
+  return header.startsWith('version ') || header === '<roblox!';
+}
+
+async function saveAsset(buffer, assetType, downloadPath, convertToObj = false) {
+  if (convertToObj && (isMeshType(assetType) || looksLikeMesh(buffer))) {
+    try {
+      const objStr = convertMeshToObj(buffer);
+      const objPath = downloadPath.replace(/\.[^.]+$/, '.obj');
+      await fs.writeFile(objPath, objStr, 'utf8');
+      return objPath;
+    } catch {
+      // Fall back to raw file if conversion fails
+      await fs.writeFile(downloadPath, buffer);
+      return downloadPath;
+    }
+  }
+  await fs.writeFile(downloadPath, buffer);
+  return downloadPath;
+}
 
 const CHUNK_SIZE = 100;        // assets per batch API request (was 50)
 const CHUNK_CONCURRENCY = 4;   // parallel chunk requests per placeId attempt (was 1)
@@ -13,7 +41,7 @@ const INDIVIDUAL_CONCURRENCY = 8; // parallel individual downloads (was 3)
 /**
  * Downloads multiple assets using batch API endpoint
  */
-async function downloadAssetsBatch(assets, placeIds, cookie, downloadsDir, sendOutput, sendTransferUpdate, onProgress) {
+async function downloadAssetsBatch(assets, placeIds, cookie, downloadsDir, sendOutput, sendTransferUpdate, onProgress, convertMeshesToObj = false) {
   const downloadedAssets = {};
   // Track which assets have already been counted in progress to avoid double-counting
   // across multiple placeId retry attempts
@@ -119,7 +147,10 @@ async function downloadAssetsBatch(assets, placeIds, cookie, downloadsDir, sendO
 
           const downloadItem = async (item) => {
             const asset = remainingAssets.find(a => a.assetId === item.assetId);
-            if (!asset || !item.location) return;
+            if (!asset) return;
+
+            const isMeshAsset = asset.assetType === 'Mesh' || asset.assetType === 'Model';
+            if (!item.location && !isMeshAsset) return;
 
             const transferId = crypto.randomUUID();
             const ext = { Sound: '.ogg', Audio: '.ogg', Animation: '.rbxm', Mesh: '.mesh', Model: '.mesh' }[asset.assetType] || '.dat';
@@ -129,18 +160,29 @@ async function downloadAssetsBatch(assets, placeIds, cookie, downloadsDir, sendO
             sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'processing', progress: 0 });
 
             try {
-              const assetResp = await fetch(item.location, { redirect: 'follow' });
-              if (!assetResp.ok) throw new Error(`CDN error ${assetResp.status}`);
+              let buffer;
+              if (isMeshAsset) {
+                // Fetch raw mesh binary directly — bypasses assetType mislabelling
+                const meshResp = await fetch(`https://assetdelivery.roblox.com/v1/asset/?id=${asset.assetId}`, {
+                  headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'User-Agent': 'Roblox/WinInet' },
+                  redirect: 'follow',
+                });
+                if (!meshResp.ok) throw new Error(`v1/asset error ${meshResp.status}`);
+                buffer = Buffer.from(await meshResp.arrayBuffer());
+              } else {
+                const assetResp = await fetch(item.location, { redirect: 'follow' });
+                if (!assetResp.ok) throw new Error(`CDN error ${assetResp.status}`);
+                buffer = Buffer.from(await assetResp.arrayBuffer());
+              }
 
-              const buffer = Buffer.from(await assetResp.arrayBuffer());
-              await fs.writeFile(downloadPath, buffer);
+              const savedPath = await saveAsset(buffer, asset.assetType, downloadPath, convertMeshesToObj);
 
               sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'completed', progress: 100 });
-              downloadedAssets[asset.assetId] = { filePath: downloadPath, name: asset.name, type: asset.assetType, transferId };
+              downloadedAssets[asset.assetId] = { filePath: savedPath, name: asset.name, type: asset.assetType, transferId, assetId: asset.assetId };
               if (onProgress && !progressReported.has(asset.assetId)) { progressReported.add(asset.assetId); onProgress(); }
             } catch (err) {
               sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'error', progress: 0 });
-              if (DEVELOPER_MODE) console.warn(`(Dev) CDN download failed for ${asset.assetId}: ${err.message}`);
+              if (DEVELOPER_MODE) console.warn(`(Dev) Download failed for ${asset.assetId}: ${err.message}`);
               // Do NOT call onProgress — asset may succeed on the next placeId attempt
             }
           };
@@ -185,7 +227,7 @@ async function downloadAssetsBatch(assets, placeIds, cookie, downloadsDir, sendO
 /**
  * Downloads assets individually (fallback when batch fails or creator unknown)
  */
-async function downloadAssetsIndividual(assets, cookie, downloadsDir, sendOutput, sendTransferUpdate, placeIdsFromCreator = [], placeIdSearchLimit = 20, onProgress) {
+async function downloadAssetsIndividual(assets, cookie, downloadsDir, sendOutput, sendTransferUpdate, placeIdsFromCreator = [], placeIdSearchLimit = 20, onProgress, convertMeshesToObj = false) {
   const downloadedAssets = {};
 
   sendOutput({ output: `  📥 Individual download mode (${assets.length} assets)...\n`, success: null });
@@ -281,9 +323,9 @@ async function downloadAssetsIndividual(assets, cookie, downloadsDir, sendOutput
           if (!downloadResp.ok) throw new Error(`Download failed: ${downloadResp.status}`);
 
           const buffer = Buffer.from(await downloadResp.arrayBuffer());
-          await fs.writeFile(downloadPath, buffer);
+          const savedPath = await saveAsset(buffer, asset.assetType, downloadPath, convertMeshesToObj);
 
-          downloadedAssets[asset.assetId] = { filePath: downloadPath, name: asset.name, type: asset.assetType, transferId };
+          downloadedAssets[asset.assetId] = { filePath: savedPath, name: asset.name, type: asset.assetType, transferId, assetId: asset.assetId };
           sendTransferUpdate({ id: transferId, name: asset.name, direction: 'download', status: 'completed', progress: 100 });
           if (onProgress) onProgress();
           indivOk++;

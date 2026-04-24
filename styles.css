@@ -905,6 +905,43 @@ input:checked + .slider:before {
   box-shadow: var(--shadow-sm);
 }
 
+#pause-spoofer-btn {
+  flex: 0 0 auto;
+  padding: 12px 20px;
+  background-color: #f59e0b;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.3s ease;
+  margin-bottom: 20px;
+  font-family: var(--font-main);
+  letter-spacing: 0.5px;
+  box-shadow: var(--shadow-md);
+}
+
+#pause-spoofer-btn:hover {
+  background-color: #d97706;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+#pause-spoofer-btn:active {
+  transform: translateY(0);
+}
+
+/* Switch to blue when in Resume state */
+#pause-spoofer-btn.is-paused {
+  background-color: #3b82f6;
+}
+
+#pause-spoofer-btn.is-paused:hover {
+  background-color: #2563eb;
+}
+
 #retry-replace-btn {
   padding: 12px 20px;
   background-color: var(--cyan-accent);

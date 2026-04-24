@@ -179,11 +179,16 @@ function performVersionCheck() {
 
           if (platform === 'darwin') {
             versionKey = 'macVersion';
-            downloadKey = 'macDownloadUrl';
+            // Prefer dmg for auto-update; fall back to zip if dmg key missing
+            downloadKey = release.macDmgDownloadUrl ? 'macDmgDownloadUrl' : 'macZipDownloadUrl';
             notesKey = 'macReleaseNotes';
           } else if (platform === 'linux') {
             versionKey = 'linuxVersion';
-            downloadKey = 'linuxDownloadUrl';
+            // Detect format: APPIMAGE env var is set when running as AppImage
+            const isAppImage = Boolean(process.env.APPIMAGE);
+            downloadKey = isAppImage
+              ? (release.linuxAppImageDownloadUrl ? 'linuxAppImageDownloadUrl' : 'linuxDownloadUrl')
+              : (release.linuxDebDownloadUrl      ? 'linuxDebDownloadUrl'      : 'linuxDownloadUrl');
             notesKey = 'linuxReleaseNotes';
           }
 
