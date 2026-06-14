@@ -56,13 +56,9 @@ export default function SettingsView() {
     errorMessage: loginError,
     startLogin,
     cancelLogin,
-  } = useDiscordLogin(() => {
-    invoke<StoredDiscordAuth | null>('load_discord_report_auth')
-      .then((auth) => {
-        setDiscordAuth(auth ?? null);
-        logIsm('success', 'Account connected! Cloud themes will now sync.');
-      })
-      .catch(() => {});
+  } = useDiscordLogin((auth) => {
+    setDiscordAuth(auth);
+    logIsm('success', 'Account connected! Cloud themes will now sync.');
   });
 
   const langOptions = { en: '🇬🇧 English', es: '🇪🇸 Español', ru: '🇷🇺 Русский', fr: '🇫🇷 Français' };

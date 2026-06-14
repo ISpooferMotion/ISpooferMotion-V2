@@ -2,10 +2,11 @@ import { emit } from '@tauri-apps/api/event';
 import { useCallback, useRef, useState } from 'react';
 
 import { commands } from '../bindings';
+import { type StoredDiscordAuth } from '../types/discordAuth';
 
 export type DiscordLoginState = 'idle' | 'opening' | 'waiting' | 'success' | 'error';
 
-export function useDiscordLogin(onSuccess?: () => void) {
+export function useDiscordLogin(onSuccess?: (auth: StoredDiscordAuth) => void) {
   const [loginState, setLoginState] = useState<DiscordLoginState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -76,9 +77,15 @@ export function useDiscordLogin(onSuccess?: () => void) {
             let userName = 'Unknown User';
             let userAvatarUrl: string | null = null;
             try {
-              const payloadBase64 = pollData.loginToken.split('.')[1];
-              if (payloadBase64) {
-                const payloadJson = atob(payloadBase64);
+              const payloadBase64Url = pollData.loginToken.split('.')[1];
+              if (payloadBase64Url) {
+                // Convert Base64URL to standard Base64
+                let base64 = payloadBase64Url.replace(/-/g, '+').replace(/_/g, '/');
+                // Pad with '=' until length is a multiple of 4
+                while (base64.length % 4) {
+                  base64 += '=';
+                }
+                const payloadJson = atob(base64);
                 const payload = JSON.parse(payloadJson);
                 userId = payload.sub || payload.id || 'unknown';
                 userName = payload.name || 'Unknown User';
@@ -97,11 +104,12 @@ export function useDiscordLogin(onSuccess?: () => void) {
                 avatarUrl: userAvatarUrl,
               },
             };
-            await commands.saveDiscordReportAuth(JSON.stringify(authPayload));
+            // Pass the object directly so Rust receives a Value::Object, not a Value::String
+            await commands.saveDiscordReportAuth(authPayload as any);
 
             await emit('discord-login-success', {}).catch(() => {});
             setLoginState('success');
-            onSuccess?.();
+            onSuccess?.(authPayload);
           }
         } catch {}
       }, 3000);

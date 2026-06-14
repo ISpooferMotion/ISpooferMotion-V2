@@ -21,12 +21,20 @@ async fn report_api_url() -> crate::error::Result<String> {
         .unwrap_or_default();
 
     if configured.trim().is_empty() {
-        let dev_url = "http://localhost:3000";
+        let dev_url = "http://127.0.0.1:3000";
+        let fallback_url = "http://localhost:3000";
         if crate::utils::get_http_client().get(format!("{dev_url}/api/cache")).send().await.is_ok()
         {
             configured = dev_url.to_string();
+        } else if crate::utils::get_http_client()
+            .get(format!("{fallback_url}/api/cache"))
+            .send()
+            .await
+            .is_ok()
+        {
+            configured = fallback_url.to_string();
         } else {
-            configured = "http://localhost:3000".to_string();
+            configured = dev_url.to_string();
         }
     }
 
