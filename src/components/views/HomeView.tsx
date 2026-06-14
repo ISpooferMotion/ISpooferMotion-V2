@@ -154,6 +154,7 @@ export default function HomeView() {
       const data = await res.json();
       return Array.isArray(data) && data.length > 0 ? data.slice(0, 3) : [];
     },
+    enabled: isTauriRuntime(),
     staleTime: 5 * 60 * 1000,
   });
 
