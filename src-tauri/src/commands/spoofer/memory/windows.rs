@@ -122,7 +122,7 @@ unsafe extern "system" fn enum_windows_proc(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn focus_and_save_studio(pid: u32) -> Result<(), String> {
+pub async fn focus_and_save_studio(pid: u32) -> crate::error::Result<()> {
     tokio::task::spawn_blocking(move || {
         let mut target_hwnd = std::ptr::null_mut();
 
@@ -154,7 +154,7 @@ pub async fn focus_and_save_studio(pid: u32) -> Result<(), String> {
         }
 
         if target_hwnd.is_null() {
-            return Err("Could not find visible window for process".to_string());
+            return Err(crate::error::AppError::Custom("Could not find visible window for process".to_string()));
         }
 
         unsafe {
@@ -194,7 +194,7 @@ pub async fn focus_and_save_studio(pid: u32) -> Result<(), String> {
         Ok(())
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| crate::error::AppError::Custom(e.to_string()))?
 }
 
 struct ProcessHandle(HANDLE);

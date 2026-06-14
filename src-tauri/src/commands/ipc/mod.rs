@@ -54,8 +54,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
+use std::sync::OnceLock;
 
 use crate::utils::build_roblox_cookie_header;
+
+static REDACTION_REGEXES: OnceLock<Vec<(Regex, &'static str)>> = OnceLock::new();
 
 pub(super) async fn read_json_file(path: &PathBuf) -> Value {
     match tokio::fs::read_to_string(path).await {
@@ -91,18 +94,23 @@ pub(super) fn redact_log_message(message: &str) -> String {
         }
     }
 
-    let patterns = [
-        (r"(?i)([a-z]:\\users\\)[^\\/\s]+", "$1####"),
-        (r"(?i)(/users/)[^/\s]+", "$1####"),
-        (r"(?i)(/home/)[^/\s]+", "$1####"),
-        (r"(?i)(\b(?:user(?:name)?|display[_ -]?name|profile)\s*[:=]\s*)[^\s,;]+", "$1####"),
-        (r"(?i)(\.roblosecurity=)[^\s,;]+", "$1####"),
-        (r"(?i)(\b(?:x-api-key|api[_ -]?key)\s*[:=]\s*)[^\s,;]+", "$1####"),
-    ];
-    for (pattern, replacement) in patterns {
-        if let Ok(regex) = Regex::new(pattern) {
-            redacted = regex.replace_all(&redacted, replacement).into_owned();
-        }
+    let regexes = REDACTION_REGEXES.get_or_init(|| {
+        let patterns = [
+            (r"(?i)([a-z]:\\users\\)[^\\/\s]+", "$1####"),
+            (r"(?i)(/users/)[^/\s]+", "$1####"),
+            (r"(?i)(/home/)[^/\s]+", "$1####"),
+            (r"(?i)(\b(?:user(?:name)?|display[_ -]?name|profile)\s*[:=]\s*)[^\s,;]+", "$1####"),
+            (r"(?i)(\.roblosecurity=)[^\s,;]+", "$1####"),
+            (r"(?i)(\b(?:x-api-key|api[_ -]?key)\s*[:=]\s*)[^\s,;]+", "$1####"),
+        ];
+        patterns
+            .into_iter()
+            .filter_map(|(pat, rep)| Regex::new(pat).ok().map(|r| (r, rep)))
+            .collect()
+    });
+
+    for (regex, replacement) in regexes {
+        redacted = regex.replace_all(&redacted, *replacement).into_owned();
     }
     redacted
 }

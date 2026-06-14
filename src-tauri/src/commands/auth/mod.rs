@@ -69,7 +69,7 @@ pub async fn get_authenticated_user_id(
         format!(".ROBLOSECURITY={cookie}")
     };
 
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build()?;
+    let client = crate::utils::get_http_client();
 
     let mut headers = HeaderMap::new();
     headers.insert(COOKIE, HeaderValue::from_str(&cookie_header_str)?);
@@ -102,7 +102,7 @@ pub async fn get_roblox_user_info(user_id: String) -> crate::error::Result<Roblo
         return Err("Invalid user_id".into());
     }
     let url = format!("https://users.roblox.com/v1/users/{trimmed}");
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build()?;
+    let client = crate::utils::get_http_client();
     let res = client
         .get(&url)
         .header("User-Agent", ROBLOX_USER_AGENT)
@@ -130,7 +130,7 @@ pub async fn get_roblox_user_avatar(user_id: String) -> crate::error::Result<Str
     let url = format!(
         "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={trimmed}&size=150x150&format=Png&isCircular=true"
     );
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build()?;
+    let client = crate::utils::get_http_client();
     let res = client
         .get(&url)
         .header("User-Agent", ROBLOX_USER_AGENT)
@@ -170,7 +170,7 @@ pub async fn get_manageable_groups(
         format!(".ROBLOSECURITY={cookie}")
     };
 
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build()?;
+    let client = crate::utils::get_http_client();
 
     let mut headers = HeaderMap::new();
     headers.insert(COOKIE, HeaderValue::from_str(&cookie_header_str)?);
@@ -220,7 +220,7 @@ pub async fn get_group_icon(group_id: String) -> crate::error::Result<String> {
     let url = format!(
         "https://thumbnails.roblox.com/v1/groups/icons?groupIds={trimmed}&size=150x150&format=Png&isCircular=true"
     );
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build()?;
+    let client = crate::utils::get_http_client();
     let res = client
         .get(&url)
         .header("User-Agent", ROBLOX_USER_AGENT)
@@ -272,7 +272,7 @@ pub async fn get_group_icons_batch(
         "https://thumbnails.roblox.com/v1/groups/icons?groupIds={joined_ids}&size=150x150&format=Png&isCircular=true"
     );
 
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build()?;
+    let client = crate::utils::get_http_client();
     let res = client
         .get(&url)
         .header("User-Agent", ROBLOX_USER_AGENT)
@@ -316,7 +316,7 @@ pub async fn detect_opencloud_api_key_owner(
         });
     }
 
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build()?;
+    let client = crate::utils::get_http_client();
 
     let payload = serde_json::json!({
         "assetType": "Audio",
@@ -384,7 +384,7 @@ pub async fn validate_opencloud_api_key(key: String) -> crate::error::Result<boo
 #[specta::specta]
 pub async fn get_auth_metadata() -> crate::error::Result<crate::commands::discord::AnyValue> {
     let url = "https://auth.roblox.com/v2/metadata";
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build()?;
+    let client = crate::utils::get_http_client();
 
     let res = client
         .get(url)

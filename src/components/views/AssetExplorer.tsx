@@ -327,13 +327,18 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
           return;
         }
 
-        invoke<Record<string, string>>('resolve_script_references', { assetIds: uniqueIds }).then(
-          (resolvedMap) => {
+        invoke<Record<string, string>>('resolve_script_references', { assetIds: uniqueIds })
+          .then((resolvedMap) => {
             setResolvingScriptRefs(false);
             setResolverProgress(null);
             buildTree(resolvedMap);
-          },
-        );
+          })
+          .catch((err) => {
+            logIsm('error', `Failed to resolve script references: ${String(err)}`);
+            setResolvingScriptRefs(false);
+            setResolverProgress(null);
+            buildTree({});
+          });
       }
     },
     [setKeyframeWarningCount, setRootInstances, setLoadedFileName],

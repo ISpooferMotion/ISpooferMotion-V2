@@ -56,7 +56,13 @@ pub fn extract_retry_after(response: &reqwest::Response) -> Option<u64> {
     if let Some(reset) = response.headers().get("x-ratelimit-reset") {
         if let Ok(reset_str) = reset.to_str() {
             if let Ok(reset_secs) = reset_str.parse::<u64>() {
-                return Some(reset_secs * 1000);
+                if let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+                    let now_secs = now.as_secs();
+                    if reset_secs > now_secs {
+                        return Some((reset_secs - now_secs) * 1000);
+                    }
+                    return Some(0);
+                }
             }
         }
     }

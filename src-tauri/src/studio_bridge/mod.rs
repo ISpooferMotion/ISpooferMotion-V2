@@ -17,7 +17,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
-use tower_http::{cors::CorsLayer, limit::RequestBodyLimitLayer};
+use tower_http::{cors::{AllowOrigin, CorsLayer}, limit::RequestBodyLimitLayer};
 use uuid::Uuid;
 
 use messages::plan_patches;
@@ -164,16 +164,26 @@ pub async fn start_server(_app_handle: AppHandle) {
     *active_bridge_port().write().await = Some(addr.port());
 
     let cors = CorsLayer::new()
-        .allow_origin([
-            HeaderValue::from_static("http://localhost:5173"),
-            HeaderValue::from_static("http://127.0.0.1:5173"),
-            HeaderValue::from_static("http://localhost:3000"),
-            HeaderValue::from_static("http://127.0.0.1:3000"),
-            HeaderValue::from_static("https://ispoofermotion.com"),
-            HeaderValue::from_static("tauri://localhost"),
-            HeaderValue::from_static("http://tauri.localhost"),
-            HeaderValue::from_static("https://tauri.localhost"),
-        ])
+        .allow_origin(AllowOrigin::predicate(
+            |origin: &HeaderValue, _req_parts: &axum::http::request::Parts| {
+                let bytes = origin.as_bytes();
+                // Permit null/empty origins (chrome-error://, local IPC, etc.)
+                if bytes.is_empty() || bytes == b"null" {
+                    return true;
+                }
+                matches!(
+                    origin.to_str().unwrap_or(""),
+                    "http://localhost:5173"
+                        | "http://127.0.0.1:5173"
+                        | "http://localhost:3000"
+                        | "http://127.0.0.1:3000"
+                        | "https://ispoofermotion.com"
+                        | "tauri://localhost"
+                        | "http://tauri.localhost"
+                        | "https://tauri.localhost"
+                )
+            },
+        ))
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([
             axum::http::header::CONTENT_TYPE,

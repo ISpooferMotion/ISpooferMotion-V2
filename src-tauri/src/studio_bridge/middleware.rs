@@ -34,7 +34,6 @@ pub fn is_public_bridge_path(path: &str) -> bool {
         || path == "/discover-key"
         || path == "/confirm-pairing"
         || path == "/studio-health"
-        || path == "/auth/discord"
         || path == "/cloud-theme/sync-now"
 }
 

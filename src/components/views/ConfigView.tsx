@@ -112,7 +112,7 @@ export default function ConfigView() {
     });
     setManualCookieEdit(false);
     if (val !== 'none') {
-      runAutoDetect(val);
+      void runAutoDetect(val);
     }
   };
 

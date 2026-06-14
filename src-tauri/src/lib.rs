@@ -154,9 +154,11 @@ pub fn run() {
                         for url in urls {
                             if let Some(token) = url.strip_prefix("ispoofermotion://auth?token=") {
                                 let auth_payload = serde_json::json!({ "loginToken": token });
-                                let _ = crate::commands::discord::save_discord_report_auth(
+                                if let Err(e) = crate::commands::discord::save_discord_report_auth(
                                     crate::commands::discord::AnyValue(auth_payload.clone()),
-                                );
+                                ) {
+                                    log::error!("Failed to save discord auth payload from deep link: {:?}", e);
+                                }
                                 let _ = app_handle.emit("discord-login-success", ());
                             }
                         }
@@ -166,9 +168,11 @@ pub fn run() {
                             payload_clean.strip_prefix("ispoofermotion://auth?token=")
                         {
                             let auth_payload = serde_json::json!({ "loginToken": token });
-                            let _ = crate::commands::discord::save_discord_report_auth(
+                            if let Err(e) = crate::commands::discord::save_discord_report_auth(
                                 crate::commands::discord::AnyValue(auth_payload.clone()),
-                            );
+                            ) {
+                                log::error!("Failed to save discord auth payload from deep link (fallback): {:?}", e);
+                            }
                             let _ = app_handle.emit("discord-login-success", ());
                         }
                     }
