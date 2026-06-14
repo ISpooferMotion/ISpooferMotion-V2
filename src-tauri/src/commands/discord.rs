@@ -220,7 +220,11 @@ pub async fn start_discord_login(
         .get("authorizationUrl")
         .and_then(Value::as_str)
         .ok_or("Discord login response did not include an authorization URL.")?;
-    if !authorization_url.starts_with("https://discord.com/") {
+    let is_discord = authorization_url.starts_with("https://discord.com/");
+    let is_ism = authorization_url.starts_with("https://ispoofermotion.com/")
+        || authorization_url.starts_with("http://localhost:")
+        || authorization_url.starts_with("http://127.0.0.1:");
+    if !is_discord && !is_ism {
         return Err("Discord login response returned an unsafe authorization URL.".into());
     }
 

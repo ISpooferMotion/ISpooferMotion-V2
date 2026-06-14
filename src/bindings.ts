@@ -197,11 +197,6 @@ export const commands = {
     typedError<boolean, AppError>(
       __TAURI_INVOKE('push_to_studio', { replacementsMap, pluginPort }),
     ),
-  checkForUpdates: () => typedError<UpdateInfo, AppError>(__TAURI_INVOKE('check_for_updates')),
-  downloadAndInstallPlugin: (pluginUrl: string, appUrl: string) =>
-    typedError<boolean, AppError>(
-      __TAURI_INVOKE('download_and_install_plugin', { pluginUrl, appUrl }),
-    ),
   getPluginApiKey: () => __TAURI_INVOKE<string>('get_plugin_api_key'),
   triggerKeyPairing: () => __TAURI_INVOKE<void>('trigger_key_pairing'),
   confirmKeyPairing: () => __TAURI_INVOKE<boolean>('confirm_key_pairing'),
@@ -307,13 +302,6 @@ export type SpooferActionRequest = {
   preserveMetadata: boolean | null;
   enableArchiveRecovery: boolean | null;
   proxyUrl: string | null;
-};
-
-export type UpdateInfo = {
-  has_update: boolean;
-  latest_version: string;
-  plugin_url: string;
-  app_url: string;
 };
 
 /* Tauri Specta runtime */

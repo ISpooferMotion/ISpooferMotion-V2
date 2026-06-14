@@ -15,7 +15,15 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FolderOpen, Globe, Settings2, SlidersHorizontal, Trash2 } from 'lucide-react';
+import {
+  FolderOpen,
+  Globe,
+  Loader2,
+  Settings2,
+  SlidersHorizontal,
+  Trash2,
+  User2,
+} from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { HexAlphaColorPicker } from 'react-colorful';
 import { createPortal } from 'react-dom';
@@ -23,6 +31,8 @@ import { createPortal } from 'react-dom';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useThemeAccent } from '../../contexts/ThemeContext';
+import { useDiscordLogin } from '../../hooks/useDiscordLogin';
+import { type StoredDiscordAuth } from '../../types/discordAuth';
 import { logIsm } from '../../utils/robloxProfiles';
 import { AVAILABLE_QUICK_SETTINGS } from '../layout/QuickSettingsMenu';
 
@@ -33,6 +43,27 @@ export default function SettingsView() {
   const [localAccent, setLocalAccent] = useState(accentColor);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [pickerCoords, setPickerCoords] = useState({ top: 0, left: 0 });
+  const [discordAuth, setDiscordAuth] = useState<StoredDiscordAuth | null>(null);
+
+  useEffect(() => {
+    invoke<StoredDiscordAuth | null>('load_discord_report_auth')
+      .then((auth) => setDiscordAuth(auth ?? null))
+      .catch(() => {});
+  }, []);
+
+  const {
+    loginState,
+    errorMessage: loginError,
+    startLogin,
+    cancelLogin,
+  } = useDiscordLogin(() => {
+    invoke<StoredDiscordAuth | null>('load_discord_report_auth')
+      .then((auth) => {
+        setDiscordAuth(auth ?? null);
+        logIsm('success', 'Account connected! Cloud themes will now sync.');
+      })
+      .catch(() => {});
+  });
 
   const langOptions = { en: '🇬🇧 English', es: '🇪🇸 Español', ru: '🇷🇺 Русский', fr: '🇫🇷 Français' };
 
@@ -138,6 +169,102 @@ export default function SettingsView() {
             onExpandedChange={(keys) => updateConfig('ui', 'settingsSections', keys)}
             className="flex flex-col gap-6"
           >
+            <AccordionItem
+              value="account"
+              aria-label="Account"
+              title={
+                <span className="flex items-center gap-3 font-semibold">
+                  <User2 size={18} className="text-primary" /> Account
+                </span>
+              }
+            >
+              <Group>
+                <div className="flex flex-col gap-4 px-1 pb-1">
+                  {discordAuth?.user ? (
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        {discordAuth.user.avatarUrl ? (
+                          <img
+                            src={discordAuth.user.avatarUrl}
+                            alt=""
+                            className="w-9 h-9 rounded-full border border-border-subtle"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-bg-elevated border border-border-subtle flex items-center justify-center text-sm font-bold text-text-secondary">
+                            {(discordAuth.user.globalName || discordAuth.user.username)
+                              .charAt(0)
+                              .toUpperCase()}
+                          </div>
+                        )}
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-text-primary">
+                            {discordAuth.user.globalName || discordAuth.user.username}
+                          </span>
+                          <span className="text-xs text-text-muted">
+                            Connected · Cloud themes sync enabled
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        variant="bordered"
+                        color="danger"
+                        className="text-xs font-medium shrink-0"
+                        onClick={async () => {
+                          await invoke('clear_discord_report_auth');
+                          setDiscordAuth(null);
+                          logIsm('info', 'Account disconnected.');
+                        }}
+                      >
+                        Disconnect
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      <p className="text-sm text-text-muted leading-relaxed">
+                        Connect your ISM account to sync cloud themes. Your browser will open to
+                        authenticate.
+                      </p>
+                      {loginState === 'waiting' ? (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2 text-sm text-text-secondary">
+                            <Loader2 size={16} className="animate-spin text-primary" />
+                            Waiting for browser authentication...
+                          </div>
+                          <button
+                            onClick={cancelLogin}
+                            className="text-xs text-text-muted hover:text-text-secondary underline self-start"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          <Button
+                            color="primary"
+                            variant="solid"
+                            className="font-semibold"
+                            onClick={startLogin}
+                            isDisabled={loginState === 'opening'}
+                          >
+                            {loginState === 'opening' ? (
+                              <>
+                                <Loader2 size={14} className="animate-spin" /> Opening browser...
+                              </>
+                            ) : (
+                              'Connect Account'
+                            )}
+                          </Button>
+                          {loginState === 'error' && loginError && (
+                            <p className="text-xs text-red-400 px-1">{loginError}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </Group>
+            </AccordionItem>
+
             <AccordionItem
               value="general"
               aria-label={t('settings.general')}
