@@ -3,6 +3,7 @@ import { ChevronRight, Copy, Image as ImageIcon, Play, Square, ZoomIn } from 'lu
 import { memo, useMemo, useState } from 'react';
 
 import type { AppConfig } from '../../../contexts/ConfigContext';
+import { cn } from '../../../utils/cn';
 import { playRobloxAudio, stopRobloxAudio } from '../../../utils/robloxAudio';
 import type { ParsedAssetRef, RbxInstance } from '../../../utils/robloxPlaceParser';
 import { logIsm } from '../../../utils/robloxProfiles';
@@ -121,7 +122,10 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           </div>
           <ChevronRight
             size={12}
-            className={`mr-1 shrink-0 text-text-muted transition-transform ${isOpen ? 'rotate-90' : ''}`}
+            className={cn(
+              'mr-1 shrink-0 text-text-muted transition-transform',
+              isOpen && 'rotate-90',
+            )}
           />
 
           <div className="w-4 h-4 shrink-0 mr-2 flex items-center justify-center">
@@ -250,7 +254,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           {(filteredAssets.length > 0 || totalChildren > 0) && (
             <ChevronRight
               size={12}
-              className={`transition-transform text-text-muted ${expanded ? 'rotate-90' : ''}`}
+              className={cn('transition-transform text-text-muted', expanded && 'rotate-90')}
             />
           )}
         </div>

@@ -9,6 +9,10 @@ pub async fn get_roblox_profile(
     app: AppHandle,
     context: ProfileRequest,
 ) -> crate::error::Result<AnyValue> {
+    use validator::Validate;
+    if let Err(e) = context.validate() {
+        return Err(crate::error::AppError::Custom(format!("Validation failed: {}", e)));
+    }
     let auto_detect = context.auto_detect.unwrap_or(false);
     let mut cookie = context.cookie.unwrap_or_default();
     let group_id = context.group_id.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());

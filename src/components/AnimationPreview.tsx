@@ -10,6 +10,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
 import { useConfig } from '../contexts/ConfigContext';
+import { cn } from '../utils/cn';
 import {
   parseAnimationXml,
   type RobloxAnimationClip,
@@ -767,11 +768,12 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
                   <button
                     key={s}
                     onClick={() => setSpeed(s)}
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
+                    className={cn(
+                      'px-2 py-0.5 rounded text-[11px] font-semibold transition-colors',
                       speed === s
                         ? 'bg-primary text-white'
-                        : 'text-text-muted hover:text-text-primary hover:bg-bg-base'
-                    }`}
+                        : 'text-text-muted hover:text-text-primary hover:bg-bg-base',
+                    )}
                   >
                     {s}×
                   </button>

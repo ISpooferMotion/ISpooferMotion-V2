@@ -7,6 +7,11 @@ import {
   FormToggle,
   Group,
   itemVariants,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
   MultiSelectDropdown,
   pageVariants,
   Row,
@@ -55,6 +60,7 @@ export default function ConfigView() {
   const [manualCookieEdit, setManualCookieEdit] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus>('idle');
   const [apiKeyStatus, setApiKeyStatus] = useState<AuthStatus>('idle');
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
   const autoDetectEnabled = config.advanced.autoCookieStudio || config.advanced.autoCookieBrowser;
   const cookieReadOnly = autoDetectEnabled && !manualCookieEdit;
 
@@ -372,10 +378,37 @@ export default function ConfigView() {
                   </span>
                   <MultiSelectDropdown
                     options={uploadOptions}
-                    values={config.spoofing.uploadTypes}
-                    onChange={(values: any) => updateConfig('spoofing', 'uploadTypes', values)}
+                    values={config.spoofing.uploadTypes.filter((t) => t !== 'video')}
+                    onChange={(values: any) => {
+                      const hasVideo = config.spoofing.uploadTypes.includes('video');
+                      const newValues = hasVideo ? [...values, 'video'] : values;
+                      updateConfig('spoofing', 'uploadTypes', newValues);
+                    }}
                     placeholder="Select asset types to upload..."
                   />
+
+                  <div className="mt-2 p-3 bg-red-500/10 border border-red-500/20 rounded-md">
+                    <FormToggle
+                      label={
+                        <span className="text-danger font-semibold flex items-center gap-2">
+                          Enable Video Uploads (Read Warning!)
+                        </span>
+                      }
+                      description="WARNING: Uploading videos to Roblox costs 2,000 Robux PER VIDEO. Only enable this if you are prepared to pay."
+                      checked={config.spoofing.uploadTypes.includes('video')}
+                      onChange={(checked: boolean) => {
+                        if (checked) {
+                          setIsVideoModalOpen(true);
+                        } else {
+                          updateConfig(
+                            'spoofing',
+                            'uploadTypes',
+                            config.spoofing.uploadTypes.filter((t) => t !== 'video'),
+                          );
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
                 <div className="pt-2 pb-1">
                   <FormInput
@@ -535,6 +568,41 @@ export default function ConfigView() {
           </Accordion>
         </motion.div>
       </Window>
+
+      <Modal isOpen={isVideoModalOpen} onOpenChange={setIsVideoModalOpen}>
+        <ModalContent>
+          <ModalHeader className="text-danger flex items-center gap-2">
+            <ShieldAlert size={20} />
+            High Cost Warning
+          </ModalHeader>
+          <ModalBody className="text-text-primary">
+            <p className="mb-2">Are you absolutely sure you want to enable video uploads?</p>
+            <p className="font-semibold text-danger">
+              Roblox charges exactly 2,000 Robux for EVERY single video asset you upload.
+            </p>
+            <p className="mt-2 text-sm text-text-muted">
+              If you run a spoofing job with 10 videos, it will cost you 20,000 Robux. There are no
+              refunds from Roblox if you accidentally upload videos you didn't mean to.
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button color="default" variant="flat" onClick={() => setIsVideoModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="danger"
+              onClick={() => {
+                const types = [...config.spoofing.uploadTypes];
+                if (!types.includes('video')) types.push('video');
+                updateConfig('spoofing', 'uploadTypes', types);
+                setIsVideoModalOpen(false);
+              }}
+            >
+              I Understand, Enable It
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </motion.div>
   );
 }

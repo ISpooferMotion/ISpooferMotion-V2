@@ -133,11 +133,14 @@ pub async fn clear_profile_secrets(
     Ok(true)
 }
 
-#[derive(serde::Deserialize, specta::Type)]
+use validator::Validate;
+
+#[derive(serde::Deserialize, specta::Type, Validate)]
 pub struct ProfileRequest {
     #[serde(rename = "autoDetect")]
     pub auto_detect: Option<bool>,
     pub cookie: Option<String>,
     #[serde(rename = "groupId")]
+    #[validate(length(min = 1))]
     pub group_id: Option<String>,
 }

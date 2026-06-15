@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown, Check, Copy, Terminal, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { cn } from '../../utils/cn';
 import {
   clearDebugLogs,
   getDebugLogs,
@@ -197,15 +198,16 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
               groupedLogs.map((log, index) => (
                 <div
                   key={`${log.id}-${index}`}
-                  className={`flex items-start gap-3 py-1.5 px-3 rounded border border-transparent ${
+                  className={cn(
+                    'flex items-start gap-3 py-1.5 px-3 rounded border border-transparent',
                     log.level === 'error'
                       ? 'text-danger bg-danger/5 border-danger/10'
                       : log.level === 'warn'
                         ? 'text-warning bg-warning/5 border-warning/10'
                         : log.level === 'success'
                           ? 'text-success bg-success/5 border-success/10'
-                          : 'text-text-primary hover:bg-bg-elevated/50'
-                  }`}
+                          : 'text-text-primary hover:bg-bg-elevated/50',
+                  )}
                 >
                   <span className="text-text-muted shrink-0 min-w-[70px] select-none opacity-60 flex items-center gap-1.5">
                     {log.timestamp}
@@ -216,15 +218,16 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
                     )}
                   </span>
                   <span
-                    className={`uppercase shrink-0 min-w-[60px] font-bold select-none ${
+                    className={cn(
+                      'uppercase shrink-0 min-w-[60px] font-bold select-none',
                       log.level === 'error'
                         ? 'text-danger'
                         : log.level === 'warn'
                           ? 'text-warning'
                           : log.level === 'success'
                             ? 'text-success'
-                            : 'text-primary/70'
-                    }`}
+                            : 'text-primary/70',
+                    )}
                   >
                     {log.level}
                   </span>

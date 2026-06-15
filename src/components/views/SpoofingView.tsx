@@ -25,9 +25,11 @@ import AnimationIcon from '../../assets/roblox_icons/Animation.png';
 import DecalIcon from '../../assets/roblox_icons/Decal.png';
 import MeshIcon from '../../assets/roblox_icons/MeshPart.png';
 import SoundIcon from '../../assets/roblox_icons/Sound.png';
+import VideoIcon from '../../assets/roblox_icons/VideoFrame.png';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
+import { cn } from '../../utils/cn';
 import { type PendingSpoofRetry, takeSpoofRetry } from '../../utils/jobTypes';
 import { findPluginBridgePort } from '../../utils/pluginBridge';
 import type { RbxInstance } from '../../utils/robloxPlaceParser';
@@ -341,6 +343,7 @@ export default function SpoofingView() {
     { value: 'audio', assetType: 'audio', label: 'Audio', icon: SoundIcon },
     { value: 'images', assetType: 'image', label: 'Images', icon: DecalIcon },
     { value: 'meshes', assetType: 'mesh', label: 'Meshes', icon: MeshIcon },
+    { value: 'videos', assetType: 'video', label: 'Videos', icon: VideoIcon },
   ];
 
   const selectedSpoofTypes = spoofOptions
@@ -967,7 +970,7 @@ export default function SpoofingView() {
                   <Button
                     variant="flat"
                     color={activeSpooferJobId ? 'danger' : undefined}
-                    className={`h-12 px-6 font-semibold transition-all duration-300`}
+                    className={cn('h-12 px-6 font-semibold transition-all duration-300')}
                     startContent={activeSpooferJobId ? <Ban size={18} /> : <ScanSearch size={18} />}
                     onClick={() => {
                       if (activeSpooferJobId) {

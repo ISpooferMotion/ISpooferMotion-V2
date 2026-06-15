@@ -33,6 +33,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useThemeAccent } from '../../contexts/ThemeContext';
 import { useDiscordLogin } from '../../hooks/useDiscordLogin';
 import { type StoredDiscordAuth } from '../../types/discordAuth';
+import { cn } from '../../utils/cn';
 import { logIsm } from '../../utils/robloxProfiles';
 import { AVAILABLE_QUICK_SETTINGS } from '../layout/QuickSettingsMenu';
 
@@ -317,11 +318,12 @@ export default function SettingsView() {
                       <button
                         key={tMode}
                         onClick={() => setThemeMode(tMode)}
-                        className={`flex-1 py-1.5 text-xs font-medium rounded-[calc(var(--radius-md)-4px)] transition-all ${
+                        className={cn(
+                          'flex-1 py-1.5 text-xs font-medium rounded-[calc(var(--radius-md)-4px)] transition-all',
                           themeMode === tMode
                             ? 'bg-text-primary text-bg-base shadow-sm'
-                            : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated'
-                        }`}
+                            : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
+                        )}
                       >
                         {t(`settings.theme${tMode.charAt(0).toUpperCase() + tMode.slice(1)}`)}
                       </button>

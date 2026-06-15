@@ -29,7 +29,10 @@ async function sendThemeReceipt(
   status: 'applied' | 'failed',
   error: string | null,
 ) {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL === undefined ? 'https://ispoofermotion.com' : import.meta.env.VITE_API_BASE_URL;
+  const baseUrl =
+    import.meta.env.VITE_API_BASE_URL === undefined
+      ? 'https://ispoofermotion.com'
+      : import.meta.env.VITE_API_BASE_URL;
   await tauriFetch(`${baseUrl}/api/cloud-theme/receipt`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -77,7 +80,10 @@ export function useCloudThemeSync() {
           10,
         );
 
-        const baseUrl = import.meta.env.VITE_API_BASE_URL === undefined ? 'https://ispoofermotion.com' : import.meta.env.VITE_API_BASE_URL;
+        const baseUrl =
+          import.meta.env.VITE_API_BASE_URL === undefined
+            ? 'https://ispoofermotion.com'
+            : import.meta.env.VITE_API_BASE_URL;
         const response = await tauriFetch(
           `${baseUrl}/api/cloud-theme/state?since=${localVersion}`,
           {

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
 import type { DiscordUser, StoredDiscordAuth } from '../../types/discordAuth';
+import { cn } from '../../utils/cn';
 
 export default function StatusBar() {
   const [discordUser, setDiscordUser] = useState<DiscordUser | null>(null);
@@ -59,9 +60,10 @@ export default function StatusBar() {
           label={studioConnected ? 'Synced to Studio' : 'Not Synced to Studio'}
           tone={studioConnected ? 'primary' : 'neutral'}
           dot={false}
-          className={`!border-transparent !bg-transparent !px-0 ${
-            studioConnected ? '' : '!text-text-muted opacity-50'
-          }`}
+          className={cn(
+            '!border-transparent !bg-transparent !px-0',
+            !studioConnected && '!text-text-muted opacity-50',
+          )}
         />
       </div>
     </motion.div>

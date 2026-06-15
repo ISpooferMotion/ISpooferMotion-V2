@@ -17,6 +17,10 @@ pub async fn run_spoofer_action(
     app: AppHandle,
     data: SpooferActionRequest,
 ) -> crate::error::Result<()> {
+    use validator::Validate;
+    if let Err(e) = data.validate() {
+        return Err(crate::error::AppError::Custom(format!("Validation failed: {}", e)));
+    }
     process_spoofer_action(app, data).await
 }
 

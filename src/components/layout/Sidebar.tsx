@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { cn } from '../../utils/cn';
 
 function DonateButton() {
   const [isHovered, setIsHovered] = useState(false);
@@ -144,17 +145,21 @@ export default function Sidebar({
                 whileHover={{ scale: 1.01 }}
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className={`w-full text-left h-10 px-3 transition-colors duration-150 flex items-center gap-3 rounded-[var(--radius-md)] relative outline-none [-webkit-tap-highlight-color:transparent] ${
+                className={cn(
+                  'w-full text-left h-10 px-3 transition-colors duration-150 flex items-center gap-3 rounded-[var(--radius-md)] relative outline-none [-webkit-tap-highlight-color:transparent]',
                   isActive
                     ? 'bg-bg-elevated text-text-primary border border-border-strong shadow-subtle'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated/70'
-                }`}
+                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated/70',
+                )}
               >
-                <div className={`transition-opacity ${isActive ? 'opacity-100' : 'opacity-60'}`}>
+                <div className={cn('transition-opacity', isActive ? 'opacity-100' : 'opacity-60')}>
                   {tab.icon}
                 </div>
                 <span
-                  className={`text-[13px] tracking-wide ${isActive ? 'font-semibold' : 'font-medium'}`}
+                  className={cn(
+                    'text-[13px] tracking-wide',
+                    isActive ? 'font-semibold' : 'font-medium',
+                  )}
                 >
                   {tab.label}
                 </span>

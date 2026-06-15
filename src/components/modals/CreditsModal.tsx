@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { motion, Variants } from 'framer-motion';
 import { Code, Heart, Rocket, X } from 'lucide-react';
 
+import { cn } from '../../utils/cn';
+
 export default function CreditsModal({
   isOpen,
   onClose,
@@ -108,7 +110,7 @@ export default function CreditsModal({
                         <span className="font-normal text-text-muted text-xs">{dev.sub}</span>
                       )}
                     </span>
-                    <span className={`text-xs font-medium ${dev.roleColor}`}>{dev.role}</span>
+                    <span className={cn('text-xs font-medium', dev.roleColor)}>{dev.role}</span>
                   </div>
                 </div>
               ))}
@@ -124,7 +126,7 @@ export default function CreditsModal({
                     {[75, 50].map((w) => (
                       <div
                         key={w}
-                        className={`h-2 rounded-full bg-border-strong/40 animate-pulse`}
+                        className={cn('h-2 rounded-full bg-border-strong/40 animate-pulse')}
                         style={{ width: `${w}%` }}
                       />
                     ))}
@@ -152,7 +154,7 @@ export default function CreditsModal({
                     {[65, 45].map((w) => (
                       <div
                         key={w}
-                        className={`h-2 rounded-full bg-border-strong/40 animate-pulse`}
+                        className={cn('h-2 rounded-full bg-border-strong/40 animate-pulse')}
                         style={{ width: `${w}%` }}
                       />
                     ))}

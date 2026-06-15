@@ -1,8 +1,10 @@
 use crate::commands::discord::AnyValue;
+use validator::Validate;
 
-#[derive(serde::Deserialize, specta::Type)]
+#[derive(serde::Deserialize, specta::Type, Validate)]
 // this struct defines all the settings you can pass into a spoofer job from the frontend ui
 pub struct SpooferActionRequest {
+    #[validate(length(min = 1))]
     pub assets: Option<String>,
     pub cookie: Option<String>,
     #[serde(rename = "apiKey")]
@@ -14,6 +16,7 @@ pub struct SpooferActionRequest {
     #[serde(rename = "uploadTypes")]
     pub upload_types: Option<Vec<String>>,
     #[serde(rename = "downloadPath")]
+    #[validate(length(min = 1))]
     pub download_path: Option<String>,
     #[serde(rename = "forcePlaceIds")]
     pub force_place_ids: Option<String>,
@@ -23,6 +26,7 @@ pub struct SpooferActionRequest {
     pub place_name: Option<String>,
     pub concurrent: Option<bool>,
     #[serde(rename = "maxConcurrency")]
+    #[validate(range(min = 1, max = 100))]
     pub max_concurrency: Option<u32>,
     #[serde(rename = "skipOwned")]
     pub skip_owned: Option<bool>,

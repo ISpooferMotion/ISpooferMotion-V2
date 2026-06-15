@@ -63,6 +63,7 @@ tauri-specta = { version = "=2.0.0-rc.25", features = ["typescript", "javascript
 specta-typescript = "0.0.12"
 semver = "1.0.28"
 tauri-plugin-deep-link = "2.4.9"
+validator = { version = "0.19.0", features = ["derive"] }
 
 [lints.clippy]
 complexity = { level = "warn", priority = -1 }

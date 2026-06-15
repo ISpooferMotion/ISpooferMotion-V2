@@ -9,6 +9,7 @@ import AppIconDark from '../../assets/app_icon.png';
 import AppIconLight from '../../assets/app_icon_light.png';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useThemeAccent } from '../../contexts/ThemeContext';
+import { cn } from '../../utils/cn';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 import QuickSettingsMenu from './QuickSettingsMenu';
 
@@ -50,7 +51,7 @@ export default function Titlebar() {
       className="h-14 w-full flex items-center justify-between px-5 bg-transparent border-b border-border-subtle select-none shrink-0 z-50 relative"
     >
       {/* App Logo & Name */}
-      <div className={`flex items-center pointer-events-none ${isLogoHidden ? 'pl-1' : 'gap-3'}`}>
+      <div className={cn('flex items-center pointer-events-none', isLogoHidden ? 'pl-1' : 'gap-3')}>
         {!isLogoHidden && (
           <div className="w-8 h-8 flex items-center justify-center">
             {/* user can override the default logo in themes, apply that here if it exists */}

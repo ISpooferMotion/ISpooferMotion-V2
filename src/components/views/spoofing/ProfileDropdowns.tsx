@@ -4,6 +4,7 @@ import { ChevronDown, Users, UserSquare2 } from 'lucide-react';
 import { type ReactNode, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { cn } from '../../../utils/cn';
 import { normalizeId, type RobloxGroup, type RobloxUserInfo } from '../../../utils/robloxProfiles';
 
 export type AudioQuotaDisplay =
@@ -198,7 +199,10 @@ export function AvatarDropdown({
             onChange('none');
             setOpen(false);
           }}
-          className={`flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-[var(--radius-sm)] hover:bg-bg-elevated transition-colors ${value === 'none' ? 'text-primary font-semibold' : 'text-text-primary'}`}
+          className={cn(
+            'flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-[var(--radius-sm)] hover:bg-bg-elevated transition-colors',
+            value === 'none' ? 'text-primary font-semibold' : 'text-text-primary',
+          )}
         >
           <div className="w-7 h-7 shrink-0">
             <EmptyAvatar size={14} />
@@ -219,7 +223,12 @@ export function AvatarDropdown({
               onChange(String(user.id));
               setOpen(false);
             }}
-            className={`flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-[var(--radius-sm)] hover:bg-bg-elevated transition-colors ${normalizeId(user.id) === normalizeId(value) ? 'text-primary font-semibold' : 'text-text-primary'}`}
+            className={cn(
+              'flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-[var(--radius-sm)] hover:bg-bg-elevated transition-colors',
+              normalizeId(user.id) === normalizeId(value)
+                ? 'text-primary font-semibold'
+                : 'text-text-primary',
+            )}
           >
             <div className="w-7 h-7 shrink-0">
               {user.avatarUrl ? (
@@ -319,7 +328,10 @@ export function GroupDropdown({
             onChange('none');
             setOpen(false);
           }}
-          className={`flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-[var(--radius-sm)] hover:bg-bg-elevated transition-colors ${value === 'none' ? 'text-primary font-semibold' : 'text-text-primary'}`}
+          className={cn(
+            'flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-[var(--radius-sm)] hover:bg-bg-elevated transition-colors',
+            value === 'none' ? 'text-primary font-semibold' : 'text-text-primary',
+          )}
         >
           <div className="w-7 h-7 shrink-0">
             <EmptyAvatar group size={14} />
@@ -340,7 +352,12 @@ export function GroupDropdown({
               onChange(String(group.id));
               setOpen(false);
             }}
-            className={`flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-[var(--radius-sm)] hover:bg-bg-elevated transition-colors ${normalizeId(group.id) === normalizeId(value) ? 'text-primary font-semibold' : 'text-text-primary'}`}
+            className={cn(
+              'flex items-center gap-3 w-full px-2 py-1.5 text-left text-[13px] rounded-[var(--radius-sm)] hover:bg-bg-elevated transition-colors',
+              normalizeId(group.id) === normalizeId(value)
+                ? 'text-primary font-semibold'
+                : 'text-text-primary',
+            )}
           >
             <div className="w-7 h-7 shrink-0">
               {group.iconUrl ? (

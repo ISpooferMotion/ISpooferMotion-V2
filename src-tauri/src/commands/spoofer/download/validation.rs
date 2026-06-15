@@ -49,6 +49,23 @@ pub async fn validate_downloaded_payload(
                 Err("Downloaded image was not a recognized image file.".into())
             }
         }
+        "video" => Ok(()),
         _ => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn validation_accepts_valid_video() -> Result<(), Box<dyn std::error::Error>> {
+        let path = std::env::temp_dir().join("ispoofer-valid-video.mp4");
+        tokio::fs::write(&path, b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom").await?;
+        let path_string = path.to_string_lossy().to_string();
+        let result = validate_downloaded_payload(&path_string, Some("video")).await;
+        let _ = tokio::fs::remove_file(path).await;
+        assert!(result.is_ok());
+        Ok(())
     }
 }

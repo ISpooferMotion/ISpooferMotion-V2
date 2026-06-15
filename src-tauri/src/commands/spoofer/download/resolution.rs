@@ -739,6 +739,7 @@ pub fn expected_asset_type(asset_type: Option<&str>) -> Option<&'static str> {
     match asset_type.unwrap_or_default().to_ascii_lowercase().as_str() {
         "audio" => Some("Audio"),
         "plugin" => Some("Plugin"),
+        "video" => Some("Video"),
         _ => None,
     }
 }

@@ -1,63 +1,71 @@
+import { z } from 'zod';
 import { create } from 'zustand';
 
 import { isTauriRuntime } from '../utils/tauriRuntime';
 
-export interface AppConfig {
-  general: {
-    desktopNotifications: boolean;
-    hideToTrayOnClose: boolean;
-    telemetryEnabled: boolean;
-  };
-  advanced: {
-    autoCookieStudio: boolean;
-    autoCookieBrowser: boolean;
-    skipOwned: boolean;
-    enablePluginSpoofing: boolean;
-    memoryInjectionEnabled: boolean;
-    clipboardMonitoring: boolean;
-    pluginPort: string;
-    forcePlaceIds: string;
-    placeIdSearchLimit: string;
-    assetScanTimeout: string;
-    excludedUserIds: string;
-    excludedGroupIds: string;
-    concurrentSpoofing: boolean;
-    maxConcurrency: number;
-    enableArchiveRecovery: boolean;
-    proxyUrl: string;
-  };
-  debug: {
-    debugMode: boolean;
-    enableCache: boolean;
-    enableExperimentalTab: boolean;
-  };
-  spoofing: {
-    selectedUser: string;
-    selectedGroup: string;
-    animation: boolean;
-    audio: boolean;
-    images: boolean;
-    meshes: boolean;
-    scriptRefs: boolean;
-    cookie: string;
-    apiKey: string;
-    enableSpoofing: boolean;
-    uploadTypes: string[];
-    downloadPath: string;
-    extraAssetIds: string;
-    preserveMetadata: boolean;
-  };
-  ui: {
-    activeTab: string;
-    assetExplorerOpen: boolean;
-    homeUpdateSections: string[];
-    settingsSections: string[];
-    configSections: string[];
-    spoofingSections: string[];
-    autoScrollSections: boolean;
-    quickSettings: string[];
-  };
-}
+export const AppConfigSchema = z.object({
+  general: z.object({
+    desktopNotifications: z.boolean().default(true),
+    hideToTrayOnClose: z.boolean().default(false),
+    telemetryEnabled: z.boolean().default(true),
+  }),
+  advanced: z.object({
+    autoCookieStudio: z.boolean().default(true),
+    autoCookieBrowser: z.boolean().default(false),
+    skipOwned: z.boolean().default(false),
+    enablePluginSpoofing: z.boolean().default(false),
+    memoryInjectionEnabled: z.boolean().default(false),
+    clipboardMonitoring: z.boolean().default(false),
+    pluginPort: z.string().default('14285'),
+    forcePlaceIds: z.string().default(''),
+    placeIdSearchLimit: z.string().default('20'),
+    assetScanTimeout: z.string().default('20'),
+    excludedUserIds: z.string().default(''),
+    excludedGroupIds: z.string().default(''),
+    concurrentSpoofing: z.boolean().default(true),
+    maxConcurrency: z.number().default(100),
+    enableArchiveRecovery: z.boolean().default(false),
+    proxyUrl: z.string().default(''),
+  }),
+  debug: z.object({
+    debugMode: z.boolean().default(false),
+    enableCache: z.boolean().default(true),
+    enableExperimentalTab: z.boolean().default(false),
+  }),
+  spoofing: z.object({
+    selectedUser: z.string().default('none'),
+    selectedGroup: z.string().default('none'),
+    animation: z.boolean().default(true),
+    audio: z.boolean().default(true),
+    images: z.boolean().default(true),
+    meshes: z.boolean().default(true),
+    videos: z.boolean().default(true),
+    scriptRefs: z.boolean().default(true),
+    cookie: z.string().default(''),
+    apiKey: z.string().default(''),
+    enableSpoofing: z.boolean().default(false),
+    uploadTypes: z.array(z.string()).default(['animation', 'audio', 'image', 'mesh', 'script_ref']),
+    downloadPath: z.string().default(''),
+    extraAssetIds: z.string().default(''),
+    preserveMetadata: z.boolean().default(true),
+  }),
+  ui: z.object({
+    activeTab: z.string().default('home'),
+    assetExplorerOpen: z.boolean().default(false),
+    homeUpdateSections: z.array(z.string()).default(['changelog']),
+    settingsSections: z.array(z.string()).default(['account', 'general', 'quickSettings', 'debug']),
+    configSections: z
+      .array(z.string())
+      .default(['credentials', 'assetProcessing', 'routing', 'exclusions']),
+    spoofingSections: z.array(z.string()).default(['targets', 'execution']),
+    autoScrollSections: z.boolean().default(false),
+    quickSettings: z
+      .array(z.string())
+      .default(['general.desktopNotifications', 'advanced.skipOwned']),
+  }),
+});
+
+export type AppConfig = z.infer<typeof AppConfigSchema>;
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
   general: {
@@ -95,6 +103,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     audio: true,
     images: true,
     meshes: true,
+    videos: true,
     scriptRefs: true,
     cookie: '',
     apiKey: '',

@@ -62,7 +62,10 @@ export default function App() {
     // Check if we need to lock the app via live config
     const fetchConfig = async () => {
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL === undefined ? 'https://ispoofermotion.com' : import.meta.env.VITE_API_BASE_URL;
+        const baseUrl =
+          import.meta.env.VITE_API_BASE_URL === undefined
+            ? 'https://ispoofermotion.com'
+            : import.meta.env.VITE_API_BASE_URL;
         const res = await fetch(`${baseUrl}/api/config`);
         if (res.ok) {
           const data = await res.json();

@@ -24,11 +24,6 @@ input[type='number'] {
       opacity 150ms ease,
       transform 150ms ease;
   }
-
-  button:not(:disabled):not([role='switch']):active,
-  [role='button']:not([aria-disabled='true']):not([role='switch']):active {
-    transform: scale(0.98);
-  }
 }
 
 .theme-range {
