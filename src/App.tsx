@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import ratImage from './assets/rat.png';
+
 import Sidebar from './components/layout/Sidebar';
 import StatusBar from './components/layout/StatusBar';
 import Titlebar from './components/layout/Titlebar';
@@ -49,7 +49,7 @@ export default function App() {
   const { config, updateConfig } = useConfig();
   const activeTab = config.ui.activeTab;
   const isExplorerOpen = config.ui.assetExplorerOpen;
-  const [showRat, setShowRat] = useState(false);
+
   const [isRobloxApiDown, setIsRobloxApiDown] = useState(false);
   const [maintenance, setMaintenance] = useState<{ mode: boolean; message: string }>({
     mode: false,
@@ -173,24 +173,7 @@ export default function App() {
   useEffect(() => {
     if (!isTauriRuntime()) return;
 
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-    let hideRatTimeout: ReturnType<typeof setTimeout> | undefined;
-    // secret easter egg trigger, don't tell anyone
-    listen('trigger-easter-egg', () => {
-      if (import.meta.env.DEV || Math.random() < 0.01) {
-        setShowRat(true);
-        hideRatTimeout = setTimeout(() => setShowRat(false), 2000);
-      }
-    }).then((u) => {
-      if (disposed) u();
-      else unlisten = u;
-    });
-    return () => {
-      disposed = true;
-      if (hideRatTimeout) clearTimeout(hideRatTimeout);
-      if (unlisten) unlisten();
-    };
+
   }, []);
 
   if (maintenance.mode) {
@@ -326,20 +309,7 @@ export default function App() {
 
         <CreditsModal isOpen={isCreditsOpen} onClose={() => setCreditsOpen(false)} />
 
-        <AnimatePresence>
-          {showRat && (
-            <motion.div
-              key="rat-overlay"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="absolute inset-0 z-[200] pointer-events-none flex items-center justify-center bg-black"
-            >
-              <img src={ratImage} alt="secret rat" className="w-full h-full object-cover" />
-            </motion.div>
-          )}
-        </AnimatePresence>
+
       </div>
     </IsmProvider>
   );
