@@ -228,15 +228,23 @@ export default function App() {
                 playsInline
                 className="absolute inset-0 w-full h-full object-cover"
                 src={backgroundUrl}
+                style={{
+                  mixBlendMode: (customBackground.blend_mode as any) || 'normal',
+                  filter: customBackground.filter || 'none',
+                }}
               />
             ) : (
               <img
                 className="absolute inset-0 w-full h-full object-cover"
                 src={backgroundUrl}
                 alt="Custom background"
+                style={{
+                  mixBlendMode: (customBackground.blend_mode as any) || 'normal',
+                  filter: customBackground.filter || 'none',
+                }}
               />
             )}
-            <div className="absolute inset-0 bg-background/50 backdrop-blur-[2px]" />
+            <div className="absolute inset-0 bg-background/20" />
           </div>
         )}
 
