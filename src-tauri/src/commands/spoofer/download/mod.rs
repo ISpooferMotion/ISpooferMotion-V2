@@ -185,11 +185,21 @@ pub async fn download_animation_asset_with_progress(
         ["RobloxStudio/WinInet", "RobloxApp/WinInet", "Roblox/WinInet", "roblox/9.0.0.0 (WinInet)"];
 
     // try every candidate url we found until one actually gives us the file
+    let mut is_first_url = true;
     for download_url in &candidate_urls {
         let is_cdn_url = download_url.contains("rbxcdn.com");
 
-        let resume_offset =
-            if let Ok(meta) = tokio::fs::metadata(&file_path).await { meta.len() } else { 0 };
+        let resume_offset = if is_first_url {
+            if let Ok(meta) = tokio::fs::metadata(&file_path).await {
+                meta.len()
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+        is_first_url = false;
+
         for attempt in 0..3u64 {
             let ua = user_agents[attempt as usize % user_agents.len()];
             let request_place_id =
@@ -260,7 +270,28 @@ pub async fn download_animation_asset_with_progress(
             }
 
             let mut status_reason = status.to_string();
-            if status == reqwest::StatusCode::FORBIDDEN {
+            if status == reqwest::StatusCode::UNAUTHORIZED {
+                let error_msg = "Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".to_string();
+                emit_transfer_update(
+                    &app,
+                    TransferUpdate {
+                        id: transfer_id.clone(),
+                        status: Some("error".into()),
+                        error: Some(error_msg.clone()),
+                        progress: Some(0),
+                        name: None,
+                        original_asset_id: None,
+                        direction: None,
+                        size: None,
+                        new_asset_id: None,
+                    },
+                );
+                return Ok(DownloadResult {
+                    success: false,
+                    file_path: None,
+                    error: Some(error_msg),
+                });
+            } else if status == reqwest::StatusCode::FORBIDDEN {
                 status_reason = "Permission Denied: Asset is private or copylocked.".to_string();
             } else if status == reqwest::StatusCode::NOT_FOUND {
                 status_reason = "Not Found: Asset is invalid or missing.".to_string();

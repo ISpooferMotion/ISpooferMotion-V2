@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
 import { useStudioAssetPoll } from '../../hooks/useStudioAssetPoll';
+import { useSpooferStore } from '../../stores/spooferStore';
 import type { ScriptRefProgressPayload, TauriEventPayload } from '../../types/tauriEvents';
 import type { PluginAsset, PluginAssetStore } from '../../utils/pluginBridge';
 import { stopRobloxAudio } from '../../utils/robloxAudio';
@@ -141,8 +142,8 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
 
   const [, setUnknownScriptRefs] = useState<PluginAsset[]>([]);
 
+  const { config } = useConfig();
   const {
-    config,
     rootInstances,
     setRootInstances,
     loadedFileName,
@@ -152,7 +153,7 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
     setSelectedAssetIds,
     keyframeWarningCount,
     setKeyframeWarningCount,
-  } = useConfig();
+  } = useSpooferStore();
 
   const { studioConnected, scanStatus } = useStudioConnectionState();
   const lastStudioSnapshotRef = useRef('');

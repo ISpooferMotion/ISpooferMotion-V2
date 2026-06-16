@@ -1,14 +1,19 @@
 import { create } from 'zustand';
 
 import type { SpooferAssetResult } from '../types/tauriEvents';
+import { notifyError } from '../utils/notifyError';
 import type { RbxInstance } from '../utils/robloxPlaceParser';
+import { appendSpoofingLog } from '../utils/spoofingLogs';
+import { queueStudioReplacements } from '../utils/studioBridge';
+import { isTauriRuntime } from '../utils/tauriRuntime';
+import { useConfigStore } from './configStore';
 
 interface SpooferState {
   rootInstances: RbxInstance[];
-  setRootInstances: (instances: RbxInstance[]) => void;
+  setRootInstances: (val: RbxInstance[] | ((prev: RbxInstance[]) => RbxInstance[])) => void;
 
   loadedFileName: string | null;
-  setLoadedFileName: (name: string | null) => void;
+  setLoadedFileName: (val: string | null | ((prev: string | null) => string | null)) => void;
 
   parsingFileName: string | null;
   setParsingFileName: (name: string | null) => void;
@@ -52,10 +57,16 @@ interface SpooferState {
 // holds all the active ephemeral state for the spoofing jobs, asset explorer, and studio integration
 export const useSpooferStore = create<SpooferState>((set) => ({
   rootInstances: [],
-  setRootInstances: (instances) => set({ rootInstances: instances }),
+  setRootInstances: (val) =>
+    set((state) => ({
+      rootInstances: typeof val === 'function' ? val(state.rootInstances) : val,
+    })),
 
   loadedFileName: null,
-  setLoadedFileName: (name) => set({ loadedFileName: name }),
+  setLoadedFileName: (val) =>
+    set((state) => ({
+      loadedFileName: typeof val === 'function' ? val(state.loadedFileName) : val,
+    })),
 
   parsingFileName: null,
   setParsingFileName: (name) => set({ parsingFileName: name }),
@@ -108,3 +119,56 @@ export const useSpooferStore = create<SpooferState>((set) => ({
       keyframeWarningCount: typeof val === 'function' ? val(state.keyframeWarningCount) : val,
     })),
 }));
+
+export const applyReplacements = async (replacements: Record<string, string>) => {
+  if (!isTauriRuntime()) return;
+  const { config } = useConfigStore.getState();
+  const { setSpoofingLogs, setLastReplacements, setIsReplacing, setReplaceError } =
+    useSpooferStore.getState();
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    setIsReplacing(true);
+    setReplaceError(false);
+    setSpoofingLogs((prev) => appendSpoofingLog(prev, '\nApplying replacements to Studio...'));
+
+    if (config.advanced.memoryInjectionEnabled) {
+      setSpoofingLogs((prev) => appendSpoofingLog(prev, 'Starting Memory Injection (Beta)...'));
+      const pid = await invoke<number | null>('find_studio_process');
+      if (!pid) {
+        throw new Error('Roblox Studio is not running.');
+      }
+
+      const results = await invoke<Record<string, any>>('scan_and_replace_multiple_strings', {
+        pid,
+        replacements,
+      });
+
+      let total = 0;
+      for (const [, res] of Object.entries(results)) {
+        total += res.total_replaced;
+      }
+
+      setSpoofingLogs((prev) =>
+        appendSpoofingLog(
+          prev,
+          `Memory injection complete! Patched ${total} exact matches in memory.`,
+        ),
+      );
+    } else {
+      await queueStudioReplacements(replacements, config.advanced.pluginPort);
+      setSpoofingLogs((prev) =>
+        appendSpoofingLog(prev, 'Queued replacements to plugin bridge. Run the plugin in Studio!'),
+      );
+    }
+    setLastReplacements(replacements);
+  } catch (e: any) {
+    setReplaceError(true);
+    notifyError('Replacement Error', String(e));
+    setSpoofingLogs((prev) =>
+      appendSpoofingLog(prev, `[ERROR] Failed to apply replacements: ${e}`),
+    );
+  } finally {
+    setIsReplacing(false);
+  }
+};

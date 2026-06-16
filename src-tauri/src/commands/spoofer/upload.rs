@@ -1,10 +1,18 @@
 use super::{
     apply_upload_auth, emit_transfer_update, is_valid_numeric_id, patch_asset_permissions,
-    sanitize_filename, set_rate_limit, wait_rate_limit, AppHandle, Duration, Manager,
-    PublishResult, RateLimitBucket, RobloxOperationResponse, Serialize, TransferUpdate, UploadAuth,
-    Value,
+    sanitize_filename, set_rate_limit, wait_rate_limit, AppHandle, Manager, PublishResult,
+    RateLimitBucket, RobloxOperationResponse, TransferUpdate, UploadAuth, Value,
 };
+use serde::Serialize;
 use tauri::Emitter;
+
+fn extract_asset_id_from_value(resp_obj: &serde_json::Value) -> Option<String> {
+    resp_obj.get("assetId").or(resp_obj.get("Id")).and_then(|id| {
+        id.as_str()
+            .map(std::string::ToString::to_string)
+            .or_else(|| id.as_u64().map(|n| n.to_string()))
+    })
+}
 
 fn format_wait_seconds(milliseconds: u64) -> String {
     format!("{:.1}s", milliseconds as f64 / 1000.0)
@@ -63,7 +71,7 @@ async fn poll_roblox_operation(
     let url = format!("https://apis.roblox.com/{path}");
     for attempt in 0..80 {
         if attempt > 0 {
-            tokio::time::sleep(Duration::from_millis(750)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(750)).await;
         }
         wait_rate_limit(RateLimitBucket::OperationPoll).await;
         let resp = match apply_upload_auth(client.get(&url), auth).send().await {
@@ -77,7 +85,7 @@ async fn poll_roblox_operation(
                     crate::commands::spoofer::record_adaptive_rate_limit(Some(retry_after_ms));
                     set_rate_limit(
                         RateLimitBucket::OperationPoll,
-                        Duration::from_millis(retry_after_ms),
+                        std::time::Duration::from_millis(retry_after_ms),
                     );
                     if attempt % 5 == 0 {
                         let message = format!(
@@ -101,7 +109,7 @@ async fn poll_roblox_operation(
                         );
                     }
                 }
-                tokio::time::sleep(Duration::from_millis(retry_after_ms)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(retry_after_ms)).await;
                 continue;
             }
             return Err(format!("Operation poll returned error: {}", resp.status()));
@@ -113,11 +121,7 @@ async fn poll_roblox_operation(
                     return Err(format!("Operation failed: {:?}", error));
                 }
                 if let Some(resp_obj) = parsed.response {
-                    let id = resp_obj.get("assetId").or(resp_obj.get("Id")).and_then(|id| {
-                        id.as_str()
-                            .map(std::string::ToString::to_string)
-                            .or_else(|| id.as_u64().map(|n| n.to_string()))
-                    });
+                    let id = extract_asset_id_from_value(&resp_obj);
                     if let Some(asset_id) = id {
                         return Ok(asset_id);
                     }
@@ -198,11 +202,10 @@ async fn upload_path_allowed(
     }
 
     for root in allowed_roots {
-        let Ok(canonical_root) = tokio::fs::canonicalize(&root).await else {
-            continue;
-        };
-        if canonical_file_path.starts_with(&canonical_root) {
-            return Ok(canonical_file_path);
+        if let Ok(canonical_root) = tokio::fs::canonicalize(&root).await {
+            if canonical_file_path.ancestors().any(|a| a == canonical_root) {
+                return Ok(canonical_file_path);
+            }
         }
     }
 
@@ -413,7 +416,7 @@ pub async fn publish_asset_with_progress(
 
             if (500..600).contains(&status_code) {
                 crate::commands::spoofer::record_adaptive_server_error();
-                crate::commands::spoofer::set_circuit_breaker(Duration::from_secs(10));
+                crate::commands::spoofer::set_circuit_breaker(std::time::Duration::from_secs(10));
                 continue;
             }
 
@@ -436,10 +439,12 @@ pub async fn publish_asset_with_progress(
                 }
                 if let Some(mut mutable_buffer) = fallback_buffer.take() {
                     if file_type == "image/png" {
-                        if let Some(iend_idx) = mutable_buffer
+                        let scan_start = mutable_buffer.len().saturating_sub(64);
+                        if let Some(iend_offset) = mutable_buffer[scan_start..]
                             .windows(8)
                             .rposition(|window| window == b"\x00\x00\x00\x00IEND")
                         {
+                            let iend_idx = scan_start + iend_offset;
                             let mut random_bytes = [0u8; 4];
                             random_bytes.copy_from_slice(&rand::random::<[u8; 4]>());
                             let chunk_data =
@@ -480,7 +485,10 @@ pub async fn publish_asset_with_progress(
                 };
                 let sleep_duration = retry_after_ms + jitter_ms;
                 crate::commands::spoofer::record_adaptive_rate_limit(Some(sleep_duration));
-                set_rate_limit(RateLimitBucket::Upload, Duration::from_millis(sleep_duration));
+                set_rate_limit(
+                    RateLimitBucket::Upload,
+                    std::time::Duration::from_millis(sleep_duration),
+                );
                 let message = format!(
                     "Roblox upload rate limit hit for {name}; backing off for {} before retry {} of 100.",
                     format_wait_seconds(sleep_duration),
@@ -529,11 +537,7 @@ pub async fn publish_asset_with_progress(
             if let Ok(parsed) = serde_json::from_str::<RobloxOperationResponse>(&resp_text) {
                 if parsed.done == Some(true) {
                     if let Some(resp_obj) = parsed.response {
-                        let id = resp_obj.get("assetId").or(resp_obj.get("Id")).and_then(|id| {
-                            id.as_str()
-                                .map(std::string::ToString::to_string)
-                                .or_else(|| id.as_u64().map(|n| n.to_string()))
-                        });
+                        let id = extract_asset_id_from_value(&resp_obj);
                         if let Some(aid) = id {
                             final_asset_id = Some(aid);
                             upload_success = true;
@@ -548,14 +552,7 @@ pub async fn publish_asset_with_progress(
                     break;
                 }
             } else if let Ok(parsed) = serde_json::from_str::<Value>(&resp_text) {
-                let id = parsed
-                    .get("response")
-                    .and_then(|r| r.get("assetId").or(r.get("Id")))
-                    .and_then(|id| {
-                        id.as_str()
-                            .map(std::string::ToString::to_string)
-                            .or_else(|| id.as_u64().map(|n| n.to_string()))
-                    });
+                let id = parsed.get("response").and_then(extract_asset_id_from_value);
                 if let Some(aid) = id {
                     final_asset_id = Some(aid);
                     upload_success = true;

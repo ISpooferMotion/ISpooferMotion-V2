@@ -246,51 +246,9 @@ pub async fn build_saved_versions_urls(asset_id: &str, cookie_header: &str) -> V
     urls
 }
 
-pub async fn build_library_scraping_urls(asset_id: &str, cookie_header: &str) -> Vec<String> {
-    let mut urls = Vec::new();
-    let client = crate::utils::get_http_client();
-    let url = format!("https://www.roblox.com/library/{asset_id}");
-
-    let resp = client
-        .get(&url)
-        .header(reqwest::header::COOKIE, cookie_header)
-        .header(reqwest::header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-        .send()
-        .await;
-
-    if let Ok(resp) = resp {
-        if resp.status().is_success() {
-            if let Ok(html) = resp.text().await {
-                let Ok(re_media) = regex::Regex::new(r#"data-mediathumb-url="([^"]+)""#) else {
-                    return urls;
-                };
-                if let Some(caps) = re_media.captures(&html) {
-                    if let Some(m) = caps.get(1) {
-                        urls.push(m.as_str().to_string());
-                    }
-                }
-
-                let Ok(re_state) = regex::Regex::new(r#"data-statedata="([^"]+)""#) else {
-                    return urls;
-                };
-                if let Some(caps) = re_state.captures(&html) {
-                    if let Some(m) = caps.get(1) {
-                        let decoded = html_escape::decode_html_entities(m.as_str());
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&decoded) {
-                            if let Some(item) = json.get("item") {
-                                if let Some(url) = item.get("AssetUrl").and_then(|u| u.as_str()) {
-                                    if !url.is_empty() {
-                                        urls.push(url.to_string());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    urls
+pub async fn build_library_scraping_urls(_asset_id: &str, _cookie_header: &str) -> Vec<String> {
+    // Deprecated: roblox.com/library redirects to create.roblox.com which is an SPA and no longer embeds the AssetUrl in HTML.
+    Vec::new()
 }
 
 // tries to find what games this asset is used in, so we can pretend to be a server for that game and bypass copylocks

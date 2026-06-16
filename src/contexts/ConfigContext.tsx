@@ -1,18 +1,14 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useMemo } from 'react';
 
 import { type AppConfig, useConfigStore } from '../stores/configStore';
-import { useSpooferStore } from '../stores/spooferStore';
+import { applyReplacements, useSpooferStore } from '../stores/spooferStore';
 import type {
-  SpooferAssetResult,
   SpooferLogPayload,
   SpooferProgressPayload,
   SpooferResultPayload,
   SpooferStartedPayload,
 } from '../types/tauriEvents';
-import { notifyError } from '../utils/notifyError';
-import type { RbxInstance } from '../utils/robloxPlaceParser';
 import { appendSpoofingLog } from '../utils/spoofingLogs';
-import { queueStudioReplacements } from '../utils/studioBridge';
 import { isTauriRuntime } from '../utils/tauriRuntime';
 
 export type { AppConfig };
@@ -26,33 +22,6 @@ interface ConfigContextType {
   ) => void;
   updateCategory: <C extends keyof AppConfig>(c: C, vals: Partial<AppConfig[C]>) => void;
   resetConfig: () => void;
-
-  rootInstances: RbxInstance[];
-  setRootInstances: React.Dispatch<React.SetStateAction<RbxInstance[]>>;
-  loadedFileName: string | null;
-  setLoadedFileName: React.Dispatch<React.SetStateAction<string | null>>;
-  parsingFileName: string | null;
-  setParsingFileName: React.Dispatch<React.SetStateAction<string | null>>;
-  selectedAssetIds: Set<string>;
-  setSelectedAssetIds: React.Dispatch<React.SetStateAction<Set<string>>>;
-  applyReplacements: (replacements: Record<string, string>) => void;
-  spoofingLogs: string;
-  setSpoofingLogs: React.Dispatch<React.SetStateAction<string>>;
-  isSpoofing: boolean;
-  setIsSpoofing: React.Dispatch<React.SetStateAction<boolean>>;
-  spoofProgress: number;
-  setSpoofProgress: React.Dispatch<React.SetStateAction<number>>;
-  lastReplacements: Record<string, string>;
-  setLastReplacements: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  isReplacing: boolean;
-  setIsReplacing: React.Dispatch<React.SetStateAction<boolean>>;
-  replaceError: boolean;
-  setReplaceError: React.Dispatch<React.SetStateAction<boolean>>;
-  spoofCompletionVersion: number;
-  activeSpooferJobId: string | null;
-  lastAssetResults: SpooferAssetResult[];
-  keyframeWarningCount: number;
-  setKeyframeWarningCount: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const Context = createContext<ConfigContextType | undefined>(undefined);
@@ -60,68 +29,9 @@ const Context = createContext<ConfigContextType | undefined>(undefined);
 // Main provider that houses all our app configuration and spoofing state
 export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const configState = useConfigStore();
-  const spooferState = useSpooferStore();
 
   useEffect(() => {
     configState.loadSecrets();
-  }, []);
-
-  // This pushes our modified IDs back into Roblox Studio
-  // handles both the traditional plugin bridge and the experimental memory injection
-  const applyReplacements = useCallback(async (replacements: Record<string, string>) => {
-    if (!isTauriRuntime()) return;
-    const { config } = useConfigStore.getState();
-    const { setSpoofingLogs, setLastReplacements, setIsReplacing, setReplaceError } =
-      useSpooferStore.getState();
-
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      setIsReplacing(true);
-      setReplaceError(false);
-      setSpoofingLogs((prev) => appendSpoofingLog(prev, '\nApplying replacements to Studio...'));
-
-      if (config.advanced.memoryInjectionEnabled) {
-        setSpoofingLogs((prev) => appendSpoofingLog(prev, 'Starting Memory Injection (Beta)...'));
-        const pid = await invoke<number | null>('find_studio_process');
-        if (!pid) {
-          throw new Error('Roblox Studio is not running.');
-        }
-
-        const results = await invoke<Record<string, any>>('scan_and_replace_multiple_strings', {
-          pid,
-          replacements,
-        });
-
-        let total = 0;
-        for (const [, res] of Object.entries(results)) {
-          total += res.total_replaced;
-        }
-
-        setSpoofingLogs((prev) =>
-          appendSpoofingLog(
-            prev,
-            `Memory injection complete! Patched ${total} exact matches in memory.`,
-          ),
-        );
-      } else {
-        await queueStudioReplacements(replacements, config.advanced.pluginPort);
-        setSpoofingLogs((prev) =>
-          appendSpoofingLog(
-            prev,
-            'Queued replacements to plugin bridge. Run the plugin in Studio!',
-          ),
-        );
-      }
-      setLastReplacements(replacements);
-    } catch (e: any) {
-      setReplaceError(true);
-      notifyError('Replacement Error', String(e));
-      setSpoofingLogs((prev) =>
-        appendSpoofingLog(prev, `[ERROR] Failed to apply replacements: ${e}`),
-      );
-    } finally {
-      setIsReplacing(false);
-    }
   }, []);
 
   useEffect(() => {
@@ -178,7 +88,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => {
       unlisteners.forEach((u) => u());
     };
-  }, [applyReplacements]);
+  }, []);
 
   // Memoize the context value so we don't nuke performance with massive re-renders
   const contextValue = useMemo<ConfigContextType>(
@@ -187,79 +97,12 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       updateConfig: configState.updateConfig,
       updateCategory: configState.updateCategory,
       resetConfig: configState.resetConfig,
-
-      rootInstances: spooferState.rootInstances,
-      setRootInstances: (val: any) =>
-        spooferState.setRootInstances(
-          typeof val === 'function' ? val(useSpooferStore.getState().rootInstances) : val,
-        ),
-      loadedFileName: spooferState.loadedFileName,
-      setLoadedFileName: (val: any) =>
-        spooferState.setLoadedFileName(
-          typeof val === 'function' ? val(useSpooferStore.getState().loadedFileName) : val,
-        ),
-      parsingFileName: spooferState.parsingFileName,
-      setParsingFileName: (val: any) =>
-        spooferState.setParsingFileName(
-          typeof val === 'function' ? val(useSpooferStore.getState().parsingFileName) : val,
-        ),
-      selectedAssetIds: spooferState.selectedAssetIds,
-      setSelectedAssetIds: spooferState.setSelectedAssetIds,
-      applyReplacements,
-      spoofingLogs: spooferState.spoofingLogs,
-      setSpoofingLogs: (val: any) =>
-        spooferState.setSpoofingLogs(typeof val === 'function' ? val : () => val),
-      isSpoofing: spooferState.isSpoofing,
-      setIsSpoofing: (val: any) =>
-        spooferState.setIsSpoofing(
-          typeof val === 'function' ? val(useSpooferStore.getState().isSpoofing) : val,
-        ),
-      spoofProgress: spooferState.spoofProgress,
-      setSpoofProgress: (val: any) =>
-        spooferState.setSpoofProgress(
-          typeof val === 'function' ? val(useSpooferStore.getState().spoofProgress) : val,
-        ),
-      lastReplacements: spooferState.lastReplacements,
-      setLastReplacements: spooferState.setLastReplacements,
-      isReplacing: spooferState.isReplacing,
-      setIsReplacing: (val: any) =>
-        spooferState.setIsReplacing(
-          typeof val === 'function' ? val(useSpooferStore.getState().isReplacing) : val,
-        ),
-      replaceError: spooferState.replaceError,
-      setReplaceError: (val: any) =>
-        spooferState.setReplaceError(
-          typeof val === 'function' ? val(useSpooferStore.getState().replaceError) : val,
-        ),
-      spoofCompletionVersion: spooferState.spoofCompletionVersion,
-      activeSpooferJobId: spooferState.activeSpooferJobId,
-      lastAssetResults: spooferState.lastAssetResults,
-      keyframeWarningCount: spooferState.keyframeWarningCount,
-      setKeyframeWarningCount: (val: any) =>
-        spooferState.setKeyframeWarningCount(typeof val === 'function' ? val : () => val),
     }),
     [
       configState.config,
       configState.updateConfig,
       configState.updateCategory,
       configState.resetConfig,
-      spooferState.rootInstances,
-      spooferState.loadedFileName,
-      spooferState.parsingFileName,
-      spooferState.selectedAssetIds,
-      spooferState.setSelectedAssetIds,
-      spooferState.spoofingLogs,
-      spooferState.isSpoofing,
-      spooferState.spoofProgress,
-      spooferState.lastReplacements,
-      spooferState.setLastReplacements,
-      spooferState.isReplacing,
-      spooferState.replaceError,
-      spooferState.spoofCompletionVersion,
-      spooferState.activeSpooferJobId,
-      spooferState.lastAssetResults,
-      spooferState.keyframeWarningCount,
-      applyReplacements,
     ],
   );
 

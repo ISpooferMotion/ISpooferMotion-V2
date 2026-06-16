@@ -29,6 +29,7 @@ import VideoIcon from '../../assets/roblox_icons/VideoFrame.png';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
+import { useSpooferStore } from '../../stores/spooferStore';
 import { cn } from '../../utils/cn';
 import { type PendingSpoofRetry, takeSpoofRetry } from '../../utils/jobTypes';
 import { findPluginBridgePort } from '../../utils/pluginBridge';
@@ -99,10 +100,8 @@ async function getStudioPlaceIdFallback(pluginPort: string): Promise<string> {
 export default function SpoofingView() {
   const { t } = useLanguage();
   const { studioPlaceId } = useStudioConnectionState();
+  const { config, updateConfig, updateCategory } = useConfig();
   const {
-    config,
-    updateConfig,
-    updateCategory,
     rootInstances,
     loadedFileName,
     selectedAssetIds,
@@ -122,7 +121,7 @@ export default function SpoofingView() {
     activeSpooferJobId,
     lastAssetResults,
     keyframeWarningCount,
-  } = useConfig();
+  } = useSpooferStore();
   const [isScanningStudio, setIsScanningStudio] = useState(false);
   const [users, setUsers] = useState<RobloxUserInfo[]>(loadCachedUsers);
   const [groups, setGroups] = useState<RobloxGroup[]>(() =>

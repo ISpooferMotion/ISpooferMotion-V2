@@ -28,31 +28,39 @@ export function useStudioConnection(port: string, onPortDiscovered?: (port: stri
 
   useEffect(() => {
     let cancelled = false;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+    let currentDelay = 1000;
+    const MAX_DELAY = 10000;
+    const VISIBILITY_PENALTY = 5000;
+
     const check = async () => {
+      if (cancelled) return;
+
+      let success = false;
       try {
         const activePort = await findPluginBridgePort(port);
-        if (!activePort) {
-          if (!cancelled) {
-            setStudioConnected(false);
-            setScanStatus(null);
-          }
-          return;
-        }
-        if (activePort !== port) onPortDiscovered?.(activePort);
+        if (activePort) {
+          if (activePort !== port) onPortDiscovered?.(activePort);
 
-        const result = await invoke<{
-          synced: boolean;
-          scanStatus: any;
-          studioPlaceId: string | null;
-        }>('get_studio_health_status');
-        if (!cancelled) {
-          setStudioConnected(result.synced === true);
-          setScanStatus(result.scanStatus || null);
-          const placeId = String(result.studioPlaceId || '').trim();
-          if (/^\d+$/.test(placeId) && placeId !== '0') {
-            setStudioPlaceId(placeId);
-            window.localStorage.setItem(STUDIO_PLACE_ID_CACHE_KEY, placeId);
+          const result = await invoke<{
+            synced: boolean;
+            scanStatus: any;
+            studioPlaceId: string | null;
+          }>('get_studio_health_status');
+
+          if (!cancelled) {
+            success = result.synced === true;
+            setStudioConnected(success);
+            setScanStatus(result.scanStatus || null);
+            const placeId = String(result.studioPlaceId || '').trim();
+            if (/^\d+$/.test(placeId) && placeId !== '0') {
+              setStudioPlaceId(placeId);
+              window.localStorage.setItem(STUDIO_PLACE_ID_CACHE_KEY, placeId);
+            }
           }
+        } else if (!cancelled) {
+          setStudioConnected(false);
+          setScanStatus(null);
         }
       } catch {
         if (!cancelled) {
@@ -60,13 +68,38 @@ export function useStudioConnection(port: string, onPortDiscovered?: (port: stri
           setScanStatus(null);
         }
       }
+
+      if (cancelled) return;
+
+      if (success) {
+        currentDelay = 1000;
+      } else {
+        currentDelay = Math.min(currentDelay * 1.5, MAX_DELAY);
+      }
+
+      let nextDelay = currentDelay;
+      if (document.hidden) {
+        nextDelay = Math.max(nextDelay, VISIBILITY_PENALTY);
+      }
+
+      timerId = setTimeout(check, nextDelay);
     };
 
     check();
-    const interval = setInterval(check, 1000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && timerId) {
+        clearTimeout(timerId);
+        currentDelay = 1000;
+        check();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (timerId) clearTimeout(timerId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [port, onPortDiscovered]);
 

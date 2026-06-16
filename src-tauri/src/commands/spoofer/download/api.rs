@@ -125,6 +125,13 @@ pub async fn write_download_response(
     }
     file.flush().await?;
 
+    if let Some(expected) = total_length {
+        if downloaded != expected {
+            let _ = tokio::fs::remove_file(&file_path).await;
+            return Err(format!("Incomplete payload received: {downloaded} of {expected} bytes. Connection may have dropped.").into());
+        }
+    }
+
     if let Err(error_msg) = validate_downloaded_payload(&file_path, asset_type.as_deref()).await {
         crate::commands::spoofer::diagnostics::record_failed_transfer_diagnostic(
             app,
@@ -335,6 +342,8 @@ pub async fn batch_get_download_urls_for_assets(
                 if let Ok(data) = resp.json::<serde_json::Value>().await {
                     chunk_urls = parse_batch_response(&data);
                 }
+            } else if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+                return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
             } else if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
                 let retry_after_ms = crate::utils::extract_retry_after(&resp);
                 crate::commands::spoofer::record_adaptive_rate_limit(retry_after_ms);
@@ -365,6 +374,8 @@ pub async fn batch_get_download_urls_for_assets(
                     if let Ok(data2) = resp2.json::<serde_json::Value>().await {
                         chunk_urls = parse_batch_response(&data2);
                     }
+                } else if resp2.status() == reqwest::StatusCode::UNAUTHORIZED {
+                    return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
                 } else if resp2.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
                     let wait_ms = crate::utils::extract_retry_after(&resp2).unwrap_or(2_000);
                     set_rate_limit(
@@ -387,6 +398,8 @@ pub async fn batch_get_download_urls_for_assets(
                     if let Ok(data3) = resp3.json::<serde_json::Value>().await {
                         chunk_urls = parse_batch_response(&data3);
                     }
+                } else if resp3.status() == reqwest::StatusCode::UNAUTHORIZED {
+                    return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
                 } else if resp3.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
                     let wait_ms = crate::utils::extract_retry_after(&resp3).unwrap_or(2_000);
                     set_rate_limit(
