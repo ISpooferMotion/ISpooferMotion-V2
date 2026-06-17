@@ -75,11 +75,11 @@ jobs:
 
       - name: Build app (Windows Unsigned Inner)
         if: matrix.os == 'windows'
-        run: bun run tauri build -- --no-bundle
+        run: bun run tauri build --no-bundle
 
       - name: Build app (Windows Bundle)
         if: matrix.os == 'windows'
-        run: bun run tauri build -- --bundles ${{ matrix.bundles }}
+        run: bun run tauri build --bundles ${{ matrix.bundles }}
 
       - name: Upload Windows Bundle to Release
         if: matrix.os == 'windows'
