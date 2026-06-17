@@ -79,7 +79,7 @@ local function discoverServer(): (boolean, boolean)
 
 	for port = PORT_START, PORT_END do
 		pending += 1
-		local url = "http://localhost:" .. port
+		local url = "http://127.0.0.1:" .. port
 
 		task.spawn(function()
 			local taskOk = pcall(function()

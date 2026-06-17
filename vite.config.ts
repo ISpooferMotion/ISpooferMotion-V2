@@ -9,7 +9,7 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
-        '@codycon/ism-library': resolve(__dirname, './ism-library/packages/ui'),
+        '@codycon/ism-library': resolve(__dirname, '../ISM-Library/packages/ui'),
       },
       dedupe: ['react', 'react-dom', 'framer-motion'],
     },

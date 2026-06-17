@@ -61,6 +61,7 @@ local function startPolling(): ()
 				if connected and changed and BASE_URL then
 					print("[ISpooferMotion] Connected to " .. BASE_URL)
 					task.spawn(fetchApiDumpProperties)
+					task.spawn(scan)
 				end
 			end
 			task.wait(BASE_URL and 1 or 2)

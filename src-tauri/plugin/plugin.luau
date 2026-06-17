@@ -15,7 +15,7 @@ local STRING_SCAN_PROPERTIES: { [string]: { string } } = {}
 --#include "src/bridge/polling.luau"
 
 local toolbar = plugin:CreateToolbar("ISpooferMotion")
-local syncButton = toolbar:CreateButton("Sync to Desktop", "Toggle connection to the ISpooferMotion Desktop App", "rbxassetid://16447285698")
+local syncButton = toolbar:CreateButton("Sync to Desktop", "Toggle connection to the ISpooferMotion Desktop App", "")
 
 syncButton.Click:Connect(function()
 	if polling then
