@@ -62,20 +62,24 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const un2 = await listen<SpooferLogPayload>('spoofer-log', (e) => {
         let msg = e.payload.message ?? '';
         const rawLevel = (e.payload.level || 'info').toUpperCase();
-        
+
         // If the message doesn't already have a level prefix like [INFO], [SUCCESS], etc.
         // we'll inject it so the SpoofingView can colorize it properly.
         if (!msg.startsWith('[')) {
           msg = `[${rawLevel}] ${msg}`;
         }
-        
+
         setSpoofingLogs((prev) => appendSpoofingLog(prev, msg));
       });
 
       const un3 = await listen<SpooferProgressPayload>('spoofer-progress', (e) => {
         if (e.payload.progress !== undefined) {
           setSpoofProgress(e.payload.progress);
-        } else if (e.payload.current !== undefined && e.payload.total !== undefined && e.payload.total > 0) {
+        } else if (
+          e.payload.current !== undefined &&
+          e.payload.total !== undefined &&
+          e.payload.total > 0
+        ) {
           setSpoofProgress((e.payload.current / e.payload.total) * 100);
         }
       });

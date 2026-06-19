@@ -255,7 +255,7 @@ pub async fn resolve_script_references(
         let cli = Arc::clone(&client);
         let app_arc_clone = Arc::clone(&app_arc);
         let count_clone = Arc::clone(&resolved_count);
-        
+
         tasks.push(tokio::spawn(async move {
             let Ok(_permit) = sem.acquire().await else {
                 return (asset_id, None, false);
@@ -299,7 +299,8 @@ pub async fn resolve_script_references(
                 }
             }
 
-            let current_resolved = count_clone.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            let current_resolved =
+                count_clone.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
             emit_script_ref_progress(
                 &app_arc_clone,
                 ScriptRefProgress {

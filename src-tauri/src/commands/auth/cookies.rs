@@ -419,10 +419,8 @@ pub fn get_cookie_from_roblox_studio_inner(
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let output = Command::new("cmdkey")
-            .arg("/list")
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()?;
+        let output =
+            Command::new("cmdkey").arg("/list").creation_flags(CREATE_NO_WINDOW).output()?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
 

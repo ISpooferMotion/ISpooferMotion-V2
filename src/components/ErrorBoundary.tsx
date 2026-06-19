@@ -41,28 +41,28 @@ export class ErrorBoundary extends Component<Props, State> {
             : import.meta.env.VITE_API_BASE_URL;
 
         const payload = {
-        errorName: error.name,
-        errorMessage: error.message,
-        stackTrace: errorInfo.componentStack + '\n\n' + (error.stack || ''),
-        appVersion,
-        appType: 'V2',
-        osInfo: `${osName} ${osVersion}`,
-      };
+          errorName: error.name,
+          errorMessage: error.message,
+          stackTrace: errorInfo.componentStack + '\n\n' + (error.stack || ''),
+          appVersion,
+          appType: 'V2',
+          osInfo: `${osName} ${osVersion}`,
+        };
 
-      if (isTauriRuntime()) {
-        const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-        await tauriFetch(`${baseUrl}/api/app-errors`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await fetch(`${baseUrl}/api/app-errors`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      }
+        if (isTauriRuntime()) {
+          const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+          await tauriFetch(`${baseUrl}/api/app-errors`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        } else {
+          await fetch(`${baseUrl}/api/app-errors`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        }
       } catch (e) {
         console.error('Failed to submit crash report:', e);
       }

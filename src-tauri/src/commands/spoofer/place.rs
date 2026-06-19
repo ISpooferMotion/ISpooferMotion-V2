@@ -462,3 +462,29 @@ pub async fn find_asset_by_name(
 
     Ok(None)
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn search_global_places(
+    keyword: String,
+    limit: Option<u32>,
+) -> crate::error::Result<Value> {
+    let limit = limit.unwrap_or(20).min(50);
+    let client = crate::utils::get_http_client();
+    let encoded_keyword = keyword.replace(" ", "%20");
+    let url = format!(
+        "https://games.roblox.com/v1/games/list?keyword={}&maxRows={}",
+        encoded_keyword, limit
+    );
+
+    let resp = client.get(&url).send().await?;
+    if !resp.status().is_success() {
+        return Err(crate::error::AppError::Custom(format!(
+            "Failed to search games: {}",
+            resp.status()
+        )));
+    }
+
+    let data: Value = resp.json().await?;
+    Ok(data)
+}

@@ -32,6 +32,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import PlaceIdSelector from '../PlaceIdSelector';
+
 import AnimationIcon from '../../assets/roblox_icons/Animation.png';
 import DecalIcon from '../../assets/roblox_icons/Decal.png';
 import MeshIcon from '../../assets/roblox_icons/MeshPart.png';
@@ -448,7 +450,7 @@ export default function ConfigView() {
                     onChange={(value: string) => updateConfig('advanced', 'pluginPort', value)}
                   />
 
-                  <FormInput
+                  <PlaceIdSelector
                     label={t('settings.forcePlaceIds')}
                     placeholder={t('settings.forcePlaceIdsPlaceholder')}
                     value={config.advanced.forcePlaceIds}

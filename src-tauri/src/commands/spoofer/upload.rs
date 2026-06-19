@@ -354,11 +354,8 @@ pub async fn publish_asset_with_progress(
             });
         };
 
-        let expected_price = if asset_type == "Audio" || asset_type == "Video" {
-            Some(0)
-        } else {
-            None
-        };
+        let expected_price =
+            if asset_type == "Audio" || asset_type == "Video" { Some(0) } else { None };
 
         let mut request_metadata = UploadMetadata {
             asset_type: Some(asset_type.to_string()),

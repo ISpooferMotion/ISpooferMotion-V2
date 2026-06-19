@@ -15,7 +15,7 @@ async fn report_api_url() -> crate::error::Result<String> {
     }
 
     let prod_url = "https://ispoofermotion.com";
-    
+
     let mut configured = prod_url.to_string();
 
     #[cfg(debug_assertions)]

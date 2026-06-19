@@ -1,7 +1,7 @@
 import { Button } from '@codycon/ism-library';
 import { open } from '@tauri-apps/plugin-shell';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Beaker, FileCog, Heart, Home, Info, ScanLine, Settings } from 'lucide-react';
+import { Beaker, FileCog, Heart, History, Home, Info, ScanLine, Settings } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useConfig } from '../../contexts/ConfigContext';
@@ -105,6 +105,7 @@ export default function Sidebar({
 
   const tabs = [
     { id: 'spoofing', label: t('nav.spoofing'), icon: <ScanLine size={18} /> },
+    { id: 'activity', label: 'Activity', icon: <History size={18} /> },
     { id: 'config', label: t('nav.config'), icon: <FileCog size={18} /> },
     { id: 'settings', label: t('nav.settings'), icon: <Settings size={18} /> },
   ];

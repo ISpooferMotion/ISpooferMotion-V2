@@ -12,6 +12,7 @@ import Titlebar from './components/layout/Titlebar';
 import CreditsModal from './components/modals/CreditsModal';
 import { RobloxStatusBanner } from './components/RobloxStatusBanner';
 import AssetExplorer from './components/views/AssetExplorer';
+import ActivityView from './components/views/ActivityView';
 import ConfigView from './components/views/ConfigView';
 import DebugConsole from './components/views/DebugConsole';
 import ExperimentalView from './components/views/ExperimentalView';
@@ -138,7 +139,7 @@ export default function App() {
   const backgroundUrl = customBackground ? resolveThemeBackgroundUrl(customBackground.path) : null;
 
   useEffect(() => {
-    const allowedTabs = ['home', 'spoofing', 'settings', 'config'];
+    const allowedTabs = ['home', 'spoofing', 'activity', 'settings', 'config'];
     // only show the experimental tab if they've explicitly enabled it in debug settings
     if (config.debug?.enableExperimentalTab) {
       allowedTabs.push('experimental');
@@ -290,6 +291,7 @@ export default function App() {
               <div className="flex-1 relative overflow-hidden">
                 <AnimatePresence mode="wait" initial={false}>
                   {activeTab === 'spoofing' && <SpoofingView key="spoofing" />}
+                  {activeTab === 'activity' && <ActivityView key="activity" />}
                   {activeTab === 'settings' && <SettingsView key="settings" />}
                   {activeTab === 'config' && <ConfigView key="config" />}
                   {activeTab === 'experimental' && <ExperimentalView key="experimental" />}

@@ -336,7 +336,7 @@ pub async fn detect_opencloud_api_key_owner(
     ])
     .file_name("probe.png")
     .mime_str("image/png")
-        .map_err(|e| crate::error::AppError::Custom(format!("MIME error: {e}")))?;
+    .map_err(|e| crate::error::AppError::Custom(format!("MIME error: {e}")))?;
 
     let form = reqwest::multipart::Form::new()
         .text("request", serde_json::to_string(&payload).unwrap_or_default())

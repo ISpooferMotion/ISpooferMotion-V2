@@ -1,18 +1,18 @@
-name: "Setup Environment"
-description: "Setups bun, rust, and tauri dependencies"
+name: 'Setup Environment'
+description: 'Setups bun, rust, and tauri dependencies'
 inputs:
   os:
-    description: "OS running the action"
+    description: 'OS running the action'
     required: false
-    default: "linux"
+    default: 'linux'
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
         node-version: 20
-        
+
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
 
@@ -20,7 +20,7 @@ runs:
       uses: dtolnay/rust-toolchain@stable
       with:
         targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
-        
+
     - name: install Tauri Linux dependencies
       if: contains(inputs.os, 'linux')
       run: |

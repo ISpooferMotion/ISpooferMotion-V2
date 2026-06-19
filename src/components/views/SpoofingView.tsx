@@ -18,7 +18,16 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { readText as readClipboardText } from '@tauri-apps/plugin-clipboard-manager';
 import { motion } from 'framer-motion';
-import { Ban, ListChecks, Play, RotateCcw, ScanSearch, UserSquare2, Wand2, Trash2 } from 'lucide-react';
+import {
+  Ban,
+  ListChecks,
+  Play,
+  RotateCcw,
+  ScanSearch,
+  UserSquare2,
+  Wand2,
+  Trash2,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import AnimationIcon from '../../assets/roblox_icons/Animation.png';
