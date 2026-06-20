@@ -56,6 +56,7 @@ macro_rules! specta_commands {
             crate::commands::ipc::app::select_folder,
             crate::commands::ipc::app::uninstall_app,
             crate::commands::ipc::app::clear_plugin_cache,
+            crate::commands::ipc::app::open_frontend_devtools,
             crate::commands::ipc::job::run_spoofer_action,
             crate::commands::ipc::job::spoofer_pause,
             crate::commands::ipc::job::spoofer_resume,

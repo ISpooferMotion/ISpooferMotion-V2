@@ -18,9 +18,11 @@ import DebugConsole from './components/views/DebugConsole';
 import ExperimentalView from './components/views/ExperimentalView';
 import SettingsView from './components/views/SettingsView';
 import SpoofingView from './components/views/SpoofingView';
+import DiscordLoginScreen from './components/views/DiscordLoginScreen';
 import { useConfig } from './contexts/ConfigContext';
 import { useThemeAccent } from './contexts/ThemeContext';
 import { useCloudThemeSync } from './hooks/useCloudThemeSync';
+import { type StoredDiscordAuth } from './types/discordAuth';
 import { isTauriRuntime } from './utils/tauriRuntime';
 
 // Resolves custom background paths to something the browser/tauri can actually render
@@ -54,7 +56,19 @@ export default function App() {
     message: '',
   });
 
+  const [discordAuth, setDiscordAuth] = useState<StoredDiscordAuth | null | undefined>(undefined);
+
   useCloudThemeSync();
+
+  useEffect(() => {
+    invoke<StoredDiscordAuth | null>('load_discord_report_auth')
+      .then((auth) => setDiscordAuth(auth ?? null))
+      .catch(() => setDiscordAuth(null));
+
+    const handleDisconnect = () => setDiscordAuth(null);
+    window.addEventListener('discord-disconnected', handleDisconnect);
+    return () => window.removeEventListener('discord-disconnected', handleDisconnect);
+  }, []);
 
   useEffect(() => {
     // Check if we need to lock the app via live config
@@ -154,10 +168,16 @@ export default function App() {
     const handleCredits = () => setCreditsOpen(true);
     document.addEventListener('open-credits', handleCredits);
 
-    // prevent default drag behavior globally so dropping files doesn't randomly open them and ruin the app state
     const preventDrag = (e: Event) => e.preventDefault();
     window.addEventListener('dragover', preventDrag);
     window.addEventListener('drop', preventDrag);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'i')) {
+        invoke('open_frontend_devtools').catch(console.error);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
 
     const shortcut = 'Alt+I';
     let isCancelled = false;
@@ -192,6 +212,7 @@ export default function App() {
       document.removeEventListener('open-credits', handleCredits);
       window.removeEventListener('dragover', preventDrag);
       window.removeEventListener('drop', preventDrag);
+      window.removeEventListener('keydown', handleKeyDown);
       if (!didRegisterShortcut) return;
       unregister(shortcut).catch((error) => {
         if (!String(error).toLowerCase().includes('not registered')) {
@@ -240,10 +261,19 @@ export default function App() {
 
   return (
     <IsmProvider config={{ autoScrollAccordions: config.ui.autoScrollSections }}>
-      <div
-        className="flex flex-col h-screen w-screen overflow-hidden text-foreground relative font-sans selection:bg-primary/30 antialiased"
-        style={{ backgroundColor: 'var(--bg-base)' }}
-      >
+      <AnimatePresence mode="wait">
+        {discordAuth === undefined ? null : discordAuth === null ? (
+          <DiscordLoginScreen key="login" onVerified={(auth) => setDiscordAuth(auth)} />
+        ) : (
+          <motion.div
+            key="app"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            className="flex flex-col h-screen w-screen overflow-hidden text-foreground relative font-sans selection:bg-primary/30 antialiased"
+            style={{ backgroundColor: 'var(--bg-base)' }}
+          >
         {customBackground && backgroundUrl && (
           <div className="absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden">
             {customBackground.type === 'video' ? (
@@ -343,7 +373,9 @@ export default function App() {
         </motion.div>
 
         <CreditsModal isOpen={isCreditsOpen} onClose={() => setCreditsOpen(false)} />
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </IsmProvider>
   );
 }

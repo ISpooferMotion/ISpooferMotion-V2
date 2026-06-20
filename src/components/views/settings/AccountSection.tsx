@@ -1,9 +1,7 @@
 import { Button, Group } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
-import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { useDiscordLogin } from '../../../hooks/useDiscordLogin';
 import { type StoredDiscordAuth } from '../../../types/discordAuth';
 import { logIsm } from '../../../utils/robloxProfiles';
 
@@ -15,16 +13,6 @@ export default function AccountSection() {
       .then((auth) => setDiscordAuth(auth ?? null))
       .catch(() => {});
   }, []);
-
-  const {
-    loginState,
-    errorMessage: loginError,
-    startLogin,
-    cancelLogin,
-  } = useDiscordLogin((auth) => {
-    setDiscordAuth(auth);
-    logIsm('success', 'Account connected! Cloud themes will now sync.');
-  });
 
   return (
     <Group>
@@ -64,6 +52,7 @@ export default function AccountSection() {
                 await invoke('clear_discord_report_auth');
                 setDiscordAuth(null);
                 logIsm('info', 'Account disconnected.');
+                window.dispatchEvent(new Event('discord-disconnected'));
               }}
             >
               Disconnect
@@ -72,44 +61,8 @@ export default function AccountSection() {
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-text-muted leading-relaxed">
-              Connect your ISM account to sync cloud themes. Your browser will open to
-              authenticate.
+              You are not connected. Please restart the app to log in.
             </p>
-            {loginState === 'waiting' ? (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-sm text-text-secondary">
-                  <Loader2 size={16} className="animate-spin text-primary" />
-                  Waiting for browser authentication...
-                </div>
-                <button
-                  onClick={cancelLogin}
-                  className="text-xs text-text-muted hover:text-text-secondary underline self-start"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                <Button
-                  color="primary"
-                  variant="solid"
-                  className="font-semibold"
-                  onClick={startLogin}
-                  disabled={loginState === 'opening'}
-                >
-                  {loginState === 'opening' ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" /> Opening browser...
-                    </>
-                  ) : (
-                    'Connect Account'
-                  )}
-                </Button>
-                {loginState === 'error' && loginError && (
-                  <p className="text-xs text-red-400 px-1">{loginError}</p>
-                )}
-              </div>
-            )}
           </div>
         )}
       </div>

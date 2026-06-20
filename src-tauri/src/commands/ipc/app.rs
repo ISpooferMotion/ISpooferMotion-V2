@@ -14,6 +14,15 @@ pub fn window_minimize(app: AppHandle) {
 
 #[tauri::command]
 #[specta::specta]
+pub fn open_frontend_devtools(app: AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        #[cfg(feature = "devtools")]
+        win.open_devtools();
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn window_close(app: AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.close();

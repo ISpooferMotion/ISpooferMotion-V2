@@ -2,6 +2,7 @@
 local ASSET_PROPERTIES: { [string]: { string } } = {}
 local STRING_SCAN_PROPERTIES: { [string]: { string } } = {}
 
+--#include "src/version/version.luau"
 --#include "src/config/runtime.luau"
 --#include "src/types/assets.luau"
 --#include "src/state/registry.luau"
@@ -14,7 +15,7 @@ local STRING_SCAN_PROPERTIES: { [string]: { string } } = {}
 --#include "src/bridge/discovery.luau"
 --#include "src/bridge/polling.luau"
 
-local toolbar = plugin:CreateToolbar("ISpooferMotion")
+local toolbar = plugin:CreateToolbar("ISpooferMotion v" .. PLUGIN_VERSION)
 local syncButton = toolbar:CreateButton(
 	"Sync to Desktop",
 	"Toggle connection to the ISpooferMotion Desktop App",

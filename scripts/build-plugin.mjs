@@ -7,6 +7,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 const pluginRoot = join(root, 'src-tauri', 'plugin');
 
+const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+const versionLuauPath = join(pluginRoot, 'src', 'version', 'version.luau');
+writeFileSync(versionLuauPath, `local PLUGIN_VERSION: string = "${packageJson.version}"\n`, 'utf8');
+
 function expandPluginIncludes(source, fromFile, stack = []) {
   return source.replace(/^--#include\s+"([^"]+)"\s*$/gm, (_match, includePath) => {
     const resolvedInclude = resolve(dirname(fromFile), includePath);

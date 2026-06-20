@@ -2,6 +2,7 @@ import { ListChecks, Trash2 } from 'lucide-react';
 import { useEffect,useRef } from 'react';
 
 import { useLanguage } from '../../../contexts/LanguageContext';
+import { cn } from '../../../utils/cn';
 
 interface ExecutionLogsProps {
   logs: string[];
@@ -56,20 +57,27 @@ export default function ExecutionLogs({
         style={{ height: '13rem' }}
       >
         {logs && logs.length > 0 ? (
-          <div className="flex flex-col">
+          <div className="flex flex-col gap-1">
             {logs.map((line, idx) => {
               if (!line) return null;
-              const colorClass = line.includes('[SUCCESS]')
-                ? 'text-success'
-                : line.includes('[WARN]')
-                  ? 'text-warning'
-                  : line.includes('[ERROR]')
-                    ? 'text-danger'
-                    : line.includes('[INFO]')
-                      ? 'text-[#87ceeb]'
-                      : 'text-text-primary';
+              const isSuccess = line.includes('[SUCCESS]');
+              const isWarn = line.includes('[WARN]');
+              const isError = line.includes('[ERROR]');
+              const isInfo = line.includes('[INFO]');
+
+              const containerClass = cn(
+                'py-1.5 px-3 rounded border border-transparent',
+                isError
+                  ? 'text-danger bg-danger/5 border-danger/10'
+                  : isWarn
+                    ? 'text-warning bg-warning/5 border-warning/10'
+                    : isSuccess
+                      ? 'text-success bg-success/5 border-success/10'
+                      : 'text-text-primary',
+              );
+
               return (
-                <div key={idx} className={colorClass}>
+                <div key={idx} className={containerClass}>
                   {line}
                 </div>
               );
