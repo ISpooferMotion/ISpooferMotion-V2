@@ -13,6 +13,7 @@ export async function addPluginListener() {
 
 export async function invoke(cmd: string, args: any) {
   console.log(`Mock Tauri IPC: ${cmd}`, args);
+  if (cmd === 'get_runtime_info') return { os_type: 'web', version: 'mock' };
   return null;
 }
 
@@ -25,6 +26,10 @@ export function getCurrentWindow() {
     minimize: async () => console.log('Mock window minimize'),
     close: async () => console.log('Mock window close'),
     onCloseRequested: async () => console.log('Mock window onCloseRequested'),
+    onDragDropEvent: (handler: any) => {
+      console.log('Mock onDragDropEvent listener attached');
+      return async () => {};
+    }
   };
 }
 

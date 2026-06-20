@@ -49,6 +49,7 @@ export const commands = {
 	selectFolder: () => typedError<string | null, AppError>(__TAURI_INVOKE("select_folder")),
 	uninstallApp: () => typedError<boolean, AppError>(__TAURI_INVOKE("uninstall_app")),
 	clearPluginCache: () => typedError<boolean, AppError>(__TAURI_INVOKE("clear_plugin_cache")),
+	openFrontendDevtools: () => __TAURI_INVOKE<void>("open_frontend_devtools"),
 	runSpooferAction: (data: SpooferActionRequest) => typedError<null, AppError>(__TAURI_INVOKE("run_spoofer_action", { data })),
 	spooferPause: (jobId: string) => __TAURI_INVOKE<boolean>("spoofer_pause", { jobId }),
 	spooferResume: (jobId: string) => __TAURI_INVOKE<boolean>("spoofer_resume", { jobId }),

@@ -63,6 +63,7 @@ export default function Titlebar() {
                 alt="Custom Logo"
               />
             ) : (
+              isTauriRuntime() ? (
               <>
                 <img
                   src={AppIconLight}
@@ -78,6 +79,7 @@ export default function Titlebar() {
                   alt="Logo Dark"
                 />
               </>
+              ) : null
             )}
           </div>
         )}
