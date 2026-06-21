@@ -52,8 +52,7 @@ export default function ActivityView() {
             downloadOnly: false,
             uploadTypes: ['animation', 'mesh', 'audio'],
           },
-          logFilePath:
-            'C:\\\\Users\\\\cflem\\\\Documents\\\\GitHub\\\\ISpooferMotion-V2\\\\package.json',
+          logFilePath: null,
         });
       }
 

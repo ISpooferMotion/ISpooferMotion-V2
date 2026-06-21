@@ -43,7 +43,7 @@ export function useDiscordLogin(onSuccess?: (auth: StoredDiscordAuth) => void) {
       setLoginState('waiting');
 
       let attempts = 0;
-      const maxAttempts = 60;
+      const maxAttempts = 120;
 
       // poll the server to see if they finished logging in
       pollRef.current = setInterval(async () => {
@@ -56,8 +56,8 @@ export function useDiscordLogin(onSuccess?: (auth: StoredDiscordAuth) => void) {
         attempts++;
         if (attempts > maxAttempts) {
           stopPolling();
-          setLoginState('error');
-          setErrorMessage('Login timed out. Please try again.');
+          setLoginState('idle');
+          setErrorMessage('Login timed out — click the button to try again.');
           return;
         }
 

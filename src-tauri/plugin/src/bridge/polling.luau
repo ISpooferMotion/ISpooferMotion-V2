@@ -110,13 +110,8 @@ local function startPolling(): ()
 					local patches = decoded.patches
 					local mappings = decoded.mappings
 
-					if type(patches) == "table" and #patches > 0 then
-						if #patches > MAX_PATCHES_PER_BATCH then
-							warn(
-								"[ISpooferMotion] Refusing oversized patch batch: "
-									.. tostring(#patches)
-							)
-						elseif scanRunning then
+				if type(patches) == "table" and #patches > 0 then
+						if scanRunning then
 							warn("[ISpooferMotion] Scan running; skipping patch batch")
 						elseif patchRunning then
 							warn("[ISpooferMotion] Patch batch already running")

@@ -200,10 +200,26 @@ local function scanScriptSourceRecord(records: { Record }, obj: Instance)
 	end
 end
 
+local FLUSH_MAX_RETRIES: number = 3
+local FLUSH_RETRY_WAIT: number = 1.5
+
 local function flushScanRecordsOrError(records: { Record })
-	if not flushRecords(records) then
-		error("Could not send Studio scan records")
+	for attempt = 1, FLUSH_MAX_RETRIES do
+		if flushRecords(records) then
+			return
+		end
+		if attempt < FLUSH_MAX_RETRIES then
+			warn(
+				string.format(
+					"[ISpooferMotion] Scan chunk send failed (attempt %d/%d), retrying...",
+					attempt,
+					FLUSH_MAX_RETRIES
+				)
+			)
+			task.wait(FLUSH_RETRY_WAIT)
+		end
 	end
+	error("Could not send Studio scan records after " .. FLUSH_MAX_RETRIES .. " attempts")
 end
 
 local function processScannedObject(records: { Record }, obj: Instance)
@@ -361,9 +377,19 @@ local function scanAssets(): ()
 	local totals = response and response.totals or {}
 
 	if response and response.recordsTruncated then
-		warn(
-			"[ISpooferMotion] Scan hit the server record limit; some assets may be missing. Split very large places or contact support."
-		)
+		local truncatedCount = tonumber(response.truncatedCount) or 0
+		local keepCount = tonumber(response.keptCount) or 0
+		if truncatedCount > 0 then
+			warn(
+				string.format(
+					"[ISpooferMotion] Scan hit the server record limit: %d records kept, %d dropped. Very large places may miss some assets - try splitting into separate places or filtering to specific services.",
+					keepCount,
+					truncatedCount
+				)
+			)
+		else
+			warn("[ISpooferMotion] Scan hit the server record limit - some assets may be missing. Try splitting very large places or contact support.")
+		end
 	end
 
 	print(
