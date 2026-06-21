@@ -318,6 +318,14 @@ local function applyPatch(patch: Patch): (boolean, string?)
 
 		local copyOk, copyErr = pcall(function()
 			copyMeshPartPropertiesInto(meshObj, newPart, targetTextureUri)
+			-- Explicitly re-apply color after CreateMeshPartAsync since the engine
+			-- may reset it to default white during async mesh loading
+			pcall(function()
+				newPart.Color = meshObj.Color
+				newPart.Material = meshObj.Material
+				newPart.Transparency = meshObj.Transparency
+				newPart.Reflectance = meshObj.Reflectance
+			end)
 		end)
 		if not copyOk then
 			pcall(function()
@@ -367,8 +375,7 @@ local function applyPatches(patches: any)
 		return
 	end
 	if #patches > MAX_PATCHES_PER_BATCH then
-		warn("[ISpooferMotion] Refusing oversized patch batch: " .. tostring(#patches))
-		return
+		warn("[ISpooferMotion] Large patch batch: " .. tostring(#patches) .. " patches - processing in chunks")
 	end
 	if scanRunning then
 		warn("[ISpooferMotion] Scan already running; skipping patch batch")

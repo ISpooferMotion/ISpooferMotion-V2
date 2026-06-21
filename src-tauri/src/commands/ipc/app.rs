@@ -18,6 +18,14 @@ pub fn open_frontend_devtools(app: AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         #[cfg(feature = "devtools")]
         win.open_devtools();
+        #[cfg(not(feature = "devtools"))]
+        {
+            // devtools feature is not compiled in — this is a no-op in release builds
+            // without the feature flag. Notify the frontend so the user knows.
+            let _ = win.eval(
+                "console.warn('[ISpooferMotion] DevTools are not available in this build. Rebuild with the devtools feature to enable them.')"
+            );
+        }
     }
 }
 
