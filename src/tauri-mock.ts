@@ -26,9 +26,9 @@ export function getCurrentWindow() {
     minimize: async () => console.log('Mock window minimize'),
     close: async () => console.log('Mock window close'),
     onCloseRequested: async () => console.log('Mock window onCloseRequested'),
-    onDragDropEvent: (handler: any) => {
+    onDragDropEvent: async (handler: any) => {
       console.log('Mock onDragDropEvent listener attached');
-      return async () => {};
+      return () => {};
     },
   };
 }
