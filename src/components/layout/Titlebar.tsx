@@ -78,7 +78,14 @@ export default function Titlebar() {
                   alt="Logo Dark"
                 />
               </>
-            ) : null}
+            ) : (
+              <img
+                src="/ispoofermotion-logo-dark.png"
+                className="w-full h-full object-contain"
+                style={{ opacity: customLogo?.opacity ?? 1 }}
+                alt="Logo"
+              />
+            )}
           </div>
         )}
         <div className="flex flex-col justify-center">
