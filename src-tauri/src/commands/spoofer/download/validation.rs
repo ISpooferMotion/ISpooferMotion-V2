@@ -22,6 +22,8 @@ pub async fn validate_downloaded_payload(
         || head_text.starts_with("<html")
         || head_text.starts_with("{\"errors\"")
         || head_text.starts_with("{\"error\"")
+        || head_text.starts_with("<?xml")
+        || head_text.starts_with("<error")
     {
         return Err("Downloaded asset response was an error page, not usable asset content.".into());
     }
@@ -33,6 +35,9 @@ pub async fn validate_downloaded_payload(
                 || (head.len() >= 2 && head[0] == 0xff && (head[1] & 0xe0) == 0xe0)
                 || head.starts_with(b"RIFF")
                 || head.starts_with(b"fLaC")
+                || head.windows(4).any(|w| w == b"ftyp") // M4A/MP4
+                || head.starts_with(b"MAC ") // monkey's audio
+                || head.starts_with(b"FORM") // AIFF
             {
                 Ok(())
             } else {
