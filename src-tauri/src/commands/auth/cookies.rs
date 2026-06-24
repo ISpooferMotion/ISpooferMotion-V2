@@ -412,6 +412,7 @@ pub fn get_cookie_from_browser_profiles() -> Option<String> {
     })
 }
 
+#[allow(clippy::needless_return)]
 pub fn get_cookie_from_roblox_studio_inner(
     #[allow(unused_variables)] user_id: Option<String>,
 ) -> crate::error::Result<Option<String>> {
