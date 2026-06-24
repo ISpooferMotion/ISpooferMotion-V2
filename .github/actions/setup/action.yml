@@ -1,0 +1,33 @@
+name: 'Setup Environment'
+description: 'Setups bun, rust, and tauri dependencies'
+inputs:
+  os:
+    description: 'OS running the action'
+    required: false
+    default: 'linux'
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
+
+    - name: install Tauri Linux dependencies
+      if: contains(inputs.os, 'linux')
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      shell: bash
+
+    - name: Install dependencies
+      run: bun install
+      shell: bash
