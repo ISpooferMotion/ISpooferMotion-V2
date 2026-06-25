@@ -50,13 +50,13 @@ This runs Prettier, rustfmt, StyLua, TypeScript, Clippy, Cargo tests, ESLint, Vi
 
 Individual commands if you need them:
 
-| Command              | What it runs          |
-| -------------------- | --------------------- |
-| `bun run format`     | Format everything     |
-| `bun run typecheck`  | TS type checking      |
-| `bun run rust:lint`  | Cargo Clippy          |
-| `bun run rust:test`  | Cargo unit tests      |
-| `bun run test`       | Vitest unit tests     |
+| Command             | What it runs      |
+| ------------------- | ----------------- |
+| `bun run format`    | Format everything |
+| `bun run typecheck` | TS type checking  |
+| `bun run rust:lint` | Cargo Clippy      |
+| `bun run rust:test` | Cargo unit tests  |
+| `bun run test`      | Vitest unit tests |
 
 ## Submitting a pull request
 

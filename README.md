@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="public/app_icon.png" alt="ISpooferMotion" width="88" />
+  <img src="src/assets/app_icon.png" alt="ISpooferMotion" width="88" />
 
   <h1>ISpooferMotion</h1>
 
@@ -16,13 +16,11 @@
   </p>
 
   <p>
-    <a href="https://github.com/ISpooferMotion/ISpooferMotion-V2/releases/latest">⬇️ Download</a>
+    <a href="https://github.com/ISpooferMotion/ISpooferMotion-V2/releases/latest">Download</a>
     ·
-    <a href="https://github.com/ISpooferMotion/ISpooferMotion-V2/issues/new?template=bug_report.md">🐛 Report a Bug</a>
+    <a href="https://github.com/ISpooferMotion/ISpooferMotion-V2/issues/new?template=bug_report.md">Report a Bug</a>
     ·
-    <a href="https://github.com/ISpooferMotion/ISpooferMotion-V2/issues/new?template=feature_request.md">💡 Request a Feature</a>
-    ·
-    <a href="https://github.com/ISpooferMotion/ISpooferMotion-V2/discussions">💬 Discussions</a>
+    <a href="https://github.com/ISpooferMotion/ISpooferMotion-V2/issues/new?template=feature_request.md">Request a Feature</a>
   </p>
 </div>
 
@@ -38,7 +36,6 @@ ISpooferMotion connects a desktop app directly to a running Roblox Studio sessio
 - 🎬 Preview R6/R15 rig animations and listen to audio assets before committing
 - 👤 Manage Roblox user and group profiles with per-profile cookie storage (backed by the OS credential store)
 - 🌲 Browse your place's asset tree, inspect properties, and copy IDs
-- 🔔 Receive desktop notifications on spoof success or failure
 
 **Built with:** Tauri v2 · React 19 · Tailwind v4 · Rust · Luau
 
@@ -48,11 +45,11 @@ ISpooferMotion connects a desktop app directly to a running Roblox Studio sessio
 
 Download the latest release for your platform:
 
-| Platform   | Installer                                         |
-| -----------| ------------------------------------------------- |
-| Windows    |  `ISpooferMotion_x.x.x_x64-setup.exe`             |
-| macOS      |  `ISpooferMotion_x.x.x_x64.dmg`                   |
-| Linux      |  `ISpooferMotion_x.x.x_amd64.AppImage`            |
+| Platform | Installer                             |
+| -------- | ------------------------------------- |
+| Windows  | `ISpooferMotion_x.x.x_x64-setup.exe`  |
+| macOS    | `ISpooferMotion_x.x.x_x64.dmg`        |
+| Linux    | `ISpooferMotion_x.x.x_amd64.AppImage` |
 
 The Roblox Studio plugin (`ISpooferMotion.rbxmx`) is attached to every release.
 Install it by dragging it into Studio or through **Plugins → Manage Plugins**.
@@ -86,14 +83,14 @@ bun run tauri:dev
 <details>
 <summary>📋 Useful commands</summary>
 
-| Command                | Description                                                      |
-| ---------------------- | ---------------------------------------------------------------- |
-| `bun run check`        | Run the full CI suite (format, typecheck, clippy, tests, build)  |
-| `bun run tauri:dev`    | Start the desktop app in dev mode                                |
-| `bun run build:plugin` | Build the Luau Studio plugin to `dist-plugin/`                   |
-| `bun run format`       | Auto-format everything (Prettier, rustfmt, StyLua)               |
-| `bun run test`         | Run frontend unit tests with Vitest                              |
-| `bun run rust:test`    | Run Rust unit tests                                              |
+| Command                | Description                                                     |
+| ---------------------- | --------------------------------------------------------------- |
+| `bun run check`        | Run the full CI suite (format, typecheck, clippy, tests, build) |
+| `bun run tauri:dev`    | Start the desktop app in dev mode                               |
+| `bun run build:plugin` | Build the Luau Studio plugin to `dist-plugin/`                  |
+| `bun run format`       | Auto-format everything (Prettier, rustfmt, StyLua)              |
+| `bun run test`         | Run frontend unit tests with Vitest                             |
+| `bun run rust:test`    | Run Rust unit tests                                             |
 
 </details>
 
