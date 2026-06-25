@@ -20,6 +20,12 @@ runs:
       uses: dtolnay/rust-toolchain@stable
       with:
         targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
+        components: rustfmt, clippy
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: src-tauri
 
     - name: install Tauri Linux dependencies
       if: contains(inputs.os, 'linux')
