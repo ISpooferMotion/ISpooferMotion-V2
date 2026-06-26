@@ -30,6 +30,10 @@ pub async fn should_skip_asset_for_spoofing(
     excluded_users: &HashSet<String>,
     excluded_groups: &HashSet<String>,
 ) -> bool {
+    if !skip_owned && excluded_users.is_empty() && excluded_groups.is_empty() {
+        return false;
+    }
+
     let Ok((creator_type, creator_id)) =
         get_asset_creator_for_asset(app, asset_id.to_string(), cookie.to_string()).await
     else {
@@ -81,6 +85,12 @@ pub async fn get_asset_creator_for_asset(
         return Err("Invalid Roblox asset id.".into());
     }
 
+    static CREATOR_CACHE: std::sync::OnceLock<dashmap::DashMap<String, (String, String)>> = std::sync::OnceLock::new();
+    let cache = CREATOR_CACHE.get_or_init(dashmap::DashMap::new);
+    if let Some(cached) = cache.get(&asset_id) {
+        return Ok(cached.value().clone());
+    }
+
     let cookie_header = build_roblox_cookie_header(&cookie);
     if cookie_header.is_empty() {
         return Err(crate::error::AppError::Custom(
@@ -128,6 +138,7 @@ pub async fn get_asset_creator_for_asset(
         ));
     };
 
+    cache.insert(asset_id, (creator_type.clone(), creator_id.clone()));
     Ok((creator_type, creator_id))
 }
 

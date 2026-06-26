@@ -19,7 +19,7 @@ runs:
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
       with:
-        targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
+        targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc, x86_64-apple-darwin, aarch64-apple-darwin
         components: rustfmt, clippy
 
     - name: Rust Cache

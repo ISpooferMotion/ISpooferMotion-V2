@@ -50,7 +50,7 @@ pub struct SpooferActionRequest {
     pub proxy_url: Option<String>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct AssetDetails {
     pub name: String,
     pub description: String,

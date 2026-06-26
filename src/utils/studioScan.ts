@@ -22,15 +22,25 @@ async function waitForStudioScanComplete(): Promise<void> {
   throw new Error('Timed out waiting for Roblox Studio to finish scanning.');
 }
 
-// explicitly tells the studio plugin to start hunting for new assets
 export async function triggerStudioScan(port: string): Promise<void> {
-  const startResponse = await fetchPluginBridge('/request-sounds', port, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  });
-  if (!startResponse.ok) {
-    throw new Error('Could not start a Studio scan. Is the plugin connected?');
+  const endpoints = [
+    '/request-sounds',
+    '/request-animations',
+    '/request-images',
+    '/request-meshes',
+    '/request-script-refs'
+  ];
+
+  for (const endpoint of endpoints) {
+    const startResponse = await fetchPluginBridge(endpoint, port, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if (!startResponse.ok) {
+      throw new Error('Could not start a Studio scan. Is the plugin connected?');
+    }
   }
+
   await waitForStudioScanComplete();
 }

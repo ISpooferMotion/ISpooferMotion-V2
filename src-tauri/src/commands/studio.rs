@@ -13,9 +13,19 @@ pub async fn push_to_studio(
             replacements
                 .into_iter()
                 .map(|(original_id, new_id)| {
+                    let new_id_str = if let Some(s) = new_id.as_str() {
+                        s.to_string()
+                    } else if let Some(n) = new_id.as_u64() {
+                        n.to_string()
+                    } else if let Some(n) = new_id.as_i64() {
+                        n.to_string()
+                    } else {
+                        String::new()
+                    };
+                    
                     serde_json::json!({
                         "originalId": original_id,
-                        "newId": new_id.as_str().unwrap_or_default(),
+                        "newId": new_id_str,
                     })
                 })
                 .collect::<Vec<_>>()

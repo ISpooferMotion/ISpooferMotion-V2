@@ -134,6 +134,12 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
     const { invoke } = await import('@tauri-apps/api/core');
     setIsReplacing(true);
     setReplaceError(false);
+
+    if (Object.keys(replacements).length === 0) {
+      setSpoofingLogs((prev) => appendSpoofingLog(prev, '\nNo replacements were generated (all assets may have been skipped or failed).'));
+      return;
+    }
+
     setSpoofingLogs((prev) => appendSpoofingLog(prev, '\nApplying replacements to Studio...'));
 
     if (config.advanced.memoryInjectionEnabled) {

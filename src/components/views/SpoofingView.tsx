@@ -638,7 +638,9 @@ export default function SpoofingView() {
             for (const asset of node.assets) {
               if (selectedTypes.has(asset.type)) {
                 const id = getAssetId(asset);
-                if (id) finalAssetIds.add(id);
+                if (id && shouldIncludeSelectedId(id)) {
+                  finalAssetIds.add(id);
+                }
               }
             }
             if (node.children) gatherByType(node.children);

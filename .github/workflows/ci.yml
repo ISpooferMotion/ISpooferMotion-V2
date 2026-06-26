@@ -77,12 +77,18 @@ jobs:
           - platform: windows-2025
             os: windows
             bundles: nsis
+            rust_targets: ""
+            args: ""
           - platform: macos-latest
             os: macos
             bundles: dmg
+            rust_targets: "aarch64-apple-darwin, x86_64-apple-darwin"
+            args: "--target universal-apple-darwin"
           - platform: ubuntu-22.04
             os: linux
             bundles: appimage
+            rust_targets: ""
+            args: ""
 
     steps:
       - name: Checkout repository
@@ -104,7 +110,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: --bundles ${{ matrix.bundles }}
+          args: --bundles ${{ matrix.bundles }} ${{ matrix.args }}
           tagName: ${{ env.RELEASE_TAG }}
           releaseName: ISpooferMotion ${{ env.RELEASE_TAG }}
           releaseBody: 'See the assets below to download and install this version.'

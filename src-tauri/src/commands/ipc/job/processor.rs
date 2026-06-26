@@ -49,7 +49,6 @@ fn selected_account_id(account: &serde_json::Value) -> Option<String> {
     account.get("id").and_then(numeric_value_to_string)
 }
 
-// hit the economy api to get the asset's original name and description so we can reuse them if requested
 async fn fetch_asset_details(
     asset_id: &str,
     cookie: &str,
@@ -68,6 +67,55 @@ async fn fetch_asset_details(
         .to_string();
 
     Some(AssetDetails { name, description })
+}
+
+async fn batch_fetch_asset_details(
+    asset_ids: &[String],
+    cookie: &str,
+    csrf_token: &str,
+    client: &reqwest::Client,
+) -> HashMap<String, AssetDetails> {
+    let mut details = HashMap::new();
+    let mut chunks = asset_ids.chunks(120);
+    
+    while let Some(chunk) = chunks.next() {
+        let items: Vec<serde_json::Value> = chunk.iter().filter_map(|id| {
+            if let Ok(id_num) = id.parse::<u64>() {
+                Some(serde_json::json!({
+                    "itemType": "Asset",
+                    "id": id_num
+                }))
+            } else {
+                None
+            }
+        }).collect();
+        
+        if items.is_empty() { continue; }
+        
+        let payload = serde_json::json!({ "items": items });
+        let req = client
+            .post("https://catalog.roblox.com/v1/catalog/items/details")
+            .header("Cookie", format!(".ROBLOSECURITY={cookie}"))
+            .header("X-CSRF-Token", csrf_token)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .json(&payload);
+            
+        if let Ok(res) = req.send().await {
+            if let Ok(json) = res.json::<serde_json::Value>().await {
+                if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
+                    for item in data {
+                        if let Some(id) = item.get("id").and_then(|v| v.as_u64()) {
+                            let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("Spoofed Asset").to_string();
+                            let description = item.get("description").and_then(|v| v.as_str()).unwrap_or("Uploaded by ISpooferMotion.").to_string();
+                            details.insert(id.to_string(), AssetDetails { name, description });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    details
 }
 
 #[allow(clippy::too_many_lines)]
@@ -350,6 +398,19 @@ pub async fn process_spoofer_action(
 
     let batch_urls = Arc::new(batch_urls);
 
+    let initial_csrf = csrf_token.lock().map(|t| t.clone()).unwrap_or_default();
+    let mut batch_metadata = std::collections::HashMap::new();
+    if preserve_metadata {
+        emit_job_log(&app, "Fetching asset metadata in batch...", "info");
+        batch_metadata = batch_fetch_asset_details(&asset_ids, &cookie, &initial_csrf, &client).await;
+        emit_job_log(
+            &app,
+            &format!("Successfully resolved metadata for {} assets via batch endpoint.", batch_metadata.len()),
+            "info",
+        );
+    }
+    let batch_metadata = Arc::new(batch_metadata);
+
     let stream = stream::iter(parsed_assets.into_iter().enumerate());
     // start processing the assets concurrently using the specified concurrency limit
     stream
@@ -367,6 +428,7 @@ pub async fn process_spoofer_action(
             let creator_place_ids_cache = Arc::clone(&creator_place_ids_cache);
             let replacements = Arc::clone(&replacements);
             let asset_results = Arc::clone(&asset_results);
+            let batch_metadata = Arc::clone(&batch_metadata);
             let success_count = Arc::clone(&success_count);
             let skip_count = Arc::clone(&skip_count);
             let fail_count = Arc::clone(&fail_count);
@@ -577,12 +639,14 @@ pub async fn process_spoofer_action(
                             return;
                         }
 
-                        let details = fetch_asset_details(&asset_id, &cookie, &client)
-                            .await
-                            .unwrap_or_else(|| AssetDetails {
-                                name: format!("Spoofed {asset_id}"),
-                                description: "Uploaded by ISpooferMotion.".to_string(),
-                            });
+                        let mut details = batch_metadata.get(&asset_id).cloned();
+                        if details.is_none() {
+                            details = fetch_asset_details(&asset_id, &cookie, &client).await;
+                        }
+                        let details = details.unwrap_or_else(|| AssetDetails {
+                            name: format!("Spoofed {asset_id}"),
+                            description: "Uploaded by ISpooferMotion.".to_string(),
+                        });
 
                         let final_description = if preserve_metadata {
                             details.description
