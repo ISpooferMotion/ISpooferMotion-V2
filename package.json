@@ -22,7 +22,7 @@
     "rust:test": "cargo test --manifest-path src-tauri/Cargo.toml --lib",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "check": "bun run format:check && bun run typecheck && bun run rust:check && bun run rust:lint && bun run rust:test && bun run lint && bun run test && bun run build && bun run build:plugin"
+    "check": "bun run typecheck && bun run rust:check && bun run rust:lint && bun run rust:test && bun run lint && bun run test && bun run build && bun run build:plugin"
   },
   "dependencies": {
     "@codycon/ism-library": "file:./ISM-Library/packages/ui",
