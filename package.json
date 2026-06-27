@@ -1,6 +1,6 @@
 {
   "name": "ispoofermotion",
-  "version": "2.0.0-rc.2",
+  "version": "2.0.0-rc.3",
   "description": "Animation spoofing utility for Roblox",
   "author": {
     "name": "IncredibroXP",
@@ -14,15 +14,21 @@
     "tauri": "tauri",
     "tauri:build": "tauri build",
     "tauri:dev": "bun scripts/clear-dev-state.mjs && tauri dev",
-    "format": "prettier --write . && cargo fmt --manifest-path src-tauri/Cargo.toml && bunx @johnnymorganz/stylua-bin .",
-    "format:check": "prettier --check . && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && bunx @johnnymorganz/stylua-bin --check .",
+    "format": "run-s format:prettier format:rust format:stylua",
+    "format:check": "run-s format:prettier:check format:rust:check format:stylua:check",
+    "format:prettier": "prettier --write .",
+    "format:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml",
+    "format:stylua": "bunx @johnnymorganz/stylua-bin .",
+    "format:prettier:check": "prettier --check .",
+    "format:rust:check": "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check",
+    "format:stylua:check": "bunx @johnnymorganz/stylua-bin --check .",
     "typecheck": "tsc --noEmit",
     "rust:check": "cargo check --manifest-path src-tauri/Cargo.toml --lib",
     "rust:lint": "cargo clippy --manifest-path src-tauri/Cargo.toml --lib --all-targets -- -D warnings",
     "rust:test": "cargo test --manifest-path src-tauri/Cargo.toml --lib",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "check": "bun run typecheck && bun run rust:check && bun run rust:lint && bun run rust:test && bun run lint && bun run test && bun run build && bun run build:plugin"
+    "check": "run-s typecheck rust:check rust:lint rust:test lint test build build:plugin"
   },
   "dependencies": {
     "@codycon/ism-library": "file:./ISM-Library/packages/ui",
@@ -65,6 +71,7 @@
     "eslint-plugin-react-refresh": "^0.5.3",
     "eslint-plugin-simple-import-sort": "^13.0.0",
     "globals": "^17.7.0",
+    "npm-run-all": "^4.1.5",
     "prettier": "^3.8.3",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
