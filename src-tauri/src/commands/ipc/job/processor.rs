@@ -76,9 +76,9 @@ async fn batch_fetch_asset_details(
     client: &reqwest::Client,
 ) -> HashMap<String, AssetDetails> {
     let mut details = HashMap::new();
-    let mut chunks = asset_ids.chunks(120);
+    let chunks = asset_ids.chunks(120);
     
-    while let Some(chunk) = chunks.next() {
+    for chunk in chunks {
         let items: Vec<serde_json::Value> = chunk.iter().filter_map(|id| {
             if let Ok(id_num) = id.parse::<u64>() {
                 Some(serde_json::json!({
@@ -105,7 +105,7 @@ async fn batch_fetch_asset_details(
             if let Ok(json) = res.json::<serde_json::Value>().await {
                 if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
                     for item in data {
-                        if let Some(id) = item.get("id").and_then(|v| v.as_u64()) {
+                        if let Some(id) = item.get("id").and_then(serde_json::Value::as_u64) {
                             let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("Spoofed Asset").to_string();
                             let description = item.get("description").and_then(|v| v.as_str()).unwrap_or("Uploaded by ISpooferMotion.").to_string();
                             details.insert(id.to_string(), AssetDetails { name, description });

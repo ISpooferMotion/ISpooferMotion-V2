@@ -254,8 +254,8 @@ pub async fn resolve_script_references(
     let mut remaining_ids = asset_ids.clone();
 
     if !csrf_token.is_empty() {
-        let mut chunks = asset_ids.chunks(120);
-        while let Some(chunk) = chunks.next() {
+        let chunks = asset_ids.chunks(120);
+        for chunk in chunks {
             let items: Vec<serde_json::Value> = chunk.iter().filter_map(|id| {
                 if let Ok(id_num) = id.parse::<u64>() {
                     Some(serde_json::json!({
@@ -282,8 +282,8 @@ pub async fn resolve_script_references(
                     if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
                         for item in data {
                             if let (Some(id), Some(type_id)) = (
-                                item.get("id").and_then(|v| v.as_u64()),
-                                item.get("assetType").and_then(|v| v.as_u64())
+                                item.get("id").and_then(serde_json::Value::as_u64),
+                                item.get("assetType").and_then(serde_json::Value::as_u64)
                             ) {
                                 let category = match type_id {
                                     24 => Some("animation"),
@@ -425,8 +425,8 @@ pub async fn validate_asset_ids(
     let mut remaining_ids = asset_ids.clone();
 
     if !csrf_token.is_empty() {
-        let mut chunks = asset_ids.chunks(120);
-        while let Some(chunk) = chunks.next() {
+        let chunks = asset_ids.chunks(120);
+        for chunk in chunks {
             let items: Vec<serde_json::Value> = chunk.iter().filter_map(|id| {
                 if let Ok(id_num) = id.parse::<u64>() {
                     Some(serde_json::json!({
@@ -453,8 +453,8 @@ pub async fn validate_asset_ids(
                     if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
                         for item in data {
                             if let (Some(id), Some(type_id)) = (
-                                item.get("id").and_then(|v| v.as_u64()),
-                                item.get("assetType").and_then(|v| v.as_u64())
+                                item.get("id").and_then(serde_json::Value::as_u64),
+                                item.get("assetType").and_then(serde_json::Value::as_u64)
                             ) {
                                 let category = match type_id {
                                     24 => "animation",
