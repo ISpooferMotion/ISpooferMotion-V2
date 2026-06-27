@@ -236,21 +236,92 @@ pub async fn resolve_script_references(
     asset_ids: Vec<String>,
 ) -> crate::error::Result<HashMap<String, String>> {
     let client = Arc::new(reqwest::Client::builder().timeout(Duration::from_secs(5)).build()?);
-
-    let semaphore = Arc::new(Semaphore::new(6));
     let mut resolved_map = HashMap::new();
     let total = asset_ids.len();
 
     if total == 0 {
         return Ok(resolved_map);
     }
+    
+    // get an anonymous CSRF token from catalog
+    let mut csrf_token = String::new();
+    if let Ok(res) = client.post("https://catalog.roblox.com/v1/catalog/items/details").header("Content-Length", "0").send().await {
+        if let Some(token) = res.headers().get("x-csrf-token") {
+            csrf_token = token.to_str().unwrap_or_default().to_string();
+        }
+    }
 
-    let mut tasks = Vec::new();
+    let mut remaining_ids = asset_ids.clone();
+
+    if !csrf_token.is_empty() {
+        let mut chunks = asset_ids.chunks(120);
+        while let Some(chunk) = chunks.next() {
+            let items: Vec<serde_json::Value> = chunk.iter().filter_map(|id| {
+                if let Ok(id_num) = id.parse::<u64>() {
+                    Some(serde_json::json!({
+                        "itemType": "Asset",
+                        "id": id_num
+                    }))
+                } else {
+                    None
+                }
+            }).collect();
+            
+            if items.is_empty() { continue; }
+            
+            let payload = serde_json::json!({ "items": items });
+            let req = client
+                .post("https://catalog.roblox.com/v1/catalog/items/details")
+                .header("x-csrf-token", &csrf_token)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .json(&payload);
+                
+            if let Ok(res) = req.send().await {
+                if let Ok(json) = res.json::<serde_json::Value>().await {
+                    if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
+                        for item in data {
+                            if let (Some(id), Some(type_id)) = (
+                                item.get("id").and_then(|v| v.as_u64()),
+                                item.get("assetType").and_then(|v| v.as_u64())
+                            ) {
+                                let category = match type_id {
+                                    24 => Some("animation"),
+                                    3 => Some("sound"),
+                                    1 | 11 | 13 | 2 | 21 | 22 | 38 => Some("image"),
+                                    40 | 43 | 17 | 12 => Some("mesh"),
+                                    _ => None,
+                                };
+                                if let Some(cat) = category {
+                                    resolved_map.insert(id.to_string(), cat.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    remaining_ids.retain(|id| !resolved_map.contains_key(id));
+
     let app_arc = Arc::new(app);
+    let resolved_count = Arc::new(std::sync::atomic::AtomicUsize::new(total - remaining_ids.len()));
+    
+    emit_script_ref_progress(
+        &app_arc,
+        ScriptRefProgress {
+            resolved: resolved_count.load(std::sync::atomic::Ordering::Relaxed),
+            total,
+            asset_id: String::new(),
+            resolved_category: None,
+        },
+    );
 
-    let resolved_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let semaphore = Arc::new(Semaphore::new(12));
+    let mut tasks = Vec::new();
 
-    for asset_id in asset_ids {
+    for asset_id in remaining_ids {
         let sem = Arc::clone(&semaphore);
         let cli = Arc::clone(&client);
         let app_arc_clone = Arc::clone(&app_arc);
@@ -338,16 +409,75 @@ pub async fn validate_asset_ids(
     asset_ids: Vec<String>,
 ) -> crate::error::Result<HashMap<String, String>> {
     let client = Arc::new(reqwest::Client::builder().timeout(Duration::from_secs(5)).build()?);
-    let semaphore = Arc::new(Semaphore::new(8));
     let mut result_map: HashMap<String, String> = HashMap::new();
 
     if asset_ids.is_empty() {
         return Ok(result_map);
     }
+    
+    let mut csrf_token = String::new();
+    if let Ok(res) = client.post("https://catalog.roblox.com/v1/catalog/items/details").header("Content-Length", "0").send().await {
+        if let Some(token) = res.headers().get("x-csrf-token") {
+            csrf_token = token.to_str().unwrap_or_default().to_string();
+        }
+    }
 
+    let mut remaining_ids = asset_ids.clone();
+
+    if !csrf_token.is_empty() {
+        let mut chunks = asset_ids.chunks(120);
+        while let Some(chunk) = chunks.next() {
+            let items: Vec<serde_json::Value> = chunk.iter().filter_map(|id| {
+                if let Ok(id_num) = id.parse::<u64>() {
+                    Some(serde_json::json!({
+                        "itemType": "Asset",
+                        "id": id_num
+                    }))
+                } else {
+                    None
+                }
+            }).collect();
+            
+            if items.is_empty() { continue; }
+            
+            let payload = serde_json::json!({ "items": items });
+            let req = client
+                .post("https://catalog.roblox.com/v1/catalog/items/details")
+                .header("x-csrf-token", &csrf_token)
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .json(&payload);
+                
+            if let Ok(res) = req.send().await {
+                if let Ok(json) = res.json::<serde_json::Value>().await {
+                    if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
+                        for item in data {
+                            if let (Some(id), Some(type_id)) = (
+                                item.get("id").and_then(|v| v.as_u64()),
+                                item.get("assetType").and_then(|v| v.as_u64())
+                            ) {
+                                let category = match type_id {
+                                    24 => "animation",
+                                    3 => "sound",
+                                    1 | 11 | 13 | 2 | 21 | 22 | 38 => "image",
+                                    40 | 43 | 17 | 12 => "mesh",
+                                    _ => "unknown",
+                                };
+                                result_map.insert(id.to_string(), category.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    remaining_ids.retain(|id| !result_map.contains_key(id));
+
+    let semaphore = Arc::new(Semaphore::new(12));
     let mut tasks = Vec::new();
 
-    for asset_id in asset_ids {
+    for asset_id in remaining_ids {
         let sem = Arc::clone(&semaphore);
         let cli = Arc::clone(&client);
         tasks.push(tokio::spawn(async move {
