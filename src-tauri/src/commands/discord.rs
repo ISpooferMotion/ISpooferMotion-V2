@@ -381,4 +381,4 @@ pub async fn close_discord_poll(poll_id: Option<String>) -> crate::error::Result
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type)]
 #[serde(transparent)]
-pub struct AnyValue(#[specta(type = Option<String>)] pub serde_json::Value);
+pub struct AnyValue(pub serde_json::Value);

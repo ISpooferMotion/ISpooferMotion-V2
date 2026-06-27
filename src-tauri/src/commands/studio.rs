@@ -1,14 +1,15 @@
-use crate::commands::discord::AnyValue;
 
 #[tauri::command]
 #[specta::specta]
 // sends the final asset mappings over to the roblox studio plugin so it can actually swap the ids in their game
 pub async fn push_to_studio(
-    replacements_map: Option<AnyValue>,
+    replacements_map: serde_json::Value,
     plugin_port: Option<String>,
 ) -> crate::error::Result<bool> {
+    log::info!("push_to_studio called with replacements_map: {:?}", replacements_map);
     let mappings = replacements_map
-        .and_then(|value| value.0.as_object().cloned())
+        .as_object()
+        .cloned()
         .map(|replacements| {
             replacements
                 .into_iter()
@@ -33,13 +34,16 @@ pub async fn push_to_studio(
         .unwrap_or_default();
 
     if mappings.is_empty() {
+        log::error!("push_to_studio: mappings is empty!");
         return Ok(false);
     }
 
     if crate::studio_bridge::queue_replace_mappings_internal(mappings.clone()).await {
+        log::info!("push_to_studio: queue_replace_mappings_internal succeeded");
         return Ok(true);
     }
 
+    log::error!("push_to_studio: queue_replace_mappings_internal returned false, trying fallback");
     let port = plugin_port.and_then(|value| value.parse::<u16>().ok()).unwrap_or(14285);
     let response = reqwest::Client::new()
         .post(format!("http://127.0.0.1:{port}/replace-ids"))
@@ -47,5 +51,8 @@ pub async fn push_to_studio(
         .json(&serde_json::json!({ "mappings": mappings }))
         .send()
         .await?;
-    Ok(response.status().is_success())
+    
+    let success = response.status().is_success();
+    log::info!("push_to_studio: fallback response success = {}", success);
+    Ok(success)
 }

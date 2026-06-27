@@ -137,6 +137,9 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
 
     if (Object.keys(replacements).length === 0) {
       setSpoofingLogs((prev) => appendSpoofingLog(prev, '\nNo replacements were generated (all assets may have been skipped or failed).'));
+      if (typeof window.ismLog === 'function') {
+        window.ismLog('info', 'No replacements generated. All selected assets may have already been spoofed or failed.', true);
+      }
       return;
     }
 
