@@ -92,3 +92,4 @@ desktop.ini
 
 # Some other junk
 *.log
+/.agents
