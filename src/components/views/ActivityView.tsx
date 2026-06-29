@@ -1,4 +1,3 @@
-import { useLanguage } from '../../contexts/LanguageContext';
 import { Accordion, AccordionItem, itemVariants, pageVariants, Window } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
@@ -15,6 +14,7 @@ import {
 import { useEffect, useState } from 'react';
 
 import { useConfig } from '../../contexts/ConfigContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { queueSpoofRetry, type SpoofJob } from '../../utils/jobTypes';
 import { logIsm } from '../../utils/robloxProfiles';
 

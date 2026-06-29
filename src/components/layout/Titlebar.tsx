@@ -1,4 +1,3 @@
-import { useLanguage } from '../../contexts/LanguageContext';
 import { IconButton, Toolbar } from '@codycon/ism-library';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -9,6 +8,7 @@ import { useEffect, useState } from 'react';
 import AppIconDark from '../../assets/app_icon.png';
 import AppIconLight from '../../assets/app_icon_light.png';
 import { useConfig } from '../../contexts/ConfigContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { useThemeAccent } from '../../contexts/ThemeContext';
 import { cn } from '../../utils/cn';
 import { isTauriRuntime } from '../../utils/tauriRuntime';

@@ -1,10 +1,10 @@
-import { useLanguage } from '../../contexts/LanguageContext';
 import { Button } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 
+import { useLanguage } from '../../contexts/LanguageContext';
 import { useDiscordLogin } from '../../hooks/useDiscordLogin';
 import { type StoredDiscordAuth } from '../../types/discordAuth';
 

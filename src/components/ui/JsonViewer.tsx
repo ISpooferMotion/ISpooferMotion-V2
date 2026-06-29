@@ -1,8 +1,8 @@
-import { useLanguage } from '../../contexts/LanguageContext';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronRight, Copy } from 'lucide-react';
 import { useState } from 'react';
 
+import { useLanguage } from '../../contexts/LanguageContext';
 import { cn } from '../../utils/cn';
 
 interface JsonViewerProps {

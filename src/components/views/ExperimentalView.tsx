@@ -1,4 +1,3 @@
-import { useLanguage } from '../../contexts/LanguageContext';
 import {
   Accordion,
   AccordionItem,
@@ -15,6 +14,7 @@ import { Cpu, LayoutTemplate } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useConfig } from '../../contexts/ConfigContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { type StoredDiscordAuth } from '../../types/discordAuth';
 import { isMemoryInjectionSupported } from '../../utils/tauriRuntime';
 

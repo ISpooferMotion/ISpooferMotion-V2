@@ -1,6 +1,5 @@
 import { Button, MultiSelectDropdown, Spinner } from '@codycon/ism-library';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-import { useLanguage } from '../../contexts/LanguageContext';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
@@ -11,6 +10,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { createPortal } from 'react-dom';
 
 import { useConfig } from '../../contexts/ConfigContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
 import { useStudioAssetPoll } from '../../hooks/useStudioAssetPoll';
 import { useSpooferStore } from '../../stores/spooferStore';

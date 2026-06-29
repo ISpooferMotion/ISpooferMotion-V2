@@ -1,9 +1,9 @@
-import { useLanguage } from '../../contexts/LanguageContext';
 import { Button, Modal, ModalBody, ModalContent, ModalHeader } from '@codycon/ism-library';
 import { motion, Variants } from 'framer-motion';
 import { ArrowRight, Check, Copy, ListChecks, X } from 'lucide-react';
 import { useState } from 'react';
 
+import { useLanguage } from '../../contexts/LanguageContext';
 import { useSpooferStore } from '../../stores/spooferStore';
 
 export default function ResultsModal({

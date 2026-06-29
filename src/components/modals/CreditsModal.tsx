@@ -1,9 +1,9 @@
-import { useLanguage } from '../../contexts/LanguageContext';
 import { Button, Modal, ModalBody, ModalContent, ModalHeader } from '@codycon/ism-library';
 import { useQuery } from '@tanstack/react-query';
 import { motion, Variants } from 'framer-motion';
 import { Code, Heart, Rocket, X } from 'lucide-react';
 
+import { useLanguage } from '../../contexts/LanguageContext';
 import { cn } from '../../utils/cn';
 
 export default function CreditsModal({

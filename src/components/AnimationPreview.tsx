@@ -1,4 +1,3 @@
-import { useLanguage } from '../contexts/LanguageContext';
 import { Button, Spinner } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -11,6 +10,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
 import { useConfig } from '../contexts/ConfigContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { cn } from '../utils/cn';
 import {
   parseAnimationXml,

@@ -1,9 +1,9 @@
-import { useLanguage } from '../../contexts/LanguageContext';
 import { Dropdown, MultiSelectDropdown } from '@codycon/ism-library';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown, Check, Copy, Terminal, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { useLanguage } from '../../contexts/LanguageContext';
 import { cn } from '../../utils/cn';
 import {
   clearDebugLogs,

@@ -1,4 +1,3 @@
-import { useLanguage } from './contexts/LanguageContext';
 import { IsmProvider } from '@codycon/ism-library';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -21,6 +20,7 @@ import ExperimentalView from './components/views/ExperimentalView';
 import SettingsView from './components/views/SettingsView';
 import SpoofingView from './components/views/SpoofingView';
 import { useConfig } from './contexts/ConfigContext';
+import { useLanguage } from './contexts/LanguageContext';
 import { useThemeAccent } from './contexts/ThemeContext';
 import { useCloudThemeSync } from './hooks/useCloudThemeSync';
 import { type StoredDiscordAuth } from './types/discordAuth';
