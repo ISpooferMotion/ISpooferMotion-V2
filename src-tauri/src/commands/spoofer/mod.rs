@@ -178,6 +178,18 @@ pub fn record_adaptive_rate_limit(retry_after_ms: Option<u64>) {
     limiter.notify.notify_waiters();
 }
 
+pub fn record_explicit_rate_limit(reset_in_ms: u64) {
+    let limiter = adaptive_limiter();
+    let capped_ms = reset_in_ms.clamp(500, 120_000);
+    let next_until = Instant::now() + Duration::from_millis(capped_ms);
+    if let Ok(mut guard) = limiter.blocked_until.lock() {
+        if guard.map_or(true, |until| next_until > until) {
+            *guard = Some(next_until);
+        }
+    }
+    limiter.notify.notify_waiters();
+}
+
 pub fn record_adaptive_server_error() {
     let limiter = adaptive_limiter();
     let current = limiter.current.load(Ordering::Acquire).max(1);
@@ -409,12 +421,13 @@ pub use permissions::{
 pub use place::{
     __cmd__clear_downloads_directory_command, __cmd__find_asset_by_name,
     __cmd__get_multiple_place_ids, __cmd__get_place_id_from_creator,
-    __cmd__get_universe_id_from_place_id, __tauri_command_name_clear_downloads_directory_command,
+    __cmd__get_universe_id_from_place_id, __cmd__get_place_id_from_universe_id, __tauri_command_name_clear_downloads_directory_command,
     __tauri_command_name_find_asset_by_name, __tauri_command_name_get_multiple_place_ids,
     __tauri_command_name_get_place_id_from_creator,
+    __tauri_command_name_get_place_id_from_universe_id,
     __tauri_command_name_get_universe_id_from_place_id, clear_downloads_directory_command,
     find_asset_by_name, get_asset_creator_for_asset, get_multiple_place_ids,
-    get_place_id_from_creator, get_universe_id_from_place_id, parse_excluded_id_list,
+    get_place_id_from_creator, get_place_id_from_universe_id, get_universe_id_from_place_id, parse_excluded_id_list,
     should_skip_asset_for_spoofing,
 };
 pub use remote_cache::{

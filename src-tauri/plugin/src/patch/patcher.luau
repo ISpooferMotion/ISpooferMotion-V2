@@ -429,6 +429,7 @@ local function applyPatches(patches: any)
 			end
 
 			if index % 50 == 0 then
+				setPluginGuiStatus(string.format("Applying replacements (%d/%d)...", index, #patches))
 				task.wait()
 			end
 		end
@@ -455,6 +456,9 @@ local function applyPatches(patches: any)
 		)
 	)
 	if succeeded > 0 then
+		setPluginGuiStatus("Scanning Assets...")
 		task.spawn(scan)
+	else
+		hidePluginGui()
 	end
 end

@@ -1,3 +1,4 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { Dropdown, MultiSelectDropdown } from '@codycon/ism-library';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown, Check, Copy, Terminal, Trash2, X } from 'lucide-react';
@@ -26,6 +27,7 @@ interface DebugConsoleProps {
 }
 
 export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
+  const { t } = useLanguage();
   const logs = useLogs();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [filterSource, setFilterSource] = useState<string>('all');
@@ -108,16 +110,16 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
   };
 
   const filterOptions = [
-    { value: 'all', label: 'All Logs' },
-    { value: 'console', label: 'DevTools Console' },
-    { value: 'ism', label: 'ISM Logs' },
+    { value: 'all', label: t('debug.allLogs') },
+    { value: 'console', label: t('debug.devToolsConsole') },
+    { value: 'ism', label: t('debug.ismLogs') },
   ];
 
   const levelOptions = [
-    { value: 'info', label: 'Info' },
-    { value: 'success', label: 'Success' },
-    { value: 'warn', label: 'Warnings' },
-    { value: 'error', label: 'Errors' },
+    { value: 'info', label: t('debug.info') },
+    { value: 'success', label: t('debug.success') },
+    { value: 'warn', label: t('debug.warnings') },
+    { value: 'error', label: t('debug.errors') },
   ];
 
   return (
@@ -144,7 +146,7 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
                   options={levelOptions}
                   values={filterLevels}
                   onChange={setFilterLevels}
-                  placeholder="Log Levels"
+                  placeholder={t('debug.logLevels')}
                 />
               </div>
             </div>
@@ -152,21 +154,21 @@ export default function DebugConsole({ isOpen, onClose }: DebugConsoleProps) {
               <button
                 onClick={handleCopy}
                 className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
-                aria-label="Copy Logs"
+                aria-label={t('debug.copyLogs')}
               >
                 {isCopied ? <Check size={15} /> : <Copy size={15} />}
               </button>
               <button
                 onClick={clearLogs}
                 className="p-1.5 text-text-muted hover:text-danger hover:bg-danger/10 rounded-md transition-colors"
-                aria-label="Clear Logs"
+                aria-label={t('debug.clearLogs')}
               >
                 <Trash2 size={15} />
               </button>
               <button
                 onClick={onClose}
                 className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-base rounded-md transition-colors"
-                aria-label="Hide Console"
+                aria-label={t('debug.hideConsole')}
               >
                 <X size={15} />
               </button>

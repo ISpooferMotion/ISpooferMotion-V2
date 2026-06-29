@@ -4,6 +4,7 @@ local STRING_SCAN_PROPERTIES: { [string]: { string } } = {} --!nolint LocalUnuse
 
 --#include "src/version/version.luau"
 --#include "src/config/runtime.luau"
+--#include "src/ui/gui.luau"
 --#include "src/types/assets.luau"
 --#include "src/state/registry.luau"
 --#include "src/util/assets.luau"
@@ -15,28 +16,11 @@ local STRING_SCAN_PROPERTIES: { [string]: { string } } = {} --!nolint LocalUnuse
 --#include "src/bridge/discovery.luau"
 --#include "src/bridge/polling.luau"
 
-local toolbar = plugin:CreateToolbar("ISpooferMotion v" .. PLUGIN_VERSION)
-local syncButton = toolbar:CreateButton(
-	"Sync to Desktop",
-	"Toggle connection to the ISpooferMotion Desktop App",
-	"rbxassetid://137844667859456"
-)
-
-syncButton.Click:Connect(function()
-	if polling then
-		polling = false
-		BASE_URL = nil
-		clearPairingState()
-		syncButton:SetActive(false)
-		print("[ISpooferMotion] Disconnected from Desktop App")
-	else
-		print("[ISpooferMotion] Starting connection to Desktop App...")
-		syncButton:SetActive(true)
-		startPolling()
-	end
-end)
+print("[ISpooferMotion] Plugin loaded. Starting background connection to Desktop App...")
+startPolling()
 
 plugin.Unloading:Connect(function()
 	polling = false
 	BASE_URL = nil
+	hidePluginGui()
 end)

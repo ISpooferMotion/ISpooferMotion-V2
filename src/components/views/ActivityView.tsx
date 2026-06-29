@@ -1,3 +1,4 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { Accordion, AccordionItem, itemVariants, pageVariants, Window } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
@@ -18,6 +19,8 @@ import { queueSpoofRetry, type SpoofJob } from '../../utils/jobTypes';
 import { logIsm } from '../../utils/robloxProfiles';
 
 export default function ActivityView() {
+  const { t } = useLanguage();
+
   const { updateConfig } = useConfig();
   const [jobs, setJobs] = useState<SpoofJob[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -133,13 +136,13 @@ export default function ActivityView() {
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
-                <span className="text-text-secondary">Loading history...</span>
+                <span className="text-text-secondary">{t('misc.loadingHistory')}</span>
               </div>
             ) : jobs.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center text-text-secondary space-y-3">
                 <Clock size={48} className="opacity-20" />
-                <p>No job history found.</p>
-                <p className="text-[13px] opacity-70">Jobs you run will appear here.</p>
+                <p>{t('misc.noJobHistory')}</p>
+                <p className="text-[13px] opacity-70">{t('misc.jobsWillAppear')}</p>
               </div>
             ) : (
               <Accordion selectionMode="multiple" className="space-y-3 pb-8">

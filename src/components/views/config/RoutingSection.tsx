@@ -49,8 +49,8 @@ export default function RoutingSection() {
       </Row>
       <Row>
         <FormInput
-          label="Proxy URL"
-          placeholder="http://user:pass@proxy:port"
+          label={t('settings.proxyUrl')}
+          placeholder={t('settings.proxyUrlPlaceholder')}
           value={config.advanced.proxyUrl}
           onChange={(value: string) => updateConfig('advanced', 'proxyUrl', value)}
         />
@@ -58,8 +58,8 @@ export default function RoutingSection() {
       <div className="flex flex-col">
         <Row>
           <FormToggle
-            label="Enable Concurrent Spoofing"
-            description="Process multiple assets simultaneously to drastically speed up large spoof jobs."
+            label={t('settings.concurrentSpoofing')}
+            description={t('settings.concurrentSpoofingDescription')}
             checked={config.advanced.concurrentSpoofing}
             onChange={(value: boolean) => updateConfig('advanced', 'concurrentSpoofing', value)}
           />
@@ -78,7 +78,7 @@ export default function RoutingSection() {
             <div className="pt-3">
               <Row>
                 <FormInput
-                  label="Max Concurrency"
+                  label={t('settings.maxConcurrency')}
                   type="number"
                   value={config.advanced.maxConcurrency.toString()}
                   onChange={(value: string) =>

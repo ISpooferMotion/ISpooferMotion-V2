@@ -1,3 +1,4 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import {
   Accordion,
   AccordionItem,
@@ -18,6 +19,8 @@ import { type StoredDiscordAuth } from '../../types/discordAuth';
 import { isMemoryInjectionSupported } from '../../utils/tauriRuntime';
 
 export default function ExperimentalView() {
+  const { t } = useLanguage();
+
   const { config, updateConfig } = useConfig();
   const [hasDevAccess, setHasDevAccess] = useState(false);
   const [memoryInjectionSupported, setMemoryInjectionSupported] = useState(false);
@@ -65,7 +68,7 @@ export default function ExperimentalView() {
             >
               <AccordionItem
                 value="appFeatures"
-                aria-label="App Features"
+                aria-label={t('settings.appFeatures')}
                 title={
                   <span className="flex items-center gap-3 font-semibold">
                     <LayoutTemplate size={18} className="text-primary" /> App Features
@@ -75,7 +78,7 @@ export default function ExperimentalView() {
                 <Group>
                   <Row>
                     <FormToggle
-                      label="Auto Scroll Sections"
+                      label={t('settings.autoScrollSections')}
                       checked={config.ui.autoScrollSections}
                       onChange={(v: boolean) => updateConfig('ui', 'autoScrollSections', v)}
                     />
@@ -85,7 +88,7 @@ export default function ExperimentalView() {
 
               <AccordionItem
                 value="spooferFeatures"
-                aria-label="Spoofer Features"
+                aria-label={t('settings.spooferFeatures')}
                 title={
                   <span className="flex items-center gap-3 font-semibold">
                     <Cpu size={18} className="text-primary" /> Spoofer Features
@@ -95,7 +98,7 @@ export default function ExperimentalView() {
                 <Group>
                   <Row>
                     <FormToggle
-                      label="Clipboard Monitoring"
+                      label={t('settings.clipboardMonitoring')}
                       description="Silently monitor your clipboard for Roblox asset URLs and auto-queue them for spoofing."
                       checked={config.advanced.clipboardMonitoring}
                       onChange={(v: boolean) => updateConfig('advanced', 'clipboardMonitoring', v)}
@@ -103,7 +106,7 @@ export default function ExperimentalView() {
                   </Row>
                   <Row>
                     <FormToggle
-                      label="Spoof Plugins"
+                      label={t('settings.spoofPlugins')}
                       description="[WIP] Attempt to spoof plugin assets."
                       checked={config.advanced.enablePluginSpoofing}
                       onChange={(v: boolean) => updateConfig('advanced', 'enablePluginSpoofing', v)}
@@ -111,7 +114,7 @@ export default function ExperimentalView() {
                   </Row>
                   <Row>
                     <FormToggle
-                      label="Memory Injection"
+                      label={t('settings.memoryInjection')}
                       description={
                         memoryInjectionSupported
                           ? '[DANGEROUS] Windows only. Overwrites exact numeric asset IDs in Studio memory (same digit length). Run with the same elevation as Studio. Plugin bridge is used for other cases.'

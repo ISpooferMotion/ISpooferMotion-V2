@@ -105,7 +105,7 @@ export default function Sidebar({
 
   const tabs = [
     { id: 'spoofing', label: t('nav.spoofing'), icon: <ScanLine size={18} /> },
-    { id: 'activity', label: 'Activity', icon: <History size={18} /> },
+    { id: 'activity', label: t('nav.activity'), icon: <History size={18} /> },
     { id: 'config', label: t('nav.config'), icon: <FileCog size={18} /> },
     { id: 'settings', label: t('nav.settings'), icon: <Settings size={18} /> },
   ];
@@ -115,7 +115,7 @@ export default function Sidebar({
   if (config.debug?.enableExperimentalTab) {
     tabs.push({
       id: 'experimental',
-      label: 'Experimental',
+      label: t('nav.experimental'),
       icon: <Beaker size={18} />,
     });
   }
@@ -173,14 +173,14 @@ export default function Sidebar({
       <div className="flex flex-col gap-1.5">
         <Button
           variant="ghost"
-          aria-label="Credits"
+          aria-label={t('common.cancel')}
           className="w-full h-10 px-3 text-text-secondary hover:text-text-primary hover:bg-bg-elevated font-medium justify-start rounded-[var(--radius-md)] transition-colors duration-150 flex items-center gap-3"
           onClick={() => document.dispatchEvent(new CustomEvent('open-credits'))}
         >
           <div className="opacity-60">
             <Info size={16} />
           </div>
-          <span className="text-[13px] tracking-wide">Credits</span>
+          <span className="text-[13px] tracking-wide">{t('misc.credits')}</span>
         </Button>
 
         <DonateButton />

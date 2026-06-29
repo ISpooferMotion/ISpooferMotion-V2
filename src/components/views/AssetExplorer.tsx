@@ -1,5 +1,6 @@
 import { Button, MultiSelectDropdown, Spinner } from '@codycon/ism-library';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
@@ -137,6 +138,7 @@ const VALID_ROOT_SERVICES = new Set([
 ]);
 
 export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps) {
+  const { t } = useLanguage();
   const [parseState, setParseState] = useState<ParseProgress | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [enlargedImage, setEnlargedImage] = useState<{
@@ -679,7 +681,7 @@ export default function AssetExplorer({ isOpen, setIsOpen }: AssetExplorerProps)
                       <Filter size={13} className="shrink-0 text-text-muted" />
                       <div className="min-w-0 flex-1">
                         <MultiSelectDropdown
-                          options={ASSET_TYPE_OPTIONS}
+                          options={ASSET_TYPE_OPTIONS.map(a => ({ ...a, label: t('explorer.' + (a.value === 'image' ? 'images' : a.value === 'animation' ? 'animations' : a.value === 'mesh' ? 'meshes' : a.value)) }))}
                           values={activeAssetFilters}
                           onChange={setActiveAssetFilters}
                           placeholder="All asset types"

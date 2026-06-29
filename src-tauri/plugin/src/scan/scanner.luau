@@ -366,6 +366,11 @@ local function scanAssets(): ()
 			tonumber(totals.scriptRefs) or 0
 		)
 	)
+	if autoReplaceEnabled then
+		setPluginGuiStatus("Waiting for Spoofer...")
+	else
+		hidePluginGui()
+	end
 end
 
 local function scan(): ()
@@ -390,5 +395,6 @@ local function scan(): ()
 			postJson("/scan-abort", {})
 		end)
 		warn("[ISpooferMotion] Scan failed: " .. tostring(err))
+		setPluginGuiStatus("Scan Failed. Connected to Desktop App.")
 	end
 end

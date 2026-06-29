@@ -27,6 +27,7 @@ import DecalIcon from '../../assets/roblox_icons/Decal.png';
 import MeshIcon from '../../assets/roblox_icons/MeshPart.png';
 import SoundIcon from '../../assets/roblox_icons/Sound.png';
 import VideoIcon from '../../assets/roblox_icons/VideoFrame.png';
+import { commands } from '../../bindings';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
@@ -122,8 +123,11 @@ export default function SpoofingView() {
     setReplaceError,
     setIsReplacing,
     activeSpooferJobId,
+    setActiveSpooferJobId,
     lastAssetResults,
     keyframeWarningCount,
+    isJobPaused,
+    setIsJobPaused,
   } = useSpooferStore(
     useShallow((s) => ({
       rootInstances: s.rootInstances,
@@ -143,7 +147,11 @@ export default function SpoofingView() {
       setReplaceError: s.setReplaceError,
       setIsReplacing: s.setIsReplacing,
       activeSpooferJobId: s.activeSpooferJobId,
+      setActiveSpooferJobId: s.setActiveSpooferJobId,
+      isJobPaused: s.isJobPaused,
+      setIsJobPaused: s.setIsJobPaused,
       lastAssetResults: s.lastAssetResults,
+      setLastAssetResults: s.setLastAssetResults,
       keyframeWarningCount: s.keyframeWarningCount,
     })),
   );
@@ -366,13 +374,13 @@ export default function SpoofingView() {
     {
       value: 'animation',
       assetType: 'animation',
-      label: 'Animations',
+      label: t('explorer.animations'),
       icon: AnimationIcon,
     },
-    { value: 'audio', assetType: 'audio', label: 'Audio', icon: SoundIcon },
-    { value: 'images', assetType: 'image', label: 'Images', icon: DecalIcon },
-    { value: 'meshes', assetType: 'mesh', label: 'Meshes', icon: MeshIcon },
-    { value: 'videos', assetType: 'video', label: 'Videos', icon: VideoIcon },
+    { value: 'audio', assetType: 'audio', label: t('explorer.audio'), icon: SoundIcon },
+    { value: 'images', assetType: 'image', label: t('explorer.images'), icon: DecalIcon },
+    { value: 'meshes', assetType: 'mesh', label: t('explorer.meshes'), icon: MeshIcon },
+    { value: 'videos', assetType: 'video', label: t('explorer.videos'), icon: VideoIcon },
   ];
 
   const selectedSpoofTypes = spoofOptions
@@ -445,6 +453,8 @@ export default function SpoofingView() {
     if (!activeSpooferJobId) return;
     try {
       await invoke('spoofer_cancel', { jobId: activeSpooferJobId });
+      setActiveSpooferJobId(null);
+      setIsJobPaused(false);
       setLogs((prev) => appendSpoofingLog(prev, '[WARN] Spoofing cancellation requested.\n'));
     } catch (error) {
       logIsm('warn', `Could not cancel spoofer: ${String(error)}`, true);
@@ -602,52 +612,35 @@ export default function SpoofingView() {
     };
     gatherAllInfo(rootInstances);
 
-    const shouldIncludeSelectedId = (id: string) => {
+    const selectedTypes = new Set(
+      spoofOptions
+        .filter((option) => selectedSpoofTypes.includes(option.value))
+        .map((option) => option.assetType),
+    );
+    selectedTypes.add('script_ref');
+
+    const shouldIncludeSelectedId = (id: string, enforceType: boolean) => {
       const numId = parseInt(id, 10);
       if (isNaN(numId) || numId < 10000) return false;
       const type = assetInfoMap.get(id)?.type;
       if (type === 'plugin' && !config.advanced.enablePluginSpoofing) return false;
+      if (enforceType && type && !selectedTypes.has(type)) return false;
       return true;
     };
 
     const finalAssetIds = new Set<string>();
     if (overrideAssetIds) {
       overrideAssetIds.forEach((id) => {
-        if (shouldIncludeSelectedId(id)) finalAssetIds.add(id);
+        if (shouldIncludeSelectedId(id, false)) finalAssetIds.add(id);
       });
     } else {
-      const hasExplicitSelection = selectedAssetIds.size > 0 || extraIdsSet.size > 0;
-      selectedAssetIds.forEach((id) => {
-        if (shouldIncludeSelectedId(id)) finalAssetIds.add(id);
-      });
       extraIdsSet.forEach((id) => {
-        if (shouldIncludeSelectedId(id)) finalAssetIds.add(id);
+        if (shouldIncludeSelectedId(id, false)) finalAssetIds.add(id);
       });
 
-      if (!hasExplicitSelection) {
-        const selectedTypes = new Set(
-          spoofOptions
-            .filter((option) => selectedSpoofTypes.includes(option.value))
-            .map((option) => option.assetType),
-        );
-
-        selectedTypes.add('script_ref');
-
-        const gatherByType = (nodes: RbxInstance[]) => {
-          for (const node of nodes) {
-            for (const asset of node.assets) {
-              if (selectedTypes.has(asset.type)) {
-                const id = getAssetId(asset);
-                if (id && shouldIncludeSelectedId(id)) {
-                  finalAssetIds.add(id);
-                }
-              }
-            }
-            if (node.children) gatherByType(node.children);
-          }
-        };
-        gatherByType(rootInstances);
-      }
+      selectedAssetIds.forEach((id) => {
+        if (shouldIncludeSelectedId(id, true)) finalAssetIds.add(id);
+      });
     }
 
     if (finalAssetIds.size === 0) {
@@ -904,10 +897,10 @@ export default function SpoofingView() {
             >
               <Group>
                 <FormTextarea
-                  label="Additional IDs to Spoof"
+                  label={t('spoof.additionalIdsToSpoof')}
                   value={config.spoofing.extraAssetIds}
                   onChange={(val: string) => updateConfig('spoofing', 'extraAssetIds', val)}
-                  placeholder="e.g. 123456789, 987654321"
+                  placeholder={t('spoof.additionalIdsPlaceholder')}
                   style={{
                     height: '7.5rem',
                     maxHeight: '7.5rem',
@@ -970,6 +963,25 @@ export default function SpoofingView() {
                       />
                     )}
                   </Button>
+                  {activeSpooferJobId && (
+                    <Button
+                      variant="flat"
+                      color="secondary"
+                      className="h-12 px-6 font-semibold"
+                      startContent={isJobPaused ? <Play size={18} /> : <Ban size={18} className="rotate-90" />}
+                      onClick={async () => {
+                        if (isJobPaused) {
+                          await commands.spooferResume(activeSpooferJobId);
+                          setIsJobPaused(false);
+                        } else {
+                          await commands.spooferPause(activeSpooferJobId);
+                          setIsJobPaused(true);
+                        }
+                      }}
+                    >
+                      {isJobPaused ? 'Resume' : 'Pause'}
+                    </Button>
+                  )}
                   <Button
                     variant="flat"
                     color={activeSpooferJobId ? 'danger' : undefined}
@@ -1018,7 +1030,7 @@ export default function SpoofingView() {
         size="sm"
       >
         <ModalContent>
-          <ModalHeader>Audio quota exceeded</ModalHeader>
+          <ModalHeader>{t('misc.audioQuotaExceeded')}</ModalHeader>
           <ModalBody>
             <p className="text-sm leading-6 text-text-secondary">
               This run includes{' '}

@@ -31,7 +31,7 @@ export default function SettingsView() {
           >
             <AccordionItem
               value="account"
-              aria-label="Account"
+              aria-label={t('nav.account')}
               title={
                 <span className="flex items-center gap-3 font-semibold">
                   <User2 size={18} className="text-primary" /> Account
@@ -55,7 +55,7 @@ export default function SettingsView() {
 
             <AccordionItem
               value="quickSettings"
-              aria-label="Quick Settings"
+              aria-label={t('nav.quickSettings')}
               title={
                 <span className="flex items-center gap-3 font-semibold">
                   <SlidersHorizontal size={18} className="text-primary" /> Quick Settings
@@ -67,7 +67,7 @@ export default function SettingsView() {
 
             <AccordionItem
               value="debug"
-              aria-label="Debug & Display"
+              aria-label={t('settings.debugDisplay')}
               title={
                 <span className="flex items-center gap-3 font-semibold">
                   <Settings2 size={18} className="text-primary" /> Debug & Display

@@ -1,3 +1,4 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { Button, Modal, ModalBody, ModalContent, ModalHeader } from '@codycon/ism-library';
 import { useQuery } from '@tanstack/react-query';
 import { motion, Variants } from 'framer-motion';
@@ -12,6 +13,7 @@ export default function CreditsModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const { data, isLoading: loading } = useQuery({
     queryKey: ['supporters'],
     queryFn: async () => {
@@ -141,7 +143,7 @@ export default function CreditsModal({
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-xs italic text-text-muted">Be the first!</p>
+                  <p className="text-xs italic text-text-muted">{t('misc.beTheFirst')}</p>
                 )}
               </div>
 
@@ -169,7 +171,7 @@ export default function CreditsModal({
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-xs italic text-text-muted">Be the first!</p>
+                  <p className="text-xs italic text-text-muted">{t('misc.beTheFirst')}</p>
                 )}
               </div>
             </motion.div>

@@ -1,3 +1,4 @@
+import { useLanguage } from '../../../contexts/LanguageContext';
 import { Button, MultiSelectToggle } from '@codycon/ism-library';
 import { ChevronRight, Copy, Image as ImageIcon, Play, Square, ZoomIn } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -38,6 +39,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   activeAssetFilters: string[];
   playingAudioId: string | null;
 }) {
+  const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [expandedAssetKey, setExpandedAssetKey] = useState<string | null>(null);
   const matchesFilter = (type: string) =>
@@ -177,7 +179,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 min-w-6 text-primary"
-                title="Preview animation"
+                title={t('explorer.previewAnimation')}
                 onClick={(event: any) => {
                   event.stopPropagation();
                   setPreviewingAnimation({
@@ -209,7 +211,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
               variant="ghost"
               size="sm"
               className="h-6 w-6 min-w-6"
-              title="Copy asset id"
+              title={t('explorer.copyAssetId')}
               onClick={(event: any) => {
                 event.stopPropagation();
                 void copyAssetId(asset);
@@ -223,10 +225,10 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
         {isOpen && (
           <div className="overflow-hidden">
             <div className="mx-2 mb-2 rounded border border-border-subtle bg-bg-base/80 px-2.5 py-2 text-[9px] text-text-muted">
-              <DetailLine label="Path" value={asset.path} />
-              <DetailLine label="ID" value={assetId} />
-              <DetailLine label="Property" value={asset.propertyName || 'Unknown'} />
-              <DetailLine label="Class" value={asset.className || 'Unknown'} />
+              <DetailLine label={t('explorer.path')} value={asset.path} />
+              <DetailLine label={t('explorer.id')} value={assetId} />
+              <DetailLine label={t('explorer.property')} value={asset.propertyName || 'Unknown'} />
+              <DetailLine label={t('explorer.class')} value={asset.className || 'Unknown'} />
             </div>
           </div>
         )}

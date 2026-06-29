@@ -306,97 +306,82 @@ pub async fn resolve_script_references(
     remaining_ids.retain(|id| !resolved_map.contains_key(id));
 
     let app_arc = Arc::new(app);
-    let resolved_count = Arc::new(std::sync::atomic::AtomicUsize::new(total - remaining_ids.len()));
+    let mut resolved_count = total - remaining_ids.len();
     
     emit_script_ref_progress(
         &app_arc,
         ScriptRefProgress {
-            resolved: resolved_count.load(std::sync::atomic::Ordering::Relaxed),
+            resolved: resolved_count,
             total,
             asset_id: String::new(),
             resolved_category: None,
         },
     );
 
-    let semaphore = Arc::new(Semaphore::new(12));
-    let mut tasks = Vec::new();
+    let valid_ids: Vec<String> = remaining_ids.into_iter().filter(|id| id.parse::<u64>().is_ok()).collect();
+    
+    for chunk in valid_ids.chunks(100) {
+        let items: Vec<serde_json::Value> = chunk.iter().map(|id| {
+            serde_json::json!({
+                "assetId": id.parse::<u64>().unwrap_or(0),
+                "requestId": id
+            })
+        }).collect();
 
-    for asset_id in remaining_ids {
-        let sem = Arc::clone(&semaphore);
-        let cli = Arc::clone(&client);
-        let app_arc_clone = Arc::clone(&app_arc);
-        let count_clone = Arc::clone(&resolved_count);
+        if let Ok(resp) = client.post("https://assetdelivery.roblox.com/v2/assets/batch")
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .json(&items)
+            .send().await {
+            
+            if let Ok(json) = resp.json::<Vec<serde_json::Value>>().await {
+                for item in json {
+                    if let Some(request_id) = item.get("requestId").and_then(|v| v.as_str()) {
+                        let mut is_false_positive = false;
+                        let mut category = None;
 
-        tasks.push(tokio::spawn(async move {
-            let Ok(_permit) = sem.acquire().await else {
-                return (asset_id, None, false);
-            };
+                        if let Some(errors) = item.get("errors").and_then(|v| v.as_array()) {
+                            if errors.iter().any(|e| e.get("code").and_then(serde_json::Value::as_u64) == Some(404) || e.get("code").and_then(serde_json::Value::as_u64) == Some(401)) {
+                                is_false_positive = true;
+                            }
+                        }
 
-            let url = format!("https://economy.roblox.com/v2/assets/{asset_id}/details");
-            let mut category = None;
-            let mut is_false_positive = false;
-
-            for attempt in 0..4 {
-                if attempt > 0 {
-                    tokio::time::sleep(Duration::from_millis(2000 * attempt)).await;
-                }
-
-                if let Ok(resp) = cli.get(&url).send().await {
-                    if resp.status().as_u16() == 429 {
-                        continue;
-                    }
-                    if resp.status().as_u16() == 404 {
-                        is_false_positive = true;
-                        break;
-                    }
-                    if resp.status().is_success() {
-                        if let Ok(data) = resp.json::<EconomyAssetDetails>().await {
-                            if let Some(type_id) = data.asset_type_id {
+                        if !is_false_positive {
+                            if let Some(type_id) = item.get("assetTypeId").and_then(serde_json::Value::as_u64) {
                                 category = match type_id {
                                     24 => Some("animation".to_string()),
                                     3 => Some("sound".to_string()),
                                     1 | 11 | 13 | 2 | 21 | 22 | 38 => Some("image".to_string()),
                                     40 | 43 | 17 | 12 => Some("mesh".to_string()),
-                                    0 => {
-                                        is_false_positive = true;
+                                    _ => {
+                                        if type_id == 0 {
+                                            is_false_positive = true;
+                                        }
                                         None
-                                    }
-                                    _ => None,
+                                    },
                                 };
                             }
                         }
+
+                        if is_false_positive {
+                            resolved_map.insert(request_id.to_string(), "false_positive".to_string());
+                        } else if let Some(cat) = &category {
+                            resolved_map.insert(request_id.to_string(), cat.clone());
+                        }
+
+                        resolved_count += 1;
+                        emit_script_ref_progress(
+                            &app_arc,
+                            ScriptRefProgress {
+                                resolved: resolved_count,
+                                total,
+                                asset_id: request_id.to_string(),
+                                resolved_category: if is_false_positive { Some("false_positive".to_string()) } else { category },
+                            },
+                        );
                     }
-                    break;
                 }
             }
-
-            let current_resolved =
-                count_clone.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-            emit_script_ref_progress(
-                &app_arc_clone,
-                ScriptRefProgress {
-                    resolved: current_resolved,
-                    total,
-                    asset_id: asset_id.clone(),
-                    resolved_category: if is_false_positive {
-                        Some("false_positive".to_string())
-                    } else {
-                        category.clone()
-                    },
-                },
-            );
-
-            (asset_id, category, is_false_positive)
-        }));
-    }
-
-    let results = futures::future::join_all(tasks).await;
-    for res in results.into_iter().flatten() {
-        let (asset_id, category, is_false_positive) = res;
-        if is_false_positive {
-            resolved_map.insert(asset_id, "false_positive".to_string());
-        } else if let Some(cat) = category {
-            resolved_map.insert(asset_id, cat);
         }
     }
 

@@ -121,7 +121,7 @@ export function addDebugLog(
         if (config?.general?.desktopNotifications) {
           invoke('show_notification', {
             options: {
-              title: level === 'success' ? 'ISpooferMotion - Success' : 'ISpooferMotion - Error',
+              title: level === 'success' ? `ISpooferMotion - Success` : `ISpooferMotion - Error`,
               body: entry.message,
             },
           }).catch(() => {});

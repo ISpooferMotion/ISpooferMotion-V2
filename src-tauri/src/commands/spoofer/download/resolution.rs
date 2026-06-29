@@ -176,9 +176,6 @@ pub fn build_direct_asset_download_urls(
         );
     }
 
-    push_unique_url(&mut urls, format!("https://assetgame.roblox.com/asset/?id={asset_id}"));
-    push_unique_url(&mut urls, format!("https://assetdelivery.roblox.com/v2/assetId/{asset_id}"));
-
     urls
 }
 

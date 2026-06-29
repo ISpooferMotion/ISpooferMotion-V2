@@ -1,3 +1,4 @@
+import { useLanguage } from './contexts/LanguageContext';
 import { IsmProvider } from '@codycon/ism-library';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -44,6 +45,8 @@ function resolveThemeBackgroundUrl(path: string) {
 }
 
 export default function App() {
+  const { t } = useLanguage();
+
   const [isCreditsOpen, setCreditsOpen] = useState(false);
   const { customBackground } = useThemeAccent();
   const { config, updateConfig } = useConfig();
@@ -258,7 +261,7 @@ export default function App() {
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
           </svg>
         </div>
-        <h1 className="text-3xl font-bold tracking-tight">Maintenance Break</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t('misc.maintenanceBreak')}</h1>
         <p className="text-text-muted max-w-md">
           {maintenance.message ||
             'ISpooferMotion is currently down for maintenance. Please check back later!'}

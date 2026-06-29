@@ -59,7 +59,7 @@ export default function DebugSection() {
       </Row>
       <Row>
         <FormToggle
-          label="Enable Experimental Tab"
+          label={t('settings.enableExperimental')}
           checked={config.debug.enableExperimentalTab}
           onChange={(v: boolean) => updateConfig('debug', 'enableExperimentalTab', v)}
         />
@@ -74,7 +74,7 @@ export default function DebugSection() {
         />
 
         <Button
-          label="Open Logs Folder"
+          label={t('settings.openLogsFolder')}
           variant="bordered"
           fullWidth={true}
           startContent={<FolderOpen size={16} />}
@@ -86,7 +86,7 @@ export default function DebugSection() {
         />
 
         <Button
-          label="Open App Log"
+          label={t('settings.openAppLog')}
           variant="bordered"
           fullWidth={true}
           startContent={<Terminal size={16} />}

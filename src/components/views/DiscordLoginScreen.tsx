@@ -1,3 +1,4 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { Button } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
@@ -12,6 +13,8 @@ interface Props {
 }
 
 export default function DiscordLoginScreen({ onVerified }: Props) {
+  const { t } = useLanguage();
+
   const [pendingAuth, setPendingAuth] = useState<StoredDiscordAuth | null>(null);
 
   const { loginState, errorMessage, startLogin, cancelLogin } = useDiscordLogin((auth) => {
@@ -46,7 +49,7 @@ export default function DiscordLoginScreen({ onVerified }: Props) {
               <span className="text-2xl font-bold tracking-tight text-text-primary">
                 {pendingAuth.user?.globalName || pendingAuth.user?.username || 'Unknown User'}
               </span>
-              <span className="text-[15px] font-medium text-text-muted">Is this you?</span>
+              <span className="text-[15px] font-medium text-text-muted">{t('misc.isThisYou')}</span>
             </div>
           </div>
 
@@ -99,7 +102,7 @@ export default function DiscordLoginScreen({ onVerified }: Props) {
               />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-text-primary">Welcome</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-text-primary">{t('misc.welcome')}</h1>
           <p className="text-[15px] text-text-muted leading-relaxed px-4">
             Connect your Discord account to continue. Your browser will open to authenticate.
           </p>

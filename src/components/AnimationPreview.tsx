@@ -1,3 +1,4 @@
+import { useLanguage } from '../contexts/LanguageContext';
 import { Button, Spinner } from '@codycon/ism-library';
 import { invoke } from '@tauri-apps/api/core';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -77,6 +78,7 @@ function flattenPoses(poses: RobloxPose[]): Map<string, RobloxPose> {
   // much faster than traversing the tree every single frame
   const map = new Map<string, RobloxPose>();
   const walk = (list: RobloxPose[]) => {
+
     for (const p of list) {
       map.set(p.name, p);
       walk(p.children);
@@ -121,6 +123,7 @@ const toMat4InPlace = (r: number[], target: THREE.Matrix4) =>
   target.set(r[0], r[1], r[2], 0, r[3], r[4], r[5], 0, r[6], r[7], r[8], 0, 0, 0, 0, 1);
 
 export default function AnimationPreview({ assetId, assetName, onClose }: AnimationPreviewProps) {
+  const { t } = useLanguage();
   const mountRef = useRef<HTMLDivElement>(null);
   const { config } = useConfig();
   const cookie = config.spoofing.cookie || undefined;
@@ -607,7 +610,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
                     })
                   }
                   className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border border-border-subtle hover:border-primary hover:text-primary transition-colors text-text-muted"
-                  title="Toggle Rig Type"
+                  title={t('misc.toggleRigType')}
                 >
                   {rigType}
                 </button>
@@ -637,7 +640,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
                 className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-base"
               >
                 <Spinner size="lg" />
-                <p className="text-[13px] text-text-muted font-medium">Fetching animation…</p>
+                <p className="text-[13px] text-text-muted font-medium">{t('misc.fetchingAnimation')}</p>
               </motion.div>
             )}
 

@@ -1,3 +1,4 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronRight, Copy } from 'lucide-react';
 import { useState } from 'react';
@@ -12,6 +13,8 @@ interface JsonViewerProps {
 }
 
 export function JsonViewer({ data, name, defaultExpanded = false, level = 0 }: JsonViewerProps) {
+  const { t } = useLanguage();
+
   const [isExpanded, setIsExpanded] = useState(defaultExpanded || level < 2);
   const [isCopied, setIsCopied] = useState(false);
 
@@ -83,7 +86,7 @@ export function JsonViewer({ data, name, defaultExpanded = false, level = 0 }: J
           <button
             onClick={handleCopy}
             className="ml-auto opacity-0 group-hover:opacity-100 p-1 hover:bg-primary/10 hover:text-primary text-text-muted rounded transition-all"
-            title="Copy JSON"
+            title={t('misc.copyJson')}
           >
             {isCopied ? <Check size={12} /> : <Copy size={12} />}
           </button>

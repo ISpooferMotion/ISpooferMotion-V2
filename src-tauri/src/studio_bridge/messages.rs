@@ -1050,86 +1050,9 @@ fn replace_script_asset_ids<'a>(
     source: &'a str,
     mappings: &HashMap<&str, &str>,
 ) -> std::borrow::Cow<'a, str> {
-    struct AstReplacer<'m> {
-        mappings: &'m HashMap<&'m str, &'m str>,
-    }
-
-    impl<'m> full_moon::visitors::VisitorMut for AstReplacer<'m> {
-        fn visit_string_literal(
-            &mut self,
-            token: full_moon::tokenizer::Token,
-        ) -> full_moon::tokenizer::Token {
-            let mut text = token.to_string();
-            let mut changed = false;
-            for (old, new) in self.mappings {
-                if text.contains(old) {
-                    text = text.replace(old, new);
-                    changed = true;
-                }
-            }
-            if changed {
-                let (depth, q_type) = match token.token_type() {
-                    full_moon::tokenizer::TokenType::StringLiteral {
-                        multi_line_depth,
-                        quote_type,
-                        ..
-                    } => (*multi_line_depth, *quote_type),
-                    _ => (0, full_moon::tokenizer::StringLiteralQuoteType::Double),
-                };
-
-                let offset = match q_type {
-                    full_moon::tokenizer::StringLiteralQuoteType::Brackets => 2 + depth,
-                    _ => 1,
-                };
-
-                let inner_literal = if text.len() >= offset * 2 {
-                    &text[offset..text.len() - offset]
-                } else {
-                    &text
-                };
-
-                return full_moon::tokenizer::Token::new(
-                    full_moon::tokenizer::TokenType::StringLiteral {
-                        literal: inner_literal.to_string().into(),
-                        multi_line_depth: depth,
-                        quote_type: q_type,
-                    },
-                );
-            }
-            token
-        }
-
-        fn visit_number(
-            &mut self,
-            token: full_moon::tokenizer::Token,
-        ) -> full_moon::tokenizer::Token {
-            let text = token.to_string();
-            let mut replaced = text.clone();
-            for (old, new) in self.mappings {
-                if replaced == *old {
-                    replaced = (*new).to_string();
-                }
-            }
-            if replaced != text {
-                return full_moon::tokenizer::Token::new(full_moon::tokenizer::TokenType::Number {
-                    text: replaced.into(),
-                });
-            }
-            token
-        }
-    }
-
-    if let Ok(ast) = full_moon::parse(source) {
-        let mut replacer = AstReplacer { mappings };
-        let new_ast = full_moon::visitors::VisitorMut::visit_ast(&mut replacer, ast);
-        let new_source = new_ast.to_string();
-        if new_source != source {
-            return std::borrow::Cow::Owned(new_source);
-        }
-        return std::borrow::Cow::Borrowed(source);
-    }
-
-    // Fallback to regex if parsing fails
+    // We removed full_moon AST parsing because deeply nested or obfuscated scripts 
+    // cause a stack overflow in Rust which silently crashes the entire desktop app.
+    // Fallback to regex is sufficient and much faster.
     script_rewrite_pattern().replace_all(source, |captures: &Captures<'_>| {
         let prefix = captures.get(1).map_or("", |item| item.as_str());
         let asset_id = captures.get(2).map_or("", |item| item.as_str());

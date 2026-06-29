@@ -1,3 +1,4 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { Button, Modal, ModalBody, ModalContent, ModalHeader } from '@codycon/ism-library';
 import { motion, Variants } from 'framer-motion';
 import { ArrowRight, Check, Copy, ListChecks, X } from 'lucide-react';
@@ -12,12 +13,14 @@ export default function ResultsModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const { lastReplacements } = useSpooferStore();
   const [copied, setCopied] = useState(false);
 
   const replacementsArray = Object.entries(lastReplacements);
 
   const handleCopyAll = () => {
+
     const text = replacementsArray.map(([oldId, newId]) => `${oldId} -> ${newId}`).join('\n');
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -61,7 +64,7 @@ export default function ResultsModal({
         <ModalBody className="pb-6">
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-text-primary">Asset ID Mappings</span>
+              <span className="text-sm font-semibold text-text-primary">{t('misc.assetIdMappings')}</span>
               {replacementsArray.length > 0 && (
                 <Button size="sm" variant="flat" onClick={handleCopyAll} className="gap-2">
                   {copied ? <Check size={16} className="text-success" /> : <Copy size={16} />}
@@ -77,23 +80,28 @@ export default function ResultsModal({
                 animate="show"
                 className="flex flex-col gap-2 max-h-100 overflow-y-auto pr-2"
               >
-                {replacementsArray.map(([oldId, newId]) => (
+                {replacementsArray.slice(0, 100).map(([oldId, newId]) => (
                   <motion.div
                     key={oldId}
                     variants={item}
                     className="flex items-center justify-between p-3 rounded-md bg-bg-surface border border-border-strong"
                   >
                     <div className="flex flex-col">
-                      <span className="text-xs text-text-secondary font-medium">Original ID</span>
+                      <span className="text-xs text-text-secondary font-medium">{t('misc.originalId')}</span>
                       <span className="text-sm font-mono font-semibold text-danger">{oldId}</span>
                     </div>
                     <ArrowRight size={16} className="text-text-secondary opacity-50" />
                     <div className="flex flex-col text-right">
-                      <span className="text-xs text-text-secondary font-medium">Spoofed ID</span>
+                      <span className="text-xs text-text-secondary font-medium">{t('misc.spoofedId')}</span>
                       <span className="text-sm font-mono font-semibold text-success">{newId}</span>
                     </div>
                   </motion.div>
                 ))}
+                {replacementsArray.length > 100 && (
+                  <div className="p-3 text-center text-xs font-medium text-text-secondary bg-bg-surface border border-border-strong rounded-md">
+                    + {replacementsArray.length - 100} more replacements (use Copy All to view)
+                  </div>
+                )}
               </motion.div>
             ) : (
               <div className="p-8 text-center text-text-secondary bg-bg-surface rounded-lg border border-border-strong border-dashed">

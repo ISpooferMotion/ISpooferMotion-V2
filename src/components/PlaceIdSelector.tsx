@@ -10,6 +10,7 @@ export interface PlaceIdSelectorProps {
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  suggestions?: SearchResult[];
 }
 
 interface SearchResult {
@@ -25,6 +26,7 @@ export default function PlaceIdSelector({
   value,
   onChange,
   className = '',
+  suggestions = [],
 }: PlaceIdSelectorProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -69,8 +71,8 @@ export default function PlaceIdSelector({
 
   useEffect(() => {
     if (!localValue.trim() || /^\d+$/.test(localValue.trim())) {
-      setResults([]);
-      setShowDropdown(false);
+      setResults(suggestions);
+      setShowDropdown(suggestions.length > 0 && !/^\d+$/.test(localValue.trim()));
       return;
     }
 
@@ -108,7 +110,10 @@ export default function PlaceIdSelector({
         ref={inputRef}
         className="relative"
         onFocusCapture={() => {
-          if (results.length > 0) setShowDropdown(true);
+          if (!localValue.trim() && suggestions.length > 0) {
+            setResults(suggestions);
+            setShowDropdown(true);
+          } else if (results.length > 0) setShowDropdown(true);
         }}
       >
         <FormInput
@@ -125,7 +130,7 @@ export default function PlaceIdSelector({
       </div>
 
       <AnimatePresence>
-        {showDropdown && localValue.trim() && !/^\d+$/.test(localValue.trim()) && (
+        {showDropdown && !/^\d+$/.test(localValue.trim()) && (
           <motion.div
             ref={dropdownRef}
             initial={{ opacity: 0, y: -10 }}

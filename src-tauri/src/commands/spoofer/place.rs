@@ -372,6 +372,45 @@ pub async fn get_universe_id_from_place_id(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn get_place_id_from_universe_id(
+    universe_id: String,
+    cookie: String,
+) -> crate::error::Result<String> {
+    static UNIVERSE_TO_PLACE_CACHE: std::sync::OnceLock<dashmap::DashMap<String, String>> =
+        std::sync::OnceLock::new();
+    let cache = UNIVERSE_TO_PLACE_CACHE.get_or_init(dashmap::DashMap::new);
+
+    if let Some(cached) = cache.get(&universe_id) {
+        return Ok(cached.value().clone());
+    }
+
+    let cookie_header = build_roblox_cookie_header(&cookie);
+    let client = crate::utils::get_http_client();
+    let url = format!("https://games.roblox.com/v1/games?universeIds={universe_id}");
+
+    let resp = client.get(&url).header(COOKIE, cookie_header).send().await?;
+
+    if !resp.status().is_success() {
+        return Err("Failed to resolve Place ID from Universe ID".into());
+    }
+
+    let data: serde_json::Value = resp.json().await?;
+    let place_id =
+        data.get("data").and_then(|d| d.as_array()).and_then(|arr| arr.first()).and_then(|obj| obj.get("rootPlaceId")).and_then(
+            |id| {
+                id.as_u64().map(|n| n.to_string()).or_else(|| id.as_str().map(ToString::to_string))
+            },
+        );
+
+    if let Some(pid) = &place_id {
+        cache.insert(universe_id, pid.clone());
+    }
+
+    place_id.ok_or_else(|| "Place ID not found".into())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn clear_downloads_directory_command(app: AppHandle) -> crate::error::Result<bool> {
     let downloads_dir = app.path().app_data_dir()?.join("downloads");
     crate::utils::clear_downloads_directory(&downloads_dir).await.map_err(Into::into)

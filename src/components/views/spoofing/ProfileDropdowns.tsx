@@ -1,3 +1,4 @@
+import { useLanguage } from '../../../contexts/LanguageContext';
 import { Spinner } from '@codycon/ism-library';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Users, UserSquare2 } from 'lucide-react';
@@ -122,8 +123,9 @@ export function AvatarDropdown({
   onChange: (value: string) => void;
   loading: boolean;
   audioQuota: AudioQuotaDisplay;
-  showAudioQuota: boolean;
+  showAudioQuota?: boolean;
 }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 200 });
@@ -142,6 +144,7 @@ export function AvatarDropdown({
             : 'Audio quota: unavailable';
 
   const toggle = () => {
+
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       setCoords({ top: rect.bottom + 4, left: rect.left, width: rect.width });
@@ -152,7 +155,7 @@ export function AvatarDropdown({
   return (
     <div className="flex w-full flex-col gap-1.5">
       <div className="flex items-center justify-between w-full">
-        <span className="text-sm font-medium text-text-primary mr-4 shrink-0">Selected User</span>
+        <span className="text-sm font-medium text-text-primary mr-4 shrink-0">{t('spoof.selectedUser')}</span>
         <button
           ref={buttonRef}
           type="button"
@@ -270,6 +273,7 @@ export function GroupDropdown({
   onChange: (value: string) => void;
   loading: boolean;
 }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 200 });
@@ -285,7 +289,7 @@ export function GroupDropdown({
 
   return (
     <div className="flex items-center justify-between w-full">
-      <span className="text-sm font-medium text-text-primary mr-4 shrink-0">Selected Group</span>
+      <span className="text-sm font-medium text-text-primary mr-4 shrink-0">{t('spoof.selectedGroup')}</span>
       <button
         ref={buttonRef}
         type="button"

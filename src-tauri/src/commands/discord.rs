@@ -379,6 +379,12 @@ pub async fn close_discord_poll(poll_id: Option<String>) -> crate::error::Result
     read_api_response(response, "Could not close poll").await.map(AnyValue)
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub struct AnyValue(pub serde_json::Value);
+
+impl specta::Type for AnyValue {
+    fn definition(_types: &mut specta::Types) -> specta::datatype::DataType {
+        specta::datatype::DataType::Primitive(specta::datatype::Primitive::str)
+    }
+}

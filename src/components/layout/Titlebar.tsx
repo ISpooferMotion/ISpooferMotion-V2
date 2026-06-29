@@ -1,3 +1,4 @@
+import { useLanguage } from '../../contexts/LanguageContext';
 import { IconButton, Toolbar } from '@codycon/ism-library';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -14,6 +15,8 @@ import { isTauriRuntime } from '../../utils/tauriRuntime';
 import QuickSettingsMenu from './QuickSettingsMenu';
 
 export default function Titlebar() {
+  const { t } = useLanguage();
+
   const { customLogo } = useThemeAccent();
   const { config, updateConfig } = useConfig();
   const [appVersion, setAppVersion] = useState<string>('');
@@ -104,17 +107,17 @@ export default function Titlebar() {
           <QuickSettingsMenu />
         </div>
         <IconButton
-          label="Toggle Debug Console"
+          label={t('debug.toggleDebugConsole')}
           tone="primary"
           onClick={() => updateConfig('debug', 'debugMode', !config.debug?.debugMode)}
         >
           <Terminal size={16} />
         </IconButton>
         <div className="mx-1 h-5 w-px shrink-0 bg-border-subtle" aria-hidden="true" />
-        <IconButton label="Minimize" onClick={handleMinimize}>
+        <IconButton label={t('debug.minimize')} onClick={handleMinimize}>
           <Minus size={16} />
         </IconButton>
-        <IconButton label="Close" tone="danger" onClick={handleClose}>
+        <IconButton label={t('debug.close')} tone="danger" onClick={handleClose}>
           <X size={16} />
         </IconButton>
       </Toolbar>

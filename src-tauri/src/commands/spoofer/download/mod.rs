@@ -122,6 +122,19 @@ pub async fn download_animation_asset_with_progress(
         push_unique_url(&mut candidate_urls, url);
     }
 
+    if matches!(asset_type.as_deref(), Some("Audio") | Some("Sound")) {
+        if let Some(cdn_url) =
+            api::get_scraped_asset_cdn_url(&client, &asset_id).await
+        {
+            emit_spoofer_log(
+                &app,
+                "info",
+                &format!("Web scraper fallback found CDN URL for audio asset {asset_id}."),
+            );
+            push_unique_url(&mut candidate_urls, cdn_url);
+        }
+    }
+
     if place_ids.is_empty() {
         let usage_place_ids =
             attempt_asset_usage_place_id_discovery(&asset_id, &cookie_header).await;

@@ -47,6 +47,9 @@ interface SpooferState {
   activeSpooferJobId: string | null;
   setActiveSpooferJobId: (id: string | null) => void;
 
+  isJobPaused: boolean;
+  setIsJobPaused: (val: boolean) => void;
+
   lastAssetResults: SpooferAssetResult[];
   setLastAssetResults: (results: SpooferAssetResult[]) => void;
 
@@ -114,6 +117,9 @@ export const useSpooferStore = create<SpooferState>((set) => ({
   activeSpooferJobId: null,
   setActiveSpooferJobId: (id) => set({ activeSpooferJobId: id }),
 
+  isJobPaused: false,
+  setIsJobPaused: (val) => set({ isJobPaused: val }),
+
   lastAssetResults: [],
   setLastAssetResults: (results) => set({ lastAssetResults: results }),
 
@@ -174,10 +180,11 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
     } else {
       await queueStudioReplacements(replacements, config.advanced.pluginPort);
       setSpoofingLogs((prev) =>
-        appendSpoofingLog(prev, 'Queued replacements to plugin bridge. Run the plugin in Studio!'),
+        appendSpoofingLog(prev, 'Queued replacements to plugin bridge. The Studio plugin will auto-replace them automatically! (Note: ensure you have run a Scan in Studio first)'),
       );
     }
     setLastReplacements(replacements);
+
   } catch (e: unknown) {
     setReplaceError(true);
     notifyError('Replacement Error', String(e));

@@ -169,9 +169,9 @@ export default function CredentialsSection() {
             </span>
           }
           options={[
-            { value: 'none', label: 'Disabled' },
-            { value: 'studio', label: 'Roblox Studio' },
-            { value: 'browser', label: 'Web Browser' },
+            { value: 'none', label: t('explorer.disabled') },
+            { value: 'studio', label: t('explorer.robloxStudio') },
+            { value: 'browser', label: t('explorer.webBrowser') },
           ]}
           value={getCookieDetectionMode()}
           onChange={handleCookieDetectionChange}
@@ -194,7 +194,7 @@ export default function CredentialsSection() {
         }}
       >
         <FormInput
-          label="Roblox Cookie"
+          label={t('spoof.cookie')}
           placeholder={
             <AnimatePresence mode="wait">
               <motion.span
@@ -233,8 +233,8 @@ export default function CredentialsSection() {
               type="button"
               onClick={handleValidateApiKey}
               className="p-1 rounded text-text-muted hover:text-primary transition-colors disabled:opacity-50"
-              aria-label="Validate Open Cloud API key"
-              title="Validate Open Cloud API key"
+              aria-label={t('common.apply')}
+              title={t('misc.validateOpenCloudKey')}
               disabled={apiKeyStatus === 'loading'}
             >
               {apiKeyStatus === 'loading' ? (

@@ -22,7 +22,11 @@ export default function ExecutionLogs({
 
   useEffect(() => {
     if (outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
+      const { scrollTop, scrollHeight, clientHeight } = outputRef.current;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      if (isAtBottom) {
+        outputRef.current.scrollTop = scrollHeight;
+      }
     }
   }, [logs]);
 
@@ -52,7 +56,7 @@ export default function ExecutionLogs({
       <div
         ref={outputRef}
         className="w-full rounded-[var(--radius-md)] border border-border-strong bg-bg-surface p-3 font-mono text-[13px] font-medium text-text-primary shadow-inner overflow-y-auto whitespace-pre-wrap break-words"
-        style={{ height: '13rem' }}
+        style={{ height: '24rem', minHeight: '13rem', maxHeight: '50vh' }}
       >
         {logs && logs.length > 0 ? (
           <div className="flex flex-col gap-1">

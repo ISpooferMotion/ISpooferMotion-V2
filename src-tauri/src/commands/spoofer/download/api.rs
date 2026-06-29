@@ -10,6 +10,32 @@ use std::collections::HashMap;
 use tauri::AppHandle;
 
 // hits the asset delivery api to actually pull the raw bytes, spoofing the user agent if needed
+pub async fn get_scraped_asset_cdn_url(
+    client: &reqwest::Client,
+    asset_id: &str,
+) -> Option<String> {
+    let url = format!("https://www.roblox.com/library/{}/", asset_id);
+    if let Ok(resp) = client
+        .get(&url)
+        .header(USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36")
+        .send()
+        .await
+    {
+        if resp.status().is_success() {
+            if let Ok(text) = resp.text().await {
+                // look for data-mediathumb-url="([^"]+)"
+                if let Some(idx) = text.find("data-mediathumb-url=\"") {
+                    let start = idx + 21;
+                    if let Some(end_idx) = text[start..].find('"') {
+                        return Some(text[start..start + end_idx].to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 pub async fn send_asset_download_request_ua(
     client: &reqwest::Client,
     url: &str,

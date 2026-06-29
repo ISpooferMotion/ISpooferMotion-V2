@@ -3,11 +3,11 @@
 #[specta::specta]
 // sends the final asset mappings over to the roblox studio plugin so it can actually swap the ids in their game
 pub async fn push_to_studio(
-    replacements_map: serde_json::Value,
+    replacements_map: crate::commands::discord::AnyValue,
     plugin_port: Option<String>,
 ) -> crate::error::Result<bool> {
     log::info!("push_to_studio called with replacements_map: {:?}", replacements_map);
-    let mappings = replacements_map
+    let mappings = replacements_map.0
         .as_object()
         .cloned()
         .map(|replacements| {

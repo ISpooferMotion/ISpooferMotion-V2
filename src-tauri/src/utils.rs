@@ -53,32 +53,53 @@ pub fn get_http_client_with_proxy(proxy_url: Option<&str>) -> reqwest::Client {
     build_client(proxy_url)
 }
 
-// Try to guess how long we need to wait before trying an API again.
-// Handles both Discord's x-ratelimit-reset and standard retry-after.
+// Checks for explicitly exhausted rate limits and standard retry-after.
+// Returns Some(milliseconds_to_wait) if we need to back off.
 #[must_use]
 pub fn extract_retry_after(response: &reqwest::Response) -> Option<u64> {
-    if let Some(reset) = response.headers().get("x-ratelimit-reset") {
-        if let Ok(reset_str) = reset.to_str() {
-            if let Ok(reset_secs) = reset_str.parse::<u64>() {
-                if let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                {
-                    let now_secs = now.as_secs();
-                    if reset_secs > now_secs {
-                        return Some((reset_secs - now_secs) * 1000);
+    let mut needs_wait = false;
+    
+    // Explicit rate limit exhaustion
+    if let Some(remaining) = response.headers().get("x-ratelimit-remaining") {
+        if let Ok(rem_str) = remaining.to_str() {
+            if rem_str == "0" {
+                needs_wait = true;
+            }
+        }
+    }
+
+    if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        needs_wait = true;
+    }
+
+    if needs_wait {
+        if let Some(reset) = response.headers().get("x-ratelimit-reset") {
+            if let Ok(reset_str) = reset.to_str() {
+                if let Ok(reset_secs) = reset_str.parse::<u64>() {
+                    if let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                    {
+                        let now_secs = now.as_secs();
+                        if reset_secs > now_secs {
+                            return Some((reset_secs - now_secs) * 1000);
+                        }
+                        return Some(0);
                     }
-                    return Some(0);
                 }
             }
         }
-    }
-    // Fallback to standard retry-after if the fancy one isn't there
-    if let Some(retry) = response.headers().get("retry-after") {
-        if let Ok(retry_str) = retry.to_str() {
-            if let Ok(retry_secs) = retry_str.parse::<u64>() {
-                return Some(retry_secs * 1000);
+        
+        // Fallback to standard retry-after if the fancy one isn't there
+        if let Some(retry) = response.headers().get("retry-after") {
+            if let Ok(retry_str) = retry.to_str() {
+                if let Ok(retry_secs) = retry_str.parse::<u64>() {
+                    return Some(retry_secs * 1000);
+                }
             }
         }
+        
+        return Some(2000); // generic wait if we got 429 or 0 remaining but no reset header
     }
+
     None
 }
 

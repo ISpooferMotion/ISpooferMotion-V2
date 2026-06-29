@@ -28,11 +28,11 @@ export default function UploadSection() {
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
 
   const uploadOptions = [
-    { value: 'animation', assetType: 'animation', label: 'Animations', icon: AnimationIcon },
-    { value: 'audio', assetType: 'audio', label: 'Audio', icon: SoundIcon },
-    { value: 'image', assetType: 'image', label: 'Images', icon: DecalIcon },
-    { value: 'mesh', assetType: 'mesh', label: 'Meshes', icon: MeshIcon },
-    { value: 'script_ref', assetType: 'script_ref', label: 'Script Refs', icon: ScriptIcon },
+    { value: 'animation', assetType: 'animation', label: t('explorer.animations'), icon: AnimationIcon },
+    { value: 'audio', assetType: 'audio', label: t('explorer.audio'), icon: SoundIcon },
+    { value: 'image', assetType: 'image', label: t('explorer.images'), icon: DecalIcon },
+    { value: 'mesh', assetType: 'mesh', label: t('explorer.meshes'), icon: MeshIcon },
+    { value: 'script_ref', assetType: 'script_ref', label: t('explorer.scriptRefs'), icon: ScriptIcon },
   ];
 
   const handleBrowseFolder = async () => {
@@ -53,14 +53,14 @@ export default function UploadSection() {
         />
 
         <FormToggle
-          label="Preserve Original Metadata"
+          label={t('settings.preserveMetadata')}
           description="When uploading, duplicate the Name and Description of the original asset so it looks 1:1 on the Roblox catalog."
           checked={config.spoofing.preserveMetadata}
           onChange={(value: boolean) => updateConfig('spoofing', 'preserveMetadata', value)}
         />
 
         <FormToggle
-          label="Enable Archive Recovery (Slow)"
+          label={t('settings.archiveRecovery')}
           description="Automatically scrape the Wayback Machine to find Place IDs for deleted/private animations. Can add 10-30 seconds per failed asset."
           checked={config.advanced.enableArchiveRecovery}
           onChange={(value: boolean) => updateConfig('advanced', 'enableArchiveRecovery', value)}
@@ -82,7 +82,7 @@ export default function UploadSection() {
               const newValues = hasVideo ? [...values, 'video'] : values;
               updateConfig('spoofing', 'uploadTypes', newValues);
             }}
-            placeholder="Select asset types to upload..."
+            placeholder={t('settings.uploadTypesPlaceholder')}
           />
 
           <div className="mt-2 p-3 bg-red-500/10 border border-red-500/20 rounded-md">
@@ -111,8 +111,8 @@ export default function UploadSection() {
 
         <div className="pt-2 pb-1">
           <FormInput
-            label="Download Folder"
-            placeholder="Select where downloads should be saved..."
+            label={t('settings.downloadFolder')}
+            placeholder={t('settings.downloadFolderPlaceholder')}
             value={config.spoofing.downloadPath || ''}
             onChange={(value: string) => updateConfig('spoofing', 'downloadPath', value)}
             endContent={
@@ -120,7 +120,7 @@ export default function UploadSection() {
                 type="button"
                 onClick={() => void handleBrowseFolder()}
                 className="p-1 rounded text-text-muted hover:text-primary transition-colors"
-                aria-label="Browse folder"
+                aria-label={t('common.browse')}
               >
                 <FolderSearch size={16} />
               </button>
@@ -136,7 +136,7 @@ export default function UploadSection() {
             High Cost Warning
           </ModalHeader>
           <ModalBody className="text-text-primary">
-            <p className="mb-2">Are you absolutely sure you want to enable video uploads?</p>
+            <p className="mb-2">{t('misc.confirmVideoUploads')}</p>
             <p className="font-semibold text-danger">
               Roblox charges exactly 2,000 Robux for EVERY single video asset you upload.
             </p>

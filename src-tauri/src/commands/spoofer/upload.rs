@@ -80,6 +80,9 @@ async fn poll_roblox_operation(
             Ok(r) => r,
             Err(e) => return Err(format!("Operation poll request failed: {e}")),
         };
+        if let Some(wait_ms) = crate::utils::extract_retry_after(&resp) {
+            crate::commands::spoofer::record_explicit_rate_limit(wait_ms);
+        }
         if !resp.status().is_success() {
             if resp.status() == 429 || resp.status() == 403 {
                 let retry_after_ms = crate::utils::extract_retry_after(&resp).unwrap_or(2000);
@@ -407,6 +410,10 @@ pub async fn publish_asset_with_progress(
                     break;
                 }
             };
+
+            if let Some(wait_ms) = crate::utils::extract_retry_after(&resp) {
+                crate::commands::spoofer::record_explicit_rate_limit(wait_ms);
+            }
 
             let status = resp.status();
             let status_code = status.as_u16();

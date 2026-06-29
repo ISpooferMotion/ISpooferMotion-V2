@@ -32,6 +32,7 @@ local API_KEY: string? = plugin:GetSetting(API_KEY_SETTING)
 local polling: boolean = false
 local scanRunning: boolean = false
 local patchRunning: boolean = false
+local autoReplaceEnabled: boolean = false
 local lastDiscovery: number = 0
 
 local SERVICES_TO_SCAN: { string } = {

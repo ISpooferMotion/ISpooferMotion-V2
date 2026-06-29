@@ -67,7 +67,7 @@ export default function GeneralSection() {
   const handleDesktopNotificationsChange = async (enabled: boolean) => {
     updateConfig('general', 'desktopNotifications', enabled);
     if (!enabled) {
-      logIsm('info', 'Desktop notifications disabled.');
+      logIsm('info', t('misc.notificationsDisabledTitle'));
       return;
     }
 
@@ -75,12 +75,12 @@ export default function GeneralSection() {
       const shown = await invoke<boolean>('show_notification', {
         options: {
           title: 'ISpooferMotion',
-          body: 'Desktop notifications are enabled.',
+          body: t('misc.desktopNotificationsEnabled'),
         },
       });
       logIsm(
         shown ? 'success' : 'warn',
-        shown ? 'Desktop notifications enabled.' : 'Desktop notifications could not be shown.',
+        shown ? t('misc.notificationsEnabledTitle') : t('misc.notificationsFailed'),
       );
     } catch (err) {
       logIsm('error', `Desktop notifications failed: ${String(err)}`);
@@ -96,14 +96,14 @@ export default function GeneralSection() {
       />
 
       <FormToggle
-        label="Hide to Tray"
+        label={t('settings.hideToTray')}
         description="When closing the app, it will minimize to the system tray instead of quitting."
         checked={config.general.hideToTrayOnClose}
         onChange={(v: boolean) => updateConfig('general', 'hideToTrayOnClose', v)}
       />
 
       <FormToggle
-        label="Telemetry & Error Reporting"
+        label={t('settings.telemetry')}
         description="Allow ISpooferMotion to automatically send anonymous crash reports and telemetry to the developers."
         checked={config.general.telemetryEnabled}
         onChange={(v: boolean) => updateConfig('general', 'telemetryEnabled', v)}
@@ -178,7 +178,7 @@ export default function GeneralSection() {
                 >
                   <HexAlphaColorPicker color={localAccent} onChange={handleColorChange} />
                   <div className="p-3 border-t border-border-subtle flex items-center justify-between bg-bg-elevated">
-                    <span className="text-xs font-bold text-text-muted">HEX</span>
+                    <span className="text-xs font-bold text-text-muted">{t('common.hex')}</span>
                     <input
                       type="text"
                       value={localAccent.toUpperCase()}
@@ -205,7 +205,7 @@ export default function GeneralSection() {
           onClick={async () => {
             const confirmed = await ask(
               'Are you sure you want to reset all settings to their default values? This action cannot be undone.',
-              { title: 'Confirm Reset', kind: 'warning' },
+              { title: t('settings.confirmResetTitle'), kind: 'warning' },
             );
             if (confirmed) {
               resetConfig();
