@@ -216,80 +216,88 @@ pub async fn get_place_id_from_creator(
     let mut cursor = String::new();
     let client = crate::utils::get_http_client();
 
-    while root_places.len() < max_results as usize {
-        let mut url = if is_group {
-            format!("https://games.roblox.com/v2/groups/{creator_id}/games?limit={limit}")
-        } else {
-            format!(
-                "https://games.roblox.com/v2/users/{creator_id}/games?limit={limit}&sortOrder=Asc"
-            )
-        };
+    for filter in [2, 1] {
+        cursor.clear();
+        while root_places.len() < max_results as usize {
+            let mut url = if is_group {
+                format!("https://games.roblox.com/v2/groups/{creator_id}/games?accessFilter={filter}&limit={limit}")
+            } else {
+                format!(
+                    "https://games.roblox.com/v2/users/{creator_id}/games?accessFilter={filter}&limit={limit}&sortOrder=Asc"
+                )
+            };
 
-        if !cursor.is_empty() {
-            url.push_str(&format!("&cursor={cursor}"));
-        }
+            if !cursor.is_empty() {
+                url.push_str(&format!("&cursor={cursor}"));
+            }
 
-        wait_rate_limit(RateLimitBucket::PlaceLookup).await;
-        let resp = client
-            .get(&url)
-            .header(reqwest::header::COOKIE, &cookie_header)
-            .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
-            .send()
-            .await?;
+            wait_rate_limit(RateLimitBucket::PlaceLookup).await;
+            let resp = client
+                .get(&url)
+                .header(reqwest::header::COOKIE, &cookie_header)
+                .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
+                .send()
+                .await?;
 
-        crate::utils::check_for_roblosecurity_update(&app, &resp, &cookie_header);
+            crate::utils::check_for_roblosecurity_update(&app, &resp, &cookie_header);
 
-        if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            let wait_ms = crate::utils::extract_retry_after(&resp).unwrap_or(2_000);
-            set_rate_limit(RateLimitBucket::PlaceLookup, Duration::from_millis(wait_ms));
-            tokio::time::sleep(Duration::from_millis(wait_ms)).await;
-            continue;
-        }
+            if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                let wait_ms = crate::utils::extract_retry_after(&resp).unwrap_or(2_000);
+                set_rate_limit(RateLimitBucket::PlaceLookup, Duration::from_millis(wait_ms));
+                tokio::time::sleep(Duration::from_millis(wait_ms)).await;
+                continue;
+            }
 
-        if !resp.status().is_success() {
-            return Err(crate::error::AppError::Custom(format!(
-                "Failed to get games: {}",
-                resp.status()
-            )));
-        }
+            if !resp.status().is_success() {
+                return Err(crate::error::AppError::Custom(format!(
+                    "Failed to get games: {}",
+                    resp.status()
+                )));
+            }
 
-        let data: serde_json::Value = resp.json().await?;
+            let data: serde_json::Value = resp.json().await?;
 
-        let games = data.get("data").and_then(|d| d.as_array()).ok_or_else(|| {
-            crate::error::AppError::Custom("Invalid games response format".into())
-        })?;
-        if games.is_empty() {
-            break;
-        }
+            let games = data.get("data").and_then(|d| d.as_array()).ok_or_else(|| {
+                crate::error::AppError::Custom("Invalid games response format".into())
+            })?;
+            
+            if games.is_empty() {
+                break;
+            }
 
-        for game in games {
-            let place_id = game
-                .get("rootPlace")
-                .and_then(|rp| rp.get("id"))
-                .or_else(|| game.get("rootPlaceId"))
-                .or_else(|| game.get("placeId"))
-                .or_else(|| game.get("id"))
-                .and_then(|id| {
-                    id.as_u64()
-                        .map(|n| n.to_string())
-                        .or_else(|| id.as_str().map(std::string::ToString::to_string))
-                });
+            for game in games {
+                let place_id = game
+                    .get("rootPlace")
+                    .and_then(|rp| rp.get("id"))
+                    .or_else(|| game.get("rootPlaceId"))
+                    .or_else(|| game.get("placeId"))
+                    .or_else(|| game.get("id"))
+                    .and_then(|id| {
+                        id.as_u64()
+                            .map(|n| n.to_string())
+                            .or_else(|| id.as_str().map(std::string::ToString::to_string))
+                    });
 
-            let game_name = game.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
+                let game_name = game.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
 
-            if let Some(pid) = place_id {
-                if seen_places.insert(pid.clone()) {
-                    root_places.push((pid, game_name));
+                if let Some(pid) = place_id {
+                    if seen_places.insert(pid.clone()) {
+                        root_places.push((pid, game_name));
+                    }
+                }
+                if root_places.len() >= max_results as usize {
+                    break;
                 }
             }
-            if root_places.len() >= max_results as usize {
+
+            if let Some(next_cursor) = data.get("nextPageCursor").and_then(|c| c.as_str()) {
+                cursor = next_cursor.to_string();
+            } else {
                 break;
             }
         }
-
-        if let Some(next_cursor) = data.get("nextPageCursor").and_then(|c| c.as_str()) {
-            cursor = next_cursor.to_string();
-        } else {
+        
+        if root_places.len() >= max_results as usize {
             break;
         }
     }
