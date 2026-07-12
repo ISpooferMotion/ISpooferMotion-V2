@@ -70,7 +70,7 @@
     "zustand": "5.0.14"
   },
   "devDependencies": {
-    "@changesets/cli": "2.27.1",
+    "@changesets/cli": "2.31.0",
     "@eslint/js": "10.0.1",
     "@playwright/test": "^1.61.1",
     "@srsholmes/tauri-playwright": "^0.4.1",
