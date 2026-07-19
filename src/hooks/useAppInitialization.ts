@@ -3,6 +3,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { useEffect, useState } from 'react';
 
+import { useConfigStore } from '../stores/configStore';
 import { isTauriRuntime } from '../utils/tauriRuntime';
 
 /**
@@ -38,7 +39,9 @@ export function useAppInitialization() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch remote config (Maintenance Mode)
+  const telemetryEnabled = useConfigStore((s) => s.config.general.telemetryEnabled);
+
+  // Fetch remote config (Maintenance Mode) and initialize remote cache
   useEffect(() => {
     const fetchConfig = async () => {
       try {
@@ -58,13 +61,21 @@ export function useAppInitialization() {
           if (data.maintenanceMode) {
             setMaintenance({ mode: true, message: data.maintenanceMessage });
           }
+          if (isTauriRuntime()) {
+            if (telemetryEnabled) {
+              const pushUrl = data.communityCacheUrl || `${baseUrl}/api/v1/cache/discovery`;
+              invoke('initialize_remote_cache', { pushUrl }).catch(console.warn);
+            } else {
+              invoke('initialize_remote_cache', { pushUrl: null }).catch(console.warn);
+            }
+          }
         }
       } catch (e) {
         console.warn('Could not connect to app config server:', e);
       }
     };
     fetchConfig();
-  }, []);
+  }, [telemetryEnabled]);
 
   // Heartbeat
   useEffect(() => {

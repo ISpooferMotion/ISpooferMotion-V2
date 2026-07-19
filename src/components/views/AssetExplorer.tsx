@@ -22,6 +22,7 @@ import type {
   RbxInstance,
 } from '../../utils/robloxPlaceParser/types';
 import { logIsm } from '../../utils/robloxProfiles';
+import { appendSpoofingLog } from '../../utils/spoofingLogs';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 import { ExplorerTreeNode, getAssetId } from './asset-explorer/ExplorerTree';
 import { ExplorerToolbar } from './asset-explorer/ExplorerToolbar';
@@ -106,16 +107,6 @@ function pluginAssetsToNode(
   };
 }
 
-function hidePluginAssets(nodes: RbxInstance[]): RbxInstance[] {
-  return nodes
-    .map((node) => ({
-      ...node,
-      assets: dedupeParsedAssets(node.assets.filter((asset) => asset.type !== 'plugin')),
-      children: hidePluginAssets(node.children),
-    }))
-    .filter((node) => node.assets.length > 0 || node.children.length > 0);
-}
-
 const VALID_ROOT_SERVICES = new Set([
   'Workspace',
   'Lighting',
@@ -171,6 +162,7 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
   const setParsingFileName = useSpooferStore((s) => s.setParsingFileName);
   const selectedAssetIds = useSpooferStore((s) => s.selectedAssetIds);
   const setSelectedAssetIds = useSpooferStore((s) => s.setSelectedAssetIds);
+  const lastReplacements = useSpooferStore((s) => s.lastReplacements);
 
   const { studioConnected, scanStatus } = useStudioConnectionState();
   const lastStudioSnapshotRef = useRef('');
@@ -203,12 +195,259 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
     };
   }, []);
 
+  const [resolvedOwners, setResolvedOwners] = useState<
+    Record<string, { creatorId: string; creatorType: string }>
+  >({});
+  const resolvedRef = useRef(resolvedOwners);
+  useEffect(() => {
+    resolvedRef.current = resolvedOwners;
+  }, [resolvedOwners]);
+
+  const uniqueAssetIds = useMemo(() => {
+    const ids = new Set<string>();
+    const gatherIds = (nodes: RbxInstance[]) => {
+      for (const node of nodes) {
+        for (const asset of node.assets) {
+          const id = getAssetId(asset);
+          if (id && asset.type !== 'plugin' && !id.startsWith('RAW_KFS_')) {
+            ids.add(id);
+          }
+        }
+        if (node.children) gatherIds(node.children);
+      }
+    };
+    gatherIds(rootInstances);
+    return ids;
+  }, [rootInstances]);
+
+  useEffect(() => {
+    if (!config.advanced.skipOwned || !config.spoofing.cookie || !isTauriRuntime()) return;
+    if (uniqueAssetIds.size === 0) return;
+
+    const newIds = Array.from(uniqueAssetIds).filter((id) => !resolvedRef.current[id]);
+    if (newIds.length === 0) return;
+
+    let cancelled = false;
+    invoke<any[]>('resolve_asset_creators', {
+      assets: newIds.map((id) => ({ assetId: id })),
+      cookie: config.spoofing.cookie,
+    })
+      .then((resolved) => {
+        if (cancelled) return;
+        setResolvedOwners((prev) => {
+          const next = { ...prev };
+          for (const id of newIds) {
+            next[id] = { creatorId: '0', creatorType: 'None' };
+          }
+          for (const item of resolved) {
+            if (item.assetId && item.creatorId && item.creatorType) {
+              next[item.assetId] = {
+                creatorId: item.creatorId,
+                creatorType: item.creatorType,
+              };
+            }
+          }
+          return next;
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to resolve scanned asset creators:', err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rootInstances, config.advanced.skipOwned, config.spoofing.cookie]);
+
+  const lastReplacementIds = useMemo(() => {
+    return new Set(Object.values(lastReplacements));
+  }, [lastReplacements]);
+
+  const excludedUserIdsSet = useMemo(() => {
+    return new Set(
+      config.advanced.excludedUserIds
+        .split(/[\s,]+/)
+        .map((id) => id.replace(/\D/g, ''))
+        .filter((id) => id.length > 0),
+    );
+  }, [config.advanced.excludedUserIds]);
+
+  const excludedGroupIdsSet = useMemo(() => {
+    return new Set(
+      config.advanced.excludedGroupIds
+        .split(/[\s,]+/)
+        .map((id) => id.replace(/\D/g, ''))
+        .filter((id) => id.length > 0),
+    );
+  }, [config.advanced.excludedGroupIds]);
+
+  const filterOwnedAssets = useCallback(
+    (nodes: RbxInstance[]): RbxInstance[] => {
+      let treeChanged = false;
+      const newNodes = nodes
+        .map((node) => {
+          const filteredAssets = node.assets.filter((asset) => {
+            if (asset.type === 'plugin') return false;
+
+            if (config.advanced.skipOwned) {
+              const id = asset.assetId;
+              if (!id) return true;
+
+              if (lastReplacementIds.has(id)) return false;
+
+              const owner = resolvedOwners[id];
+              if (owner) {
+                const ownerIdNormalized = String(owner.creatorId);
+                if (
+                  owner.creatorType === 'User' &&
+                  ownerIdNormalized === String(config.spoofing.selectedUser)
+                )
+                  return false;
+                if (
+                  owner.creatorType === 'Group' &&
+                  ownerIdNormalized === String(config.spoofing.selectedGroup)
+                )
+                  return false;
+                if (owner.creatorType === 'User' && excludedUserIdsSet.has(ownerIdNormalized))
+                  return false;
+                if (owner.creatorType === 'Group' && excludedGroupIdsSet.has(ownerIdNormalized))
+                  return false;
+              }
+            }
+            return true;
+          });
+
+          const finalAssets = dedupeParsedAssets(filteredAssets);
+          const newChildren = filterOwnedAssets(node.children);
+
+          const nodeChanged =
+            finalAssets.length !== node.assets.length || newChildren !== node.children;
+          if (nodeChanged) treeChanged = true;
+
+          if (!nodeChanged) return node;
+
+          return {
+            ...node,
+            assets: finalAssets,
+            children: newChildren,
+          };
+        })
+        .filter((node) => node.assets.length > 0 || node.children.length > 0);
+
+      if (newNodes.length !== nodes.length) treeChanged = true;
+      return treeChanged ? newNodes : nodes;
+    },
+    [
+      config.advanced.skipOwned,
+      lastReplacementIds,
+      resolvedOwners,
+      config.spoofing.selectedUser,
+      config.spoofing.selectedGroup,
+      excludedUserIdsSet,
+      excludedGroupIdsSet,
+    ],
+  );
+
   const displayedInstances = useMemo(() => {
     const cleanRootInstances = rootInstances.filter(
       (node) => VALID_ROOT_SERVICES.has(node.className) || node.referent.startsWith('studio-'),
     );
-    return hidePluginAssets(cleanRootInstances);
-  }, [rootInstances]);
+    return filterOwnedAssets(cleanRootInstances);
+  }, [rootInstances, filterOwnedAssets]);
+
+  const setSpoofingLogs = useSpooferStore((s) => s.setSpoofingLogs);
+
+  const stats = useMemo(() => {
+    const countByType = (nodes: RbxInstance[]) => {
+      const counts: Record<string, number> = {
+        animation: 0,
+        audio: 0,
+        image: 0,
+        mesh: 0,
+        script_ref: 0,
+      };
+      const walk = (list: RbxInstance[]) => {
+        for (const n of list) {
+          for (const a of n.assets) {
+            const t = a.type || 'script_ref';
+            counts[t] = (counts[t] || 0) + 1;
+          }
+          walk(n.children);
+        }
+      };
+      walk(nodes);
+      return counts;
+    };
+
+    const totalCounts = countByType(rootInstances);
+    const displayedCounts = countByType(displayedInstances);
+
+    const total = Object.values(totalCounts).reduce((a, b) => a + b, 0);
+    const displayed = Object.values(displayedCounts).reduce((a, b) => a + b, 0);
+
+    const excludedByType: Record<string, number> = {};
+    for (const key of Object.keys(totalCounts)) {
+      const diff = (totalCounts[key] || 0) - (displayedCounts[key] || 0);
+      if (diff > 0) excludedByType[key] = diff;
+    }
+
+    return {
+      total,
+      displayed,
+      excluded: total - displayed,
+      totalCounts,
+      displayedCounts,
+      excludedByType,
+    };
+  }, [rootInstances, displayedInstances]);
+
+  const lastLoggedRef = useRef('');
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (stats.total === 0) return;
+    if (stats.excluded === 0) return;
+
+    // Check if we are still scanning or parsing
+    const isScanning = scanStatus?.scanning || false;
+    const isParsing = parseState !== null;
+    if (isScanning || isParsing) return;
+
+    // Check if we have unresolved asset creators
+    const hasUnresolved =
+      config.advanced.skipOwned && config.spoofing.cookie
+        ? Array.from(uniqueAssetIds).some((id) => !resolvedOwners[id])
+        : false;
+
+    if (hasUnresolved) return;
+
+    // Clear any pending log
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+
+    debounceTimerRef.current = setTimeout(() => {
+      const logKey = `${stats.total}:${stats.displayed}`;
+      if (lastLoggedRef.current === logKey) return;
+      lastLoggedRef.current = logKey;
+
+      const typeLabels: Record<string, string> = {
+        animation: 'animations',
+        audio: 'sounds',
+        image: 'images',
+        mesh: 'meshes',
+        script_ref: 'script refs',
+      };
+      const parts = Object.entries(stats.excludedByType)
+        .map(([type, count]) => `${count} ${typeLabels[type] || type}`)
+        .join(', ');
+
+      const msg = `[INFO] Filtered ${stats.excluded} assets you already own (${parts}). Showing ${stats.displayed} remaining.\n`;
+      setSpoofingLogs((prev) => appendSpoofingLog(prev, msg));
+      logIsm('info', msg.trim(), false);
+    }, 1000); // Wait 1s for layout/renders to settle
+
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [stats, setSpoofingLogs, scanStatus, parseState, rootInstances, config, resolvedOwners]);
 
   const processStudioData = useCallback(
     (

@@ -234,7 +234,7 @@ pub async fn download_animation_asset_with_progress(
                 Ok(Ok(resp)) => resp,
                 Ok(Err(error)) => {
                     last_error = format!("Download request failed: {error}");
-                    if attempt < 2 {
+                    if attempt < 4 {
                         tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
                         continue;
                     }
@@ -242,7 +242,7 @@ pub async fn download_animation_asset_with_progress(
                 }
                 Err(_elapsed) => {
                     last_error = "Download request timed out.".to_string();
-                    if attempt < 2 {
+                    if attempt < 4 {
                         tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
                         continue;
                     }
@@ -268,17 +268,14 @@ pub async fn download_animation_asset_with_progress(
                 )
                 .await;
 
-                if result.is_ok() {
-                    if let Some(valid_place_id) = request_place_id.clone() {
-                        crate::commands::spoofer::remote_cache::push_discovery(
-                            app.clone(),
-                            asset_id.clone(),
-                            valid_place_id,
-                        );
+                let mut final_result = result;
+                if final_result.is_ok() {
+                    if let Ok(res) = final_result.as_mut() {
+                        res.resolved_place_id = request_place_id.clone();
                     }
                 }
 
-                return result;
+                return final_result;
             }
 
             let mut status_reason = status.to_string();
@@ -302,6 +299,7 @@ pub async fn download_animation_asset_with_progress(
                     success: false,
                     file_path: None,
                     error: Some(error_msg),
+                    resolved_place_id: None,
                 });
             } else if status == reqwest::StatusCode::FORBIDDEN {
                 status_reason = "Permission Denied: Asset is private or copylocked.".to_string();
@@ -321,6 +319,11 @@ pub async fn download_animation_asset_with_progress(
                 {
                     continue;
                 }
+            }
+
+            if status == reqwest::StatusCode::FORBIDDEN && attempt < 2 {
+                tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
+                continue;
             }
 
             if is_retryable_download_status(status) && attempt < 9 {
@@ -456,7 +459,12 @@ pub async fn download_animation_asset_with_progress(
         },
     );
 
-    Ok(DownloadResult { success: false, file_path: None, error: Some(last_error) })
+    Ok(DownloadResult {
+        success: false,
+        file_path: None,
+        error: Some(last_error),
+        resolved_place_id: None,
+    })
 }
 
 fn should_attempt_claim(status: reqwest::StatusCode) -> bool {

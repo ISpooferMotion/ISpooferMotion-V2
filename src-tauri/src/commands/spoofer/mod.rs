@@ -391,6 +391,8 @@ pub struct DownloadResult {
     pub file_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_place_id: Option<String>,
 }
 
 #[derive(Serialize)]

@@ -36,24 +36,7 @@ assert(normalizeAssetId ~= nil, "Include order violation: util/assets.luau not l
 assert(getMaxRecordValueBytes ~= nil, "Include order violation: scan/properties.luau not loaded")
 assert(applyPatch ~= nil, "Include order violation: patch/patcher.luau not loaded")
 
-print("[ISpooferMotion] Plugin loaded. Starting background connection to Desktop App...")
-startPolling()
-
-local toolbar = plugin:CreateToolbar("ISpooferMotion")
-local toggleButton =
-	toolbar:CreateButton("Toggle UI", "Show/Hide ISpooferMotion UI", "rbxassetid://137844667859456")
-
-toggleButton.Click:Connect(function()
-	togglePluginGui()
-end)
-
-plugin.Unloading:Connect(function()
-	polling = false
-	BASE_URL = nil
-	hidePluginGui()
-end)
-
---- Manual Replacement Handler
+--- Manual Replacement Handler (declared before _G registration so the table is valid at load time)
 local function runManualReplacements(text: string)
 	local mappings = {}
 	local count = 0
@@ -312,6 +295,33 @@ local function runManualReplacements(text: string)
 	)
 end
 
+--- Spawns runManualReplacements in a task so GUI click handlers (which cannot yield)
+--- don't crash Studio when CreateMeshPartAsync is hit.
+local function runManualReplacementsAsync(text: string)
+	task.spawn(runManualReplacements, text)
+end
+
+-- Register the plugin API table BEFORE startPolling() and GUI creation so any button
+-- click that fires immediately after plugin load never sees a nil handler.
 _G.ISpooferMotionPlugin = {
-	runManualReplacements = runManualReplacements,
+	runManualReplacements = runManualReplacementsAsync,
+	-- Expose the sync version for scripting contexts that manage their own coroutine.
+	runManualReplacementsSync = runManualReplacements,
 }
+
+print("[ISpooferMotion] Plugin loaded. Starting background connection to Desktop App...")
+startPolling()
+
+local toolbar = plugin:CreateToolbar("ISpooferMotion")
+local toggleButton =
+	toolbar:CreateButton("Toggle UI", "Show/Hide ISpooferMotion UI", "rbxassetid://137844667859456")
+
+toggleButton.Click:Connect(function()
+	togglePluginGui()
+end)
+
+plugin.Unloading:Connect(function()
+	polling = false
+	BASE_URL = nil
+	hidePluginGui()
+end)

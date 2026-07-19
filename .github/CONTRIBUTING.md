@@ -14,7 +14,7 @@ Thanks for taking the time to contribute. Here's everything you need to know to 
 **Clone and run:**
 
 ```bash
-git clone --recurse-submodules https://github.com/ISpooferMotion/ISpooferMotion-V2.git
+git clone https://github.com/ISpooferMotion/ISpooferMotion-V2.git
 cd ISpooferMotion-V2
 bun install
 bun run tauri:dev

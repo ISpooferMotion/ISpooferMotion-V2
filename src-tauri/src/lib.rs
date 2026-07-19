@@ -86,6 +86,7 @@ macro_rules! specta_commands {
             crate::commands::spoofer::memory::focus_and_save_studio,
             crate::commands::spoofer::memory::scan_and_replace_multiple_strings,
             crate::commands::spoofer::clear_asset_cache,
+            crate::commands::spoofer::remote_cache::initialize_remote_cache,
             crate::commands::spoofer::permissions::patch_asset_permissions,
             crate::commands::spoofer::permissions::set_asset_privacy,
             crate::commands::spoofer::place::get_place_id_from_creator,

@@ -48,6 +48,7 @@ struct JobContext {
 
     // Concurrency controls
     download_semaphore: Arc<Semaphore>,
+    discoveries: Mutex<Vec<(String, String)>>,
 
     // External handles
     client: reqwest::Client,
@@ -484,6 +485,7 @@ pub async fn process_spoofer_action(
         asset_results: Mutex::new(Vec::new()),
         log_file: Mutex::new(log_file_extracted),
         download_semaphore: Arc::new(Semaphore::new(max_download_concurrency)),
+        discoveries: Mutex::new(Vec::new()),
         client,
         app: app.clone(),
     });
@@ -631,7 +633,7 @@ pub async fn process_spoofer_action(
                         if let Err(e) = tokio::fs::write(&file_path, full_xml).await {
                             Err(crate::error::AppError::Io(e))
                         } else {
-                            Ok(crate::commands::spoofer::DownloadResult { success: true, file_path: Some(file_path.clone()), error: None })
+                            Ok(crate::commands::spoofer::DownloadResult { success: true, file_path: Some(file_path.clone()), error: None, resolved_place_id: None })
                         }
                     } else {
                         Err(crate::error::AppError::Custom("Cannot spoof KeyframeSequences from binary .rbxl files. Please save the place as .rbxlx or use the Studio Plugin instead.".into()))
@@ -647,6 +649,11 @@ pub async fn process_spoofer_action(
                     Ok(res) if res.success => {
                         let download_only = asset_type == "script_ref" || asset_type == "video" || !ctx.upload_types.contains(&asset_type) || asset_type == "plugin";
                         if download_only {
+                            if let Some(place_id) = res.resolved_place_id {
+                                if let Ok(mut disc) = ctx.discoveries.lock() {
+                                    disc.push((asset_id.clone(), place_id));
+                                }
+                            }
                             ctx.success_count.fetch_add(1, Ordering::Relaxed);
                             ctx.skip_count.fetch_add(1, Ordering::Relaxed);
                             ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": true }));
@@ -682,6 +689,11 @@ pub async fn process_spoofer_action(
                                 ctx.replacements.insert(asset_id.clone(), serde_json::Value::String(new_id.clone()));
                                 ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": true, "newId": new_id }));
                                 ctx.success_count.fetch_add(1, Ordering::Relaxed);
+                                if let Some(place_id) = res.resolved_place_id {
+                                    if let Ok(mut disc) = ctx.discoveries.lock() {
+                                        disc.push((asset_id.clone(), place_id));
+                                    }
+                                }
                                 remove_download_file = true;
                             }
                             Ok(up) => {
@@ -793,6 +805,18 @@ pub async fn process_spoofer_action(
         }),
     );
     finish_spoofer_job(&job_id);
+
+    if completed_successfully {
+        if let Ok(disc) = ctx.discoveries.lock() {
+            for (asset_id, place_id) in disc.iter() {
+                crate::commands::spoofer::remote_cache::push_discovery(
+                    app.clone(),
+                    asset_id.clone(),
+                    place_id.clone(),
+                );
+            }
+        }
+    }
 
     let is_download_only = data.upload_types.as_ref().is_some_and(|types| {
         types.contains(&"download".to_string()) && !types.contains(&"upload".to_string())

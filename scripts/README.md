@@ -9,5 +9,3 @@ Compiles the Luau plugin by resolving `#include` directives in `src-tauri/plugin
 ## `clear-dev-state.mjs`
 
 Cleans up development state and caches (such as Tauri's webview data) before starting the development server to ensure a clean slate.
-
-## `init-submodules.sh`
