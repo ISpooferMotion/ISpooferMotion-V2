@@ -212,6 +212,26 @@ local function fetchApiDumpProperties()
 	fetchingApiDump = false
 end
 
+-- A single failed HTTP poll is not proof the connection is dead. macOS App
+-- Nap, sleep coalescing, Roblox HttpService request coalescing, and short
+-- CPU spikes during scan all cause transient failures. Only treat the
+-- connection as lost after several consecutive failures.
+local POLL_FAIL_THRESHOLD = 4
+local pollFailureStreak = 0
+local patchFailureStreak = 0
+
+local function markConnectionLost(baseUrl: string, reason: string)
+	logToPlugin("[Warning] [ISpooferMotion] Lost connection to " .. baseUrl .. " (" .. reason .. ")")
+	setConnectionStatus(false)
+	setPluginGuiStatus("Lost connection; reconnecting...")
+	BASE_URL = nil
+	pollFailureStreak = 0
+	patchFailureStreak = 0
+	-- autoReplaceEnabled deliberately preserved: after reconnect, if we're
+	-- mid-workflow, the next /poll-replacements cycle should still deliver
+	-- pending patches instead of forcing the user to manually re-scan.
+end
+
 --- Starts the background polling loops.
 ---
 --- Idempotent; if polling is already running, this does nothing.
@@ -225,8 +245,10 @@ function startPolling(): ()
 	task.spawn(function()
 		local wasConnected = false
 		while polling do
-			if not BASE_URL or os.clock() - lastDiscovery >= 5 then
-				local hadUrl = BASE_URL
+			-- Only re-run discovery when we genuinely have no connection.
+			-- Re-running on a timer caused reconnect spam because the
+			-- probe race could pick a different URL for the same server.
+			if not BASE_URL then
 				local connected, changed = discoverServer()
 				lastDiscovery = os.clock()
 				if connected and changed and BASE_URL then
@@ -235,8 +257,9 @@ function startPolling(): ()
 					setPluginGuiStatus("Waiting for scan or replacements...")
 					task.spawn(fetchApiDumpProperties)
 					wasConnected = true
+					pollFailureStreak = 0
+					patchFailureStreak = 0
 				elseif not connected and wasConnected then
-					-- We had a connection before and now can't find the daemon.
 					wasConnected = false
 					logToPlugin("[Warning] [ISpooferMotion] Desktop App not found; reconnecting...")
 					setConnectionStatus(false)
@@ -251,28 +274,27 @@ function startPolling(): ()
 		while polling do
 			local baseUrl = BASE_URL
 			if baseUrl then
-				local pollOk, decoded, statusCode = requestPollEndpoint(baseUrl, "/poll")
+				local pollOk, decoded, _statusCode = requestPollEndpoint(baseUrl, "/poll")
 
 				if not pollOk then
-					-- Only log + disconnect if we actually had a URL (avoid spam on startup).
-					if baseUrl then
-						logToPlugin("[Warning] [ISpooferMotion] Lost connection to " .. baseUrl)
-						setConnectionStatus(false)
-						setPluginGuiStatus("Lost connection; reconnecting...")
-						BASE_URL = nil
-						-- Also clear autoReplace so stale patches are not applied on reconnect.
-						autoReplaceEnabled = false
+					pollFailureStreak += 1
+					if pollFailureStreak >= POLL_FAIL_THRESHOLD then
+						markConnectionLost(baseUrl, "poll failed " .. pollFailureStreak .. "x")
 					end
-				elseif type(decoded) == "table" and decoded.requestAssets == true then
-					if scanRunning then
-						logToPlugin("[Warning] Scan already running, ignoring poll request")
-					elseif patchRunning then
-						logToPlugin("[Warning] Patch already running, ignoring poll request")
-					else
-						logToPlugin("Scan requested by Desktop App")
-						autoReplaceEnabled = true
-						setPluginGuiStatus("Scanning Assets...")
-						task.spawn(scan)
+				else
+					-- Any successful poll (with or without a scan request) is a heartbeat.
+					pollFailureStreak = 0
+					if type(decoded) == "table" and decoded.requestAssets == true then
+						if scanRunning then
+							logToPlugin("[Warning] Scan already running, ignoring poll request")
+						elseif patchRunning then
+							logToPlugin("[Warning] Patch already running, ignoring poll request")
+						else
+							logToPlugin("Scan requested by Desktop App")
+							autoReplaceEnabled = true
+							setPluginGuiStatus("Scanning Assets...")
+							task.spawn(scan)
+						end
 					end
 				end
 			end
@@ -281,38 +303,45 @@ function startPolling(): ()
 		end
 	end)
 
+	-- Offset the second loop by 250ms so the two requests don't burst
+	-- against the local server on the same tick. Smoother CPU profile and
+	-- much less likely to hit Roblox HttpService request coalescing.
 	task.spawn(function()
+		task.wait(0.25)
 		while polling do
 			local baseUrl = BASE_URL
 			if baseUrl then
 				local patchOk, decoded = requestPollEndpoint(baseUrl, "/poll-replacements")
 
 				if not patchOk then
-					logToPlugin("[Warning] " .. "[ISpooferMotion] Lost connection to " .. baseUrl)
-					setConnectionStatus(false)
-					BASE_URL = nil
-					-- Clear autoReplace so we don't immediately re-apply on reconnect.
-					autoReplaceEnabled = false
-				elseif type(decoded) == "table" then
-					local patches = decoded.patches
-					local mappings = decoded.mappings
+					patchFailureStreak += 1
+					if patchFailureStreak >= POLL_FAIL_THRESHOLD then
+						markConnectionLost(baseUrl, "patch poll failed " .. patchFailureStreak .. "x")
+					end
+				else
+					-- Successful patch poll is also a heartbeat.
+					patchFailureStreak = 0
+					if type(decoded) == "table" then
+						local patches = decoded.patches
+						local mappings = decoded.mappings
 
-					if type(patches) == "table" and #patches > 0 then
-						if scanRunning then
-							logToPlugin("[Warning] Scan running, ignoring patches")
-						elseif patchRunning then
-							logToPlugin("[Warning] Patch already running, ignoring patches")
-						else
-							logToPlugin("Received " .. #patches .. " replacements from Desktop App")
-							autoReplaceEnabled = false
-							setPluginGuiStatus(
-								"Applying " .. #patches .. " targeted replacements..."
-							)
-							task.spawn(applyPatches, patches)
+						if type(patches) == "table" and #patches > 0 then
+							if scanRunning then
+								logToPlugin("[Warning] Scan running, ignoring patches")
+							elseif patchRunning then
+								logToPlugin("[Warning] Patch already running, ignoring patches")
+							else
+								logToPlugin("Received " .. #patches .. " replacements from Desktop App")
+								autoReplaceEnabled = false
+								setPluginGuiStatus(
+									"Applying " .. #patches .. " targeted replacements..."
+								)
+								task.spawn(applyPatches, patches)
+							end
+						elseif type(mappings) == "table" and #mappings > 0 then
+							-- Do nothing, wait for patches to arrive on next poll cycle.
+							local _wait = true
 						end
-					elseif type(mappings) == "table" and #mappings > 0 then
-						-- Do nothing, wait for patches to arrive on next poll cycle.
-						local _wait = true
 					end
 				end
 			end
