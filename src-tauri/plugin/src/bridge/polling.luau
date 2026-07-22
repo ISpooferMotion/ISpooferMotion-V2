@@ -223,8 +223,10 @@ function startPolling(): ()
 	polling = true
 
 	task.spawn(function()
+		local wasConnected = false
 		while polling do
 			if not BASE_URL or os.clock() - lastDiscovery >= 5 then
+				local hadUrl = BASE_URL
 				local connected, changed = discoverServer()
 				lastDiscovery = os.clock()
 				if connected and changed and BASE_URL then
@@ -232,6 +234,13 @@ function startPolling(): ()
 					setConnectionStatus(true)
 					setPluginGuiStatus("Waiting for scan or replacements...")
 					task.spawn(fetchApiDumpProperties)
+					wasConnected = true
+				elseif not connected and wasConnected then
+					-- We had a connection before and now can't find the daemon.
+					wasConnected = false
+					logToPlugin("[Warning] [ISpooferMotion] Desktop App not found; reconnecting...")
+					setConnectionStatus(false)
+					setPluginGuiStatus("Waiting for Desktop App...")
 				end
 			end
 			task.wait(BASE_URL and 1 or 2)
@@ -245,12 +254,15 @@ function startPolling(): ()
 				local pollOk, decoded, statusCode = requestPollEndpoint(baseUrl, "/poll")
 
 				if not pollOk then
-					logToPlugin("[Warning] " .. "[ISpooferMotion] Lost connection to " .. baseUrl)
-					setConnectionStatus(false)
-					setPluginGuiStatus("Lost connection; reconnecting...")
-					BASE_URL = nil
-					-- Also clear autoReplace so stale patches are not applied on reconnect.
-					autoReplaceEnabled = false
+					-- Only log + disconnect if we actually had a URL (avoid spam on startup).
+					if baseUrl then
+						logToPlugin("[Warning] [ISpooferMotion] Lost connection to " .. baseUrl)
+						setConnectionStatus(false)
+						setPluginGuiStatus("Lost connection; reconnecting...")
+						BASE_URL = nil
+						-- Also clear autoReplace so stale patches are not applied on reconnect.
+						autoReplaceEnabled = false
+					end
 				elseif type(decoded) == "table" and decoded.requestAssets == true then
 					if scanRunning then
 						logToPlugin("[Warning] Scan already running, ignoring poll request")
@@ -272,7 +284,7 @@ function startPolling(): ()
 	task.spawn(function()
 		while polling do
 			local baseUrl = BASE_URL
-			if baseUrl and autoReplaceEnabled then
+			if baseUrl then
 				local patchOk, decoded = requestPollEndpoint(baseUrl, "/poll-replacements")
 
 				if not patchOk then

@@ -67,13 +67,8 @@ If you already cloned the repository without submodules, or need to initialize t
 git clone https://github.com/ISpooferMotion/ISpooferMotion-V2.git
 cd ISpooferMotion-V2
 
-# Initialize submodules
-bash scripts/init-submodules.sh
-
 # Install dependencies
 bun install
-
-# Build the component library
 
 # Start the app in development mode
 bun run tauri:dev
@@ -88,14 +83,12 @@ bun run tauri:dev
 On Linux, also install: `libwebkit2gtk-4.1-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`
 
 ```bash
-# Clone with submodules
-git clone --recurse-submodules https://github.com/ISpooferMotion/ISpooferMotion-V2.git
+# Clone
+git clone https://github.com/ISpooferMotion/ISpooferMotion-V2.git
 cd ISpooferMotion-V2
 
 # Install dependencies
 bun install
-
-# Build the component library
 
 # Start the app in development mode
 bun run tauri:dev

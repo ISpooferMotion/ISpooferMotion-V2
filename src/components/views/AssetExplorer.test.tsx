@@ -45,7 +45,11 @@ describe('AssetExplorer', () => {
     vi.clearAllMocks();
     vi.mocked(LanguageContext.useLanguage).mockReturnValue({ t: mockT } as any);
     vi.mocked(ConfigContext.useConfig).mockReturnValue({
-      config: { ui: { transparency: true } },
+      config: {
+        ui: { transparency: true },
+        advanced: { skipOwned: false, excludedUserIds: '', excludedGroupIds: '' },
+        spoofing: { cookie: '', selectedUser: '0', selectedGroup: '0' },
+      },
     } as any);
     const mockStudioState = vi.fn().mockReturnValue({
       studioConnected: true,

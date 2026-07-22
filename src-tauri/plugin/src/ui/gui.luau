@@ -526,15 +526,42 @@ local function createPluginGui()
 	runManualBtn.MouseButton1Up:Connect(function()
 		tweenBg(runManualBtn, Color3.fromHex("#3f3f46"))
 	end)
+	-- Guard: prevent queuing multiple concurrent async replacement runs.
+	local manualRunning = false
+
 	runManualBtn.MouseButton1Click:Connect(function()
+		if manualRunning then
+			return
+		end
 		ripple(runManualBtn)
 		local txt = manualBox.Text
+		if txt == "" then
+			return
+		end
 		-- selene: allow(global_usage)
 		local _G_plugin = _G.ISpooferMotionPlugin
 		if _G_plugin and _G_plugin.runManualReplacements then
+			manualRunning = true
+			runManualBtn.Text = "Running..."
+			tweenBg(runManualBtn, Color3.fromHex("#18181b"))
+			-- runManualReplacements is async (task.spawn internally) so we use a
+			-- separate task to poll for completion via a brief delay heuristic.
+			-- We reset the button after a generous timeout rather than hooking into
+			-- the Luau coroutine (click handler cannot yield).
 			_G_plugin.runManualReplacements(txt)
+			task.delay(0.5, function()
+				-- Reset after all spawned work has had time to kick off.
+				-- The actual replacement task runs independently; this just unblocks the button.
+				manualRunning = false
+				if runManualBtn and runManualBtn.Parent then
+					runManualBtn.Text = "Run Replacements"
+					tweenBg(runManualBtn, Color3.fromHex("#27272a"))
+				end
+			end)
 		else
-			warn("[ISpooferMotion] Manual replacement handler not linked.")
+			warn(
+				"[ISpooferMotion] Plugin handler not ready yet - wait for the plugin to finish loading."
+			)
 		end
 	end)
 
@@ -794,6 +821,14 @@ end
 local logCounter = 0
 local logConnection = nil
 local LogService = game:GetService("LogService")
+
+-- Guard: only register one LogService listener. If createPluginGui() is called again
+-- after a hide/show cycle while the plugin stays alive, we do not want duplicate log
+-- entries streaming into the new UI.
+if logConnection then
+	logConnection:Disconnect()
+	logConnection = nil
+end
 
 logConnection = LogService.MessageOut:Connect(function(message, messageType)
 	if not logsScrollingFrame then

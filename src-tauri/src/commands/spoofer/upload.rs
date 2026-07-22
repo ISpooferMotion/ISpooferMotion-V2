@@ -297,8 +297,15 @@ pub async fn publish_asset_with_progress(
     match crate::commands::spoofer::inspector::inspect_payload(&canonical_file_path).await {
         Ok(meta) => {
             if meta.extension != "unknown" {
-                upload_kind.file_type = meta.file_type;
-                upload_kind.extension = meta.extension;
+                upload_kind.file_type = meta.file_type.clone();
+                upload_kind.extension = meta.extension.clone();
+
+                if asset_type_name.as_deref() == Some("Mesh")
+                    && (meta.file_type == "image/png" || meta.file_type == "image/jpeg")
+                {
+                    upload_kind.asset_type = "Image".into();
+                    upload_kind.needs_universe_permissions = true;
+                }
             }
         }
         Err(e) => return Err(e),

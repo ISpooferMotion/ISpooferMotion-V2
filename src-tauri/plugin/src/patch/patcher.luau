@@ -212,6 +212,20 @@ local function applyPatch(patch: Patch): (boolean, string?)
 			local ok, err = pcall(function()
 				obj:SetAttribute(attr, tonumber(patch.value) or patch.value)
 			end)
+			if ok then
+				logToPlugin(
+					string.format(
+						"[ISpooferMotion] Replaced attribute '%s' on %s -> '%s'",
+						attr,
+						pcall(function()
+							return obj:GetFullName()
+						end)
+								and obj:GetFullName()
+							or obj.Name,
+						tostring(patch.value)
+					)
+				)
+			end
 			return ok, err
 		end
 
@@ -219,9 +233,24 @@ local function applyPatch(patch: Patch): (boolean, string?)
 			return false, "Property cannot be set with setProperty"
 		end
 
+		local coerced = coercePropertyValue(obj, patch.property, patch.value)
 		local ok, err = pcall(function()
-			(obj :: any)[patch.property] = coercePropertyValue(obj, patch.property, patch.value)
+			(obj :: any)[patch.property] = coerced
 		end)
+		if ok then
+			local objFullName = "?"
+			pcall(function()
+				objFullName = obj:GetFullName()
+			end)
+			logToPlugin(
+				string.format(
+					"[ISpooferMotion] Replaced property '%s' on %s -> '%s'",
+					patch.property,
+					objFullName,
+					tostring(patch.value)
+				)
+			)
+		end
 		return ok, err
 	elseif patch.action == "replaceEmotes" then
 		if not obj:IsA("HumanoidDescription") then
@@ -234,6 +263,13 @@ local function applyPatch(patch: Patch): (boolean, string?)
 		local ok, err = pcall(function()
 			(obj :: any):SetEmotes(decoded)
 		end)
+		if ok then
+			local objFullName = "?"
+			pcall(function()
+				objFullName = obj:GetFullName()
+			end)
+			logToPlugin("[ISpooferMotion] Replaced emotes on " .. objFullName)
+		end
 		return ok, err
 	elseif patch.action == "replaceAccessories" then
 		if not obj:IsA("HumanoidDescription") then
@@ -246,6 +282,13 @@ local function applyPatch(patch: Patch): (boolean, string?)
 		local ok, err = pcall(function()
 			(obj :: any):SetAccessories(decoded)
 		end)
+		if ok then
+			local objFullName = "?"
+			pcall(function()
+				objFullName = obj:GetFullName()
+			end)
+			logToPlugin("[ISpooferMotion] Replaced accessories on " .. objFullName)
+		end
 		return ok, err
 	elseif patch.action == "replaceTags" then
 		local decoded, decodeErr = decodeJsonTable(patch.value, "Tags")
@@ -277,6 +320,15 @@ local function applyPatch(patch: Patch): (boolean, string?)
 				CollectionService:AddTag(obj, newTag)
 			end
 		end)
+		if ok then
+			local objFullName = "?"
+			pcall(function()
+				objFullName = obj:GetFullName()
+			end)
+			logToPlugin(
+				string.format("[ISpooferMotion] Replaced %d tag(s) on %s", #decoded, objFullName)
+			)
+		end
 		return ok, err
 	elseif patch.action == "replaceAttribute" then
 		local okProperty, propertyErr = validatePropertyName(patch.property)
@@ -286,6 +338,20 @@ local function applyPatch(patch: Patch): (boolean, string?)
 		local ok, err = pcall(function()
 			obj:SetAttribute(patch.property, patch.value)
 		end)
+		if ok then
+			local objFullName = "?"
+			pcall(function()
+				objFullName = obj:GetFullName()
+			end)
+			logToPlugin(
+				string.format(
+					"[ISpooferMotion] Replaced attribute '%s' on %s -> '%s'",
+					patch.property,
+					objFullName,
+					tostring(patch.value)
+				)
+			)
+		end
 		return ok, err
 	elseif patch.action == "replaceScriptSource" then
 		if not obj:IsA("LuaSourceContainer") or obj.ClassName == "CoreScript" then
@@ -310,6 +376,13 @@ local function applyPatch(patch: Patch): (boolean, string?)
 			ok, err = pcall(function()
 				(obj :: any).Source = source
 			end)
+		end
+		if ok then
+			local objFullName = "?"
+			pcall(function()
+				objFullName = obj:GetFullName()
+			end)
+			logToPlugin("[ISpooferMotion] Replaced script source in " .. objFullName)
 		end
 		return ok, err
 	elseif patch.action == "replaceMeshPart" then
@@ -427,6 +500,18 @@ local function applyPatch(patch: Patch): (boolean, string?)
 		end
 
 		replaceRegisteredObject(patch.token, newPart)
+		local objFullName = "?"
+		pcall(function()
+			objFullName = newPart:GetFullName()
+		end)
+		logToPlugin(
+			string.format(
+				"[ISpooferMotion] Replaced MeshPart '%s': mesh=%s texture=%s",
+				objFullName,
+				targetMeshUri or "(unchanged)",
+				targetTextureUri or "(unchanged)"
+			)
+		)
 		return true, nil
 	end
 
@@ -547,13 +632,11 @@ local function applyPatches(patches: any)
 	)
 
 	-- Report failed patches back to the desktop app
-	if #failedPatchesList > 0 then
-		pcall(function()
-			postJson("/patch-results", {
-				failedPatches = failedPatchesList,
-			})
-		end)
-	end
+	pcall(function()
+		postJson("/patch-results", {
+			failedPatches = failedPatchesList,
+		})
+	end)
 
 	if succeeded > 0 then
 		setPluginGuiStatus("Replacements complete. Waiting for new scan or replacements...")

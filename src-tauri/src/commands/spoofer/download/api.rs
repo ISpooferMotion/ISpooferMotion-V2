@@ -230,7 +230,12 @@ pub async fn write_download_response(
                 new_asset_id: None,
             },
         );
-        return Ok(DownloadResult { success: false, file_path: None, error: Some(error_msg) });
+        return Ok(DownloadResult {
+            success: false,
+            file_path: None,
+            error: Some(error_msg),
+            resolved_place_id: None,
+        });
     }
 
     emit_transfer_update(
@@ -248,7 +253,12 @@ pub async fn write_download_response(
         },
     );
 
-    Ok(DownloadResult { success: true, file_path: Some(file_path), error: None })
+    Ok(DownloadResult {
+        success: true,
+        file_path: Some(file_path),
+        error: None,
+        resolved_place_id: None,
+    })
 }
 
 // Automatically acquire free assets to bypass copylock restrictions.
@@ -598,6 +608,7 @@ pub async fn batch_download_assets_concurrent(
                         success: false,
                         file_path: None,
                         error: Some(e.to_string()),
+                        resolved_place_id: None,
                     },
                 }
             }
