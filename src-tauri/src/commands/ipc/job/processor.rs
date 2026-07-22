@@ -493,6 +493,15 @@ pub async fn process_spoofer_action(
     let skip_owned = data.skip_owned.unwrap_or(false);
     let stream = stream::iter(parsed_assets.into_iter().enumerate());
 
+    // Belt-and-braces cap so a single asset's HTTP retry cascade cannot
+    // stall the whole job. Individual HTTP requests have their own 15s
+    // client timeout and retry-after values are now capped at 2 minutes,
+    // but a task could still legitimately need ~5 minutes for a rate-
+    // limited multi-step upload. 10 minutes is a comfortable ceiling
+    // above that while still being far below the 20+ minute hangs users
+    // have reported.
+    const PER_ASSET_TIMEOUT_SECS: u64 = 600;
+
     stream
         .for_each_concurrent(max_concurrency, |(i, (asset_id, asset_type, raw_value, asset_name))| {
             let ctx = Arc::clone(&ctx);
@@ -504,6 +513,13 @@ pub async fn process_spoofer_action(
                     .or_else(|| asset_name.clone().filter(|n| n != "Unknown" && n != "Animations" && !n.starts_with("Asset ")))
                     .or_else(|| asset_name.clone())
                     .unwrap_or_else(|| format!("Asset {asset_id}"));
+
+                let asset_id_for_timeout = asset_id.clone();
+                let exact_name_for_timeout = exact_name.clone();
+                let asset_type_for_timeout = asset_type.clone();
+                let ctx_for_timeout = Arc::clone(&ctx);
+
+                let task_body = async move {
 
                 let _adaptive_permit = crate::commands::spoofer::acquire_adaptive_permit().await;
                 if ctx.interrupted.load(Ordering::Relaxed) {
@@ -735,6 +751,31 @@ pub async fn process_spoofer_action(
 
                 if remove_download_file {
                     let _ = tokio::fs::remove_file(&file_path).await;
+                }
+                };
+
+                if tokio::time::timeout(
+                    std::time::Duration::from_secs(PER_ASSET_TIMEOUT_SECS),
+                    task_body,
+                )
+                .await
+                .is_err()
+                {
+                    // Task exceeded the per-asset ceiling. Count as failed so the
+                    // job can finalize instead of hanging on stuck HTTP retries.
+                    ctx_for_timeout.fail_count.fetch_add(1, Ordering::Relaxed);
+                    let msg = format!(
+                        "Timed out processing asset {asset_id_for_timeout} after {PER_ASSET_TIMEOUT_SECS}s; giving up so the job can finish."
+                    );
+                    ctx_for_timeout.log(&msg, "warn");
+                    ctx_for_timeout.record_result(serde_json::json!({
+                        "id": asset_id_for_timeout,
+                        "name": exact_name_for_timeout,
+                        "type": asset_type_for_timeout,
+                        "success": false,
+                        "stage": "timeout",
+                        "errorReason": "per-asset timeout"
+                    }));
                 }
             }
         })

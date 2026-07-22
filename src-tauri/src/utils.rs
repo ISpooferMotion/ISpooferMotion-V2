@@ -87,6 +87,14 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
     }
 
     if needs_wait {
+        // Hard cap on server-suggested waits. Roblox occasionally returns
+        // Retry-After values of an hour or more, which used to leave
+        // individual asset tasks sleeping for that entire duration and
+        // stalling the whole job (`for_each_concurrent` waits for every
+        // future). 2 minutes is long enough for genuine rate-limit
+        // windows to reset but short enough that a stuck task recovers.
+        const MAX_RETRY_AFTER_MS: u64 = 120_000;
+
         if let Some(reset) = response.headers().get("x-ratelimit-reset") {
             if let Ok(reset_str) = reset.to_str() {
                 if let Ok(reset_secs) = reset_str.parse::<u64>() {
@@ -95,7 +103,8 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
                     {
                         let now_secs = now.as_secs();
                         if reset_secs > now_secs {
-                            return Some((reset_secs - now_secs) * 1000);
+                            let ms = (reset_secs - now_secs).saturating_mul(1000);
+                            return Some(ms.min(MAX_RETRY_AFTER_MS));
                         }
                         return Some(0);
                     }
@@ -107,7 +116,8 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
         if let Some(retry) = response.headers().get("retry-after") {
             if let Ok(retry_str) = retry.to_str() {
                 if let Ok(retry_secs) = retry_str.parse::<u64>() {
-                    return Some(retry_secs * 1000);
+                    let ms = retry_secs.saturating_mul(1000);
+                    return Some(ms.min(MAX_RETRY_AFTER_MS));
                 }
             }
         }
