@@ -761,21 +761,33 @@ pub async fn process_spoofer_action(
                 .await
                 .is_err()
                 {
-                    // Task exceeded the per-asset ceiling. Count as failed so the
-                    // job can finalize instead of hanging on stuck HTTP retries.
-                    ctx_for_timeout.fail_count.fetch_add(1, Ordering::Relaxed);
-                    let msg = format!(
-                        "Timed out processing asset {asset_id_for_timeout} after {PER_ASSET_TIMEOUT_SECS}s; giving up so the job can finish."
-                    );
-                    ctx_for_timeout.log(&msg, "warn");
-                    ctx_for_timeout.record_result(serde_json::json!({
-                        "id": asset_id_for_timeout,
-                        "name": exact_name_for_timeout,
-                        "type": asset_type_for_timeout,
-                        "success": false,
-                        "stage": "timeout",
-                        "errorReason": "per-asset timeout"
-                    }));
+                    // Task exceeded the per-asset ceiling. If the task had already
+                    // recorded a replacement (i.e. the upload succeeded and the
+                    // hang was in the trailing cleanup) we must NOT count it as
+                    // failed too — that would double-count against fail_count and
+                    // flip the job to "partially_finished" when everything worked.
+                    if ctx_for_timeout.replacements.contains_key(&asset_id_for_timeout) {
+                        ctx_for_timeout.log(
+                            &format!(
+                                "Asset {asset_id_for_timeout} uploaded successfully but its cleanup hung; abandoning cleanup so the job can finish."
+                            ),
+                            "warn",
+                        );
+                    } else {
+                        ctx_for_timeout.fail_count.fetch_add(1, Ordering::Relaxed);
+                        let msg = format!(
+                            "Timed out processing asset {asset_id_for_timeout} after {PER_ASSET_TIMEOUT_SECS}s; giving up so the job can finish."
+                        );
+                        ctx_for_timeout.log(&msg, "warn");
+                        ctx_for_timeout.record_result(serde_json::json!({
+                            "id": asset_id_for_timeout,
+                            "name": exact_name_for_timeout,
+                            "type": asset_type_for_timeout,
+                            "success": false,
+                            "stage": "timeout",
+                            "errorReason": "per-asset timeout"
+                        }));
+                    }
                 }
             }
         })
