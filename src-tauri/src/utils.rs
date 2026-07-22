@@ -106,7 +106,13 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
                             let ms = (reset_secs - now_secs).saturating_mul(1000);
                             return Some(ms.min(MAX_RETRY_AFTER_MS));
                         }
-                        return Some(0);
+                        // Reset time is in the past. Falling back to None lets
+                        // the caller use its own default wait (typically 2s) —
+                        // returning Some(0) here caused every caller's
+                        // `.unwrap_or(2_000)` to be bypassed, producing an
+                        // immediate-retry loop that spammed logs and freed no
+                        // actual rate-limit budget.
+                        return None;
                     }
                 }
             }
@@ -116,6 +122,11 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
         if let Some(retry) = response.headers().get("retry-after") {
             if let Ok(retry_str) = retry.to_str() {
                 if let Ok(retry_secs) = retry_str.parse::<u64>() {
+                    if retry_secs == 0 {
+                        // Same rationale as x-ratelimit-reset above — a 0 wait
+                        // triggers immediate retries that get 429'd again.
+                        return None;
+                    }
                     let ms = retry_secs.saturating_mul(1000);
                     return Some(ms.min(MAX_RETRY_AFTER_MS));
                 }

@@ -45,12 +45,22 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   const { t } = useLanguage();
   const [expanded, setExpanded] = useState(initialExpanded);
   const [expandedAssetKey, setExpandedAssetKey] = useState<string | null>(null);
+  // Cap the initial render to keep expanding huge folders (e.g. thousands of
+  // Unverified Script IDs) from freezing the app. User can click 'show more'
+  // to reveal the rest in chunks.
+  const ASSET_RENDER_CHUNK = 300;
+  const [renderLimit, setRenderLimit] = useState(ASSET_RENDER_CHUNK);
 
   const matchesFilter = (type: string) =>
     activeAssetFilters.length === 0 || activeAssetFilters.includes(type);
   const filteredAssets = useMemo(() => {
     return node.assets.filter((asset) => matchesFilter(asset.type));
   }, [node.assets, activeAssetFilters]);
+  const visibleAssets = useMemo(
+    () => filteredAssets.slice(0, renderLimit),
+    [filteredAssets, renderLimit],
+  );
+  const hiddenAssetCount = filteredAssets.length - visibleAssets.length;
   const totalChildren = node.children.length;
   const allIds = getAllAssetIds(node);
 
@@ -290,13 +300,41 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
 
       {expanded && (
         <div className="flex flex-col overflow-hidden">
-          {filteredAssets.length > 0 && (
+          {visibleAssets.length > 0 && (
             <div className="flex flex-col">
-              {filteredAssets.map((asset) => (
+              {visibleAssets.map((asset) => (
                 <div key={`${asset.type}:${asset.path}:${asset.propertyName}:${getAssetId(asset)}`}>
                   {renderAssetRow(asset)}
                 </div>
               ))}
+              {hiddenAssetCount > 0 && (
+                <div
+                  className="text-[10px] text-muted-foreground py-2 flex items-center gap-2"
+                  style={{ marginLeft: `${(level + 1) * 16 + 18}px` }}
+                >
+                  <span>
+                    Showing {visibleAssets.length} of {filteredAssets.length}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => setRenderLimit((prev) => prev + ASSET_RENDER_CHUNK)}
+                  >
+                    Show {Math.min(ASSET_RENDER_CHUNK, hiddenAssetCount)} more
+                  </Button>
+                  {hiddenAssetCount > ASSET_RENDER_CHUNK && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[10px]"
+                      onClick={() => setRenderLimit(filteredAssets.length)}
+                    >
+                      Show all
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
