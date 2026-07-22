@@ -165,6 +165,11 @@ const mergeSections = (savedSections: unknown, defaultSections: string[]) => {
 interface ConfigState {
   config: AppConfig;
   accountSecrets: Record<string, { cookie?: string; apiKey?: string }>;
+  // Tracks whether loadSecrets() has completed at least once this session.
+  // Views (e.g. AccountsView) use this to avoid rendering 'missing cookie'
+  // pills during the brief window between app mount and the async secrets
+  // load, which was misread as 'the app invalidated my credentials'.
+  secretsLoaded: boolean;
   updateConfig: <C extends keyof AppConfig, K extends keyof AppConfig[C]>(
     c: C,
     k: K,
@@ -232,6 +237,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
   return {
     config: initConfig,
     accountSecrets: {},
+    secretsLoaded: false,
     updateConfig: (cat, key, val) => {
       set((state) => {
         const n = {
@@ -268,7 +274,10 @@ export const useConfigStore = create<ConfigState>((set, get) => {
         return { config: DEFAULT_APP_CONFIG };
       }),
     loadSecrets: async () => {
-      if (!isTauriRuntime()) return;
+      if (!isTauriRuntime()) {
+        set({ secretsLoaded: true });
+        return;
+      }
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         interface ProfileSecrets {
@@ -286,6 +295,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
               : '';
           return {
             accountSecrets: s.accountSecrets || {},
+            secretsLoaded: true,
             config: {
               ...state.config,
               spoofing: {
@@ -300,6 +310,9 @@ export const useConfigStore = create<ConfigState>((set, get) => {
         });
       } catch (e) {
         console.warn('Failed to load profile secrets from backend', e);
+        // Still mark as loaded so the UI doesn't sit in the loading state
+        // forever — accounts without secrets will correctly show as missing.
+        set({ secretsLoaded: true });
       }
     },
     saveSecrets: async () => {

@@ -29,7 +29,8 @@ type ApiKeyOwnerDetectResult = {
 export default function AccountsView() {
   const { config } = useConfig();
   const { t } = useLanguage();
-  const { accountSecrets, updateAccountSecret, updateAccountsList } = useConfigStore();
+  const { accountSecrets, updateAccountSecret, updateAccountsList, secretsLoaded } =
+    useConfigStore();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newCookie, setNewCookie] = useState('');
@@ -375,22 +376,49 @@ export default function AccountsView() {
                         )}
                       </div>
                     )}
-                    {!secrets?.cookie && acc.isDownloader && (
+                    {/* Only render 'missing' pills once secrets have finished loading
+                        from disk. Otherwise a stale render during the mount → load
+                        window flashed 'Invalid cookie / Invalid API key' for every
+                        account, which users read as the app invalidating their
+                        credentials on reopen. */}
+                    {secretsLoaded && !secrets?.cookie && acc.isDownloader && (
                       <div
                         className="text-xs text-red-500 flex items-center gap-1"
-                        title={t('accounts.invalidCookie')}
+                        title="No cookie is saved for this account"
                       >
-                        <ShieldAlert size={12} /> {t('accounts.invalidCookie')}
+                        <ShieldAlert size={12} /> Missing cookie
                       </div>
                     )}
-                    {!secrets?.apiKey && acc.isUploader && (
+                    {secretsLoaded && !secrets?.apiKey && acc.isUploader && (
                       <div
                         className="text-xs text-yellow-500 flex items-center gap-1"
-                        title={t('accounts.invalidApiKey')}
+                        title="No Open Cloud API key is saved for this account"
                       >
-                        <ShieldAlert size={12} /> {t('accounts.invalidApiKey')}
+                        <ShieldAlert size={12} /> Missing API key
                       </div>
                     )}
+                    {secretsLoaded &&
+                      acc.isDownloader &&
+                      secrets?.cookie &&
+                      acc.cookieValidated === false && (
+                        <div
+                          className="text-xs text-red-500 flex items-center gap-1"
+                          title="The saved cookie failed validation — Roblox rejected it"
+                        >
+                          <ShieldAlert size={12} /> Cookie rejected by Roblox
+                        </div>
+                      )}
+                    {secretsLoaded &&
+                      acc.isUploader &&
+                      secrets?.apiKey &&
+                      acc.apiKeyValidated === false && (
+                        <div
+                          className="text-xs text-yellow-500 flex items-center gap-1"
+                          title="The saved API key failed validation — Roblox rejected it"
+                        >
+                          <ShieldAlert size={12} /> API key rejected by Roblox
+                        </div>
+                      )}
                   </div>
                 </Card>
               );
