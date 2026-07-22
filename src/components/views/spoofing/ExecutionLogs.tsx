@@ -48,19 +48,28 @@ export default function ExecutionLogs({
   );
 
   const [eta, setEta] = useState<string | null>(null);
+  // Rolling window of (timestamp, completedCount) samples used for the ETA.
+  // Cumulative-average from job start produced wildly inflated ETAs (users
+  // reported 900+ minute estimates) because early samples are dominated by
+  // one-time setup: batch metadata, place-ID discovery on cold cache, and
+  // rate-limit warmup. A short trailing window reacts to actual throughput.
+  const samplesRef = useRef<Array<{ t: number; count: number }>>([]);
 
   useEffect(() => {
-    if (!isSpoofing || !spoofStartTime || spoofCurrentCount === 0 || spoofTotalCount === 0) {
+    if (!isSpoofing || !spoofStartTime || spoofTotalCount === 0) {
       setEta(null);
+      samplesRef.current = [];
       return;
     }
+
+    const ETA_WINDOW_MS = 30_000;
+    const MIN_SAMPLES_FOR_ETA = 3;
+    const MIN_ITEMS_FOR_ETA = 5;
 
     const interval = setInterval(() => {
       const store = useSpooferStore.getState();
       const now =
         store.isJobPaused && store.jobPauseStartTime ? store.jobPauseStartTime : Date.now();
-      const elapsedMs = now - spoofStartTime;
-      const msPerItem = elapsedMs / spoofCurrentCount;
       const remainingItems = spoofTotalCount - spoofCurrentCount;
 
       if (remainingItems <= 0) {
@@ -68,15 +77,40 @@ export default function ExecutionLogs({
         return;
       }
 
+      // Add a fresh sample and drop anything older than the window.
+      samplesRef.current.push({ t: now, count: spoofCurrentCount });
+      samplesRef.current = samplesRef.current.filter((s) => now - s.t <= ETA_WINDOW_MS);
+
+      const samples = samplesRef.current;
+      // Hold off on displaying an ETA until we have enough signal — otherwise
+      // the number swings wildly during the first few seconds of a job.
+      if (samples.length < MIN_SAMPLES_FOR_ETA || spoofCurrentCount < MIN_ITEMS_FOR_ETA) {
+        setEta(null);
+        return;
+      }
+
+      const oldest = samples[0];
+      const itemsInWindow = spoofCurrentCount - oldest.count;
+      const msInWindow = now - oldest.t;
+      if (itemsInWindow <= 0 || msInWindow <= 0) {
+        setEta(null);
+        return;
+      }
+
+      const msPerItem = msInWindow / itemsInWindow;
       const remainingMs = msPerItem * remainingItems;
-      const remainingSec = Math.floor(remainingMs / 1000);
+      const remainingSec = Math.max(0, Math.floor(remainingMs / 1000));
 
       if (remainingSec < 60) {
         setEta(`~${remainingSec}s remaining`);
-      } else {
+      } else if (remainingSec < 3600) {
         const mins = Math.floor(remainingSec / 60);
         const secs = remainingSec % 60;
         setEta(`~${mins}m ${secs}s remaining`);
+      } else {
+        const hours = Math.floor(remainingSec / 3600);
+        const mins = Math.floor((remainingSec % 3600) / 60);
+        setEta(`~${hours}h ${mins}m remaining`);
       }
     }, 1000);
 
