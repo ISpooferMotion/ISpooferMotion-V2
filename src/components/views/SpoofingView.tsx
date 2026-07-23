@@ -49,6 +49,7 @@ import { appendSpoofingLog } from '../../utils/spoofingLogs';
 import { queueStudioReplacements } from '../../utils/studioBridge';
 import { triggerStudioScan } from '../../utils/studioScan';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
+import PasteIdsModal from '../modals/PasteIdsModal';
 import ResultsModal from '../modals/ResultsModal';
 
 import CredentialsSection from './config/CredentialsSection';
@@ -59,6 +60,7 @@ import AdvancedSection from './settings/AdvancedSection';
 import ExecutionLogs from './spoofing/ExecutionLogs';
 import {
   type AudioQuotaDisplay,
+  AccountSwitcher,
   AvatarDropdown,
   GroupDropdown,
   parseAudioQuota,
@@ -155,6 +157,7 @@ export default function SpoofingView() {
   );
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [resultsModalOpen, setResultsModalOpen] = useState(false);
+  const [pasteIdsOpen, setPasteIdsOpen] = useState(false);
   const [advancedTab, setAdvancedTab] = useState('upload');
   const initialMount = useRef(true);
   const [audioQuota, setAudioQuota] = useState<AudioQuotaDisplay>({
@@ -1017,6 +1020,9 @@ export default function SpoofingView() {
                 </span>
               </div>
 
+              {/* Account switcher — mirrors the Select action from the Accounts tab */}
+              <AccountSwitcher accounts={config.accounts} />
+
               {/* Target Context */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
@@ -1099,6 +1105,7 @@ export default function SpoofingView() {
                 setLogs={setLogs}
                 lastReplacements={lastReplacements}
                 setResultsModalOpen={setResultsModalOpen}
+                onOpenPasteIds={() => setPasteIdsOpen(true)}
               />
             </div>
           </motion.div>
@@ -1126,6 +1133,7 @@ export default function SpoofingView() {
         </div>
       </div>
       <ResultsModal isOpen={resultsModalOpen} onClose={() => setResultsModalOpen(false)} />
+      <PasteIdsModal open={pasteIdsOpen} onOpenChange={setPasteIdsOpen} />
 
       <Dialog
         open={Boolean(pendingQuotaRun)}

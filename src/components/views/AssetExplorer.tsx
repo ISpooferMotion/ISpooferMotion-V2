@@ -143,6 +143,7 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
     name: string;
   } | null>(null);
   const [activeAssetFilters, setActiveAssetFilters] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
 
   const [resolvingScriptRefs, setResolvingScriptRefs] = useState(false);
@@ -918,6 +919,8 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
                   loadedFileName={loadedFileName}
                   activeAssetFilters={activeAssetFilters}
                   setActiveAssetFilters={setActiveAssetFilters}
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
                 />
 
                 <div className="flex flex-col flex-1 p-2">
@@ -934,6 +937,7 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
                       setEnlargedImage={setEnlargedImage}
                       setPreviewingAnimation={setPreviewingAnimation}
                       activeAssetFilters={activeAssetFilters}
+                      searchQuery={searchQuery}
                       playingAudioId={playingAudioId}
                       initialExpanded={true}
                     />

@@ -1,4 +1,4 @@
-import { Copy, ListChecks, Trash2 } from 'lucide-react';
+import { ClipboardPaste, Copy, ListChecks, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { useShallow } from 'zustand/react/shallow';
@@ -13,6 +13,7 @@ interface ExecutionLogsProps {
   setLogs: (logs: string[]) => void;
   lastReplacements: Record<string, string>;
   setResultsModalOpen: (open: boolean) => void;
+  onOpenPasteIds?: () => void;
 }
 
 export default function ExecutionLogs({
@@ -20,6 +21,7 @@ export default function ExecutionLogs({
   setLogs,
   lastReplacements,
   setResultsModalOpen,
+  onOpenPasteIds,
 }: ExecutionLogsProps) {
   const { t } = useLanguage();
   const outputRef = useRef<HTMLDivElement>(null);
@@ -141,6 +143,15 @@ export default function ExecutionLogs({
           </div>
         </span>
         <div className="flex items-center gap-3">
+          {onOpenPasteIds && (
+            <button
+              onClick={onOpenPasteIds}
+              className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-primary transition-colors"
+              title="Paste replacement IDs and send them to Studio"
+            >
+              <ClipboardPaste size={14} /> Paste IDs
+            </button>
+          )}
           {Object.keys(lastReplacements).length > 0 && (
             <button
               onClick={() => setResultsModalOpen(true)}

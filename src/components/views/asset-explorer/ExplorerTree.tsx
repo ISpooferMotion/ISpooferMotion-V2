@@ -26,6 +26,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   setEnlargedImage,
   setPreviewingAnimation,
   activeAssetFilters,
+  searchQuery = '',
   playingAudioId,
   initialExpanded = false,
 }: {
@@ -39,12 +40,16 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   setEnlargedImage: (value: { id: string; name: string } | null) => void;
   setPreviewingAnimation: (value: { id: string; name: string } | null) => void;
   activeAssetFilters: string[];
+  searchQuery?: string;
   playingAudioId: string | null;
   initialExpanded?: boolean;
 }) {
   const { t } = useLanguage();
-  const [expanded, setExpanded] = useState(initialExpanded);
+  const [userExpanded, setExpanded] = useState(initialExpanded);
   const [expandedAssetKey, setExpandedAssetKey] = useState<string | null>(null);
+  // Force-expand while a search is active so matches are visible without the
+  // user having to click every folder open.
+  const expanded = userExpanded || (searchQuery ?? '').trim().length > 0;
   // Cap the initial render to keep expanding huge folders (e.g. thousands of
   // Unverified Script IDs) from freezing the app. User can click 'show more'
   // to reveal the rest in chunks.
@@ -53,9 +58,25 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
 
   const matchesFilter = (type: string) =>
     activeAssetFilters.length === 0 || activeAssetFilters.includes(type);
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const matchesSearch = (asset: ParsedAssetRef) => {
+    if (!normalizedSearch) return true;
+    const id = ('assetId' in asset ? asset.assetId : '') || '';
+    const name = (
+      'name' in asset ? String((asset as { name?: string }).name || '') : ''
+    ).toLowerCase();
+    const path = (asset.path || '').toLowerCase();
+    const propertyName = (asset.propertyName || '').toLowerCase();
+    return (
+      id.includes(normalizedSearch) ||
+      name.includes(normalizedSearch) ||
+      path.includes(normalizedSearch) ||
+      propertyName.includes(normalizedSearch)
+    );
+  };
   const filteredAssets = useMemo(() => {
-    return node.assets.filter((asset) => matchesFilter(asset.type));
-  }, [node.assets, activeAssetFilters]);
+    return node.assets.filter((asset) => matchesFilter(asset.type) && matchesSearch(asset));
+  }, [node.assets, activeAssetFilters, normalizedSearch]);
   const visibleAssets = useMemo(
     () => filteredAssets.slice(0, renderLimit),
     [filteredAssets, renderLimit],
@@ -351,6 +372,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
               setEnlargedImage={setEnlargedImage}
               setPreviewingAnimation={setPreviewingAnimation}
               activeAssetFilters={activeAssetFilters}
+              searchQuery={searchQuery}
               playingAudioId={playingAudioId}
             />
           ))}

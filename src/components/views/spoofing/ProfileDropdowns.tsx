@@ -1,11 +1,102 @@
 import { motion } from 'framer-motion';
 import { Loader2, Users, UserSquare2 } from 'lucide-react';
 
+import type { AppConfig } from '../../../contexts/ConfigContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
+import { useConfigStore } from '../../../stores/configStore';
 import { cn } from '../../../utils/cn';
 import { normalizeId, type RobloxGroup, type RobloxUserInfo } from '../../../utils/robloxProfiles';
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../ui/select';
+
+/**
+ * Compact account switcher for the Spoofing view.
+ *
+ * Lists every account saved on the Accounts tab and lets the user switch
+ * the active credentials without leaving Spoofing. Selecting an account
+ * mirrors what the Accounts tab's Select button does: pushes that
+ * account's cookie/API key into the active spoofing config and disables
+ * auto-detect so a manual choice sticks.
+ */
+export function AccountSwitcher({ accounts }: { accounts: AppConfig['accounts'] }) {
+  const { t } = useLanguage();
+  const { accountSecrets, updateConfig, updateCategory } = useConfigStore();
+  const activeUserId = useConfigStore((s) => s.config.spoofing.selectedUser);
+
+  if (!accounts || accounts.length === 0) return null;
+
+  const handleChange = (nextId: string | null) => {
+    if (!nextId || nextId === 'none') return;
+    const account = accounts.find((a) => a.id === nextId);
+    if (!account) return;
+    const secrets = accountSecrets[nextId];
+
+    updateConfig('spoofing', 'selectedUser', nextId);
+    updateCategory('advanced', { autoCookieStudio: false, autoCookieBrowser: false });
+    if (secrets?.cookie && account.isDownloader) {
+      updateConfig('spoofing', 'cookie', secrets.cookie);
+    }
+    if (secrets?.apiKey && account.isUploader) {
+      updateConfig('spoofing', 'apiKey', secrets.apiKey);
+    }
+  };
+
+  const active = accounts.find((a) => a.id === activeUserId);
+  const label = active?.name || t('accounts.selectedAccount') || 'Choose account';
+
+  return (
+    <div className="flex flex-col gap-1.5 mb-2">
+      <span className="text-xs font-medium text-text-secondary">
+        {t('accounts.title') || 'Active account'}
+      </span>
+      <Select value={activeUserId} onValueChange={handleChange}>
+        <SelectTrigger className="w-full h-10 bg-bg-surface border-border-strong text-text-primary hover:border-primary px-3 transition-colors">
+          <div className="flex items-center gap-2 w-full min-w-0">
+            <div className="w-6 h-6 shrink-0">
+              {active?.avatarUrl ? (
+                <img
+                  src={active.avatarUrl}
+                  alt={active.name}
+                  className="w-6 h-6 rounded-full object-cover"
+                />
+              ) : (
+                <EmptyAvatar size={14} />
+              )}
+            </div>
+            <span className="truncate text-[13px] font-medium">{label}</span>
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          {accounts.map((acc) => (
+            <SelectItem key={acc.id} value={acc.id} className="text-[13px]">
+              <div className="flex items-center gap-3 w-full">
+                <div className="w-6 h-6 shrink-0">
+                  {acc.avatarUrl ? (
+                    <img
+                      src={acc.avatarUrl}
+                      alt={acc.name}
+                      className="w-full h-full rounded-full object-cover ring-1 ring-border-subtle"
+                    />
+                  ) : (
+                    <EmptyAvatar size={14} />
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    'truncate',
+                    acc.id === activeUserId ? 'font-semibold text-primary' : 'font-medium',
+                  )}
+                >
+                  {acc.name}
+                </span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 export type AudioQuotaDisplay =
   | { status: 'idle' | 'loading' | 'unavailable' }
