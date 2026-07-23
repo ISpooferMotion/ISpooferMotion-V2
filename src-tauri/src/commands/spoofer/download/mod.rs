@@ -360,14 +360,16 @@ pub async fn download_animation_asset_with_progress(
                         RateLimitBucket::AssetDownload,
                         Duration::from_millis(retry_after_ms),
                     );
-                    emit_spoofer_log(
-                        &app,
-                        "warn",
-                        &format!(
-                            "Roblox rate limited download for asset {asset_id}; backing off for {:.1}s.",
-                            retry_after_ms as f64 / 1000.0
-                        ),
-                    );
+                    if crate::commands::spoofer::should_log_rate_limit_warning("asset-download") {
+                        emit_spoofer_log(
+                            &app,
+                            "warn",
+                            &format!(
+                                "Roblox rate limited downloads; backing off for {:.1}s.",
+                                retry_after_ms as f64 / 1000.0
+                            ),
+                        );
+                    }
                 } else if status.is_server_error() {
                     crate::commands::spoofer::record_adaptive_server_error();
                 }

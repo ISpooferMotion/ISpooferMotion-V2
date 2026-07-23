@@ -534,14 +534,18 @@ pub async fn batch_get_download_urls_for_assets(
                             RateLimitBucket::DownloadResolution,
                             Duration::from_millis(wait_ms),
                         );
-                        emit_spoofer_log(
-                            &app,
-                            "warn",
-                            &format!(
-                                "Roblox rate limited batch asset resolution; slowing requests for about {:.1}s.",
-                                wait_ms as f64 / 1000.0
-                            ),
-                        );
+                        if crate::commands::spoofer::should_log_rate_limit_warning(
+                            "batch-asset-resolution",
+                        ) {
+                            emit_spoofer_log(
+                                &app,
+                                "warn",
+                                &format!(
+                                    "Roblox rate limited batch asset resolution; slowing requests for about {:.1}s.",
+                                    wait_ms as f64 / 1000.0
+                                ),
+                            );
+                        }
                         has_transient = true;
                     } else if resp.status().is_server_error() {
                         crate::commands::spoofer::record_adaptive_server_error();

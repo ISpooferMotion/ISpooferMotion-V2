@@ -18,6 +18,31 @@ use uuid::Uuid;
 
 static CIRCUIT_BREAKER: Mutex<Option<Instant>> = Mutex::new(None);
 static RATE_LIMIT_BUCKETS: OnceLock<dashmap::DashMap<&'static str, Instant>> = OnceLock::new();
+static RATE_LIMIT_LOG_TIMES: OnceLock<dashmap::DashMap<&'static str, Instant>> = OnceLock::new();
+
+/// Per-channel throttle for user-facing rate-limit warnings.
+///
+/// Roblox 429s during a batch operation can produce dozens of retry attempts
+/// in quick succession. Logging each one flooded the output panel with the
+/// same 'Roblox rate limited... 2.0s' line and made the app look broken.
+/// This helper returns `true` at most once every 20 seconds per `channel`
+/// key, so we log the first hit and stay quiet during the retry storm.
+pub fn should_log_rate_limit_warning(channel: &'static str) -> bool {
+    let map = RATE_LIMIT_LOG_TIMES.get_or_init(dashmap::DashMap::new);
+    let now = Instant::now();
+    let cutoff = Duration::from_secs(20);
+    let mut allow = true;
+    map.entry(channel)
+        .and_modify(|last| {
+            if now.duration_since(*last) < cutoff {
+                allow = false;
+            } else {
+                *last = now;
+            }
+        })
+        .or_insert(now);
+    allow
+}
 
 static ASSET_CACHE: std::sync::OnceLock<
     dashmap::DashMap<String, dashmap::DashMap<String, String>>,

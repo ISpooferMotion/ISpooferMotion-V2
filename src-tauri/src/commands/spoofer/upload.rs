@@ -595,7 +595,9 @@ pub async fn publish_asset_with_progress(
                     format_wait_seconds(sleep_duration),
                     attempt + 1
                 );
-                emit_spoofer_log(&app, "warn", &message);
+                if crate::commands::spoofer::should_log_rate_limit_warning("upload") {
+                    emit_spoofer_log(&app, "warn", &message);
+                }
                 emit_transfer_update(
                     &app,
                     TransferUpdate {

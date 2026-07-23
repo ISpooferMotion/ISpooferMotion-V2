@@ -47,12 +47,19 @@ export default function AccountsView() {
       let userId = '';
       let name = 'Unknown';
       let avatarUrl = '';
+      // Track what got validated during this add — the cookie/API key were
+      // just tested against Roblox, so persist that so the account shows a
+      // green check on reopen instead of forcing the user to click 'Validate
+      // All' every session.
+      let cookieValidated = false;
+      let apiKeyValidated = false;
 
       if (newCookie.trim()) {
         const result = await validateCookieProfile(newCookie.trim());
         userId = String(result.user.id);
         name = result.user.displayName || result.user.name;
         avatarUrl = result.user.avatarUrl || '';
+        cookieValidated = true;
       } else if (newApiKey.trim()) {
         const result = await invoke<ApiKeyOwnerDetectResult>('detect_opencloud_api_key_owner', {
           key: newApiKey.trim(),
@@ -60,11 +67,26 @@ export default function AccountsView() {
         if (result.ok && result.ownerUserId) {
           userId = result.ownerUserId;
           name = `API Key Owner (${userId})`;
+          apiKeyValidated = true;
         } else {
           throw new Error('API Key is invalid or owner could not be determined.');
         }
       } else {
         throw new Error('You must provide either a Cookie or an API Key.');
+      }
+
+      // If both were supplied, validate the API key too even though we
+      // resolved userId from the cookie above.
+      if (newCookie.trim() && newApiKey.trim() && !apiKeyValidated) {
+        try {
+          const apiResult = await invoke<ApiKeyOwnerDetectResult>(
+            'detect_opencloud_api_key_owner',
+            { key: newApiKey.trim() },
+          );
+          apiKeyValidated = apiResult.ok;
+        } catch {
+          apiKeyValidated = false;
+        }
       }
 
       const existingAccounts = [...config.accounts];
@@ -77,6 +99,15 @@ export default function AccountsView() {
           isUploader,
           name,
           avatarUrl: avatarUrl || existingAccounts[existingIdx].avatarUrl,
+          // Only overwrite validated flags when the user actually supplied a
+          // new value for that field on this add — preserves the previous
+          // state for the untouched field.
+          cookieValidated: newCookie.trim()
+            ? cookieValidated
+            : existingAccounts[existingIdx].cookieValidated,
+          apiKeyValidated: newApiKey.trim()
+            ? apiKeyValidated
+            : existingAccounts[existingIdx].apiKeyValidated,
         };
       } else {
         existingAccounts.push({
@@ -85,6 +116,8 @@ export default function AccountsView() {
           avatarUrl,
           isDownloader,
           isUploader,
+          cookieValidated,
+          apiKeyValidated,
         });
       }
 
