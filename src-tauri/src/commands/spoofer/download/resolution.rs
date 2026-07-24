@@ -2,11 +2,56 @@ use super::is_valid_numeric_id;
 
 use reqwest::header::{COOKIE, USER_AGENT};
 use std::collections::HashSet;
+use std::sync::OnceLock;
 use tauri::AppHandle;
 
 const MAX_GROUP_CRAWL_LIMIT: usize = 5;
 const MAX_GROUP_FRIEND_CRAWL_LIMIT: usize = 8;
 const MAX_FRIEND_CRAWL_LIMIT: usize = 15;
+
+// Per-process caches for the social-graph discovery.
+//
+// Without these, every asset in a job triggers the full graph walk:
+// auth-user lookup, auth-user's groups, auth-user's group games, plus the
+// creator's groups/friends/games. For a place with 777 assets sharing a
+// handful of creators, that's hundreds of redundant Roblox calls that
+// dominated wall time (~40s per asset in tester logs).
+//
+// The caches are keyed by ID (not cookie) — we can't tell one cookie from
+// another safely, so we assume the currently signed-in user doesn't
+// change mid-process. Restarting the app clears everything.
+type AuthUserCache = dashmap::DashMap<String, u64>;
+type UserGroupsCache = dashmap::DashMap<u64, Vec<(u64, Option<u64>)>>;
+type UserFriendsCache = dashmap::DashMap<u64, Vec<u64>>;
+type CreatorGamesCache = dashmap::DashMap<(String, u64), Vec<String>>;
+type CreatorInfoCache = dashmap::DashMap<String, (String, u64)>;
+type SocialGraphCache = dashmap::DashMap<u64, Vec<String>>;
+
+static AUTH_USER_ID_CACHE: OnceLock<AuthUserCache> = OnceLock::new();
+static USER_GROUPS_CACHE: OnceLock<UserGroupsCache> = OnceLock::new();
+static USER_FRIENDS_CACHE: OnceLock<UserFriendsCache> = OnceLock::new();
+static CREATOR_GAMES_CACHE: OnceLock<CreatorGamesCache> = OnceLock::new();
+static CREATOR_INFO_CACHE: OnceLock<CreatorInfoCache> = OnceLock::new();
+static SOCIAL_GRAPH_CACHE: OnceLock<SocialGraphCache> = OnceLock::new();
+
+fn auth_user_id_cache() -> &'static AuthUserCache {
+    AUTH_USER_ID_CACHE.get_or_init(dashmap::DashMap::new)
+}
+fn user_groups_cache() -> &'static UserGroupsCache {
+    USER_GROUPS_CACHE.get_or_init(dashmap::DashMap::new)
+}
+fn user_friends_cache() -> &'static UserFriendsCache {
+    USER_FRIENDS_CACHE.get_or_init(dashmap::DashMap::new)
+}
+fn creator_games_cache() -> &'static CreatorGamesCache {
+    CREATOR_GAMES_CACHE.get_or_init(dashmap::DashMap::new)
+}
+fn creator_info_cache() -> &'static CreatorInfoCache {
+    CREATOR_INFO_CACHE.get_or_init(dashmap::DashMap::new)
+}
+fn social_graph_cache() -> &'static SocialGraphCache {
+    SOCIAL_GRAPH_CACHE.get_or_init(dashmap::DashMap::new)
+}
 
 // Request direct URL from standard v1 asset delivery API.
 pub async fn resolve_asset_id_location(
@@ -358,6 +403,9 @@ pub async fn attempt_asset_usage_place_id_discovery(
 }
 
 pub async fn get_groups_for_user(user_id: u64, cookie_header: &str) -> Vec<(u64, Option<u64>)> {
+    if let Some(cached) = user_groups_cache().get(&user_id) {
+        return cached.clone();
+    }
     let client = crate::utils::get_http_client();
     let url = format!("https://groups.roblox.com/v1/users/{user_id}/groups/roles");
     let mut results = Vec::new();
@@ -383,10 +431,14 @@ pub async fn get_groups_for_user(user_id: u64, cookie_header: &str) -> Vec<(u64,
             }
         }
     }
+    user_groups_cache().insert(user_id, results.clone());
     results
 }
 
 pub async fn get_friends_for_user(user_id: u64, cookie_header: &str) -> Vec<u64> {
+    if let Some(cached) = user_friends_cache().get(&user_id) {
+        return cached.clone();
+    }
     let client = crate::utils::get_http_client();
     let url = format!("https://friends.roblox.com/v1/users/{user_id}/friends");
     let mut results = Vec::new();
@@ -406,6 +458,7 @@ pub async fn get_friends_for_user(user_id: u64, cookie_header: &str) -> Vec<u64>
             }
         }
     }
+    user_friends_cache().insert(user_id, results.clone());
     results
 }
 
@@ -414,6 +467,10 @@ pub async fn get_games_for_creator(
     creator_id: u64,
     cookie_header: &str,
 ) -> Vec<String> {
+    let cache_key = (creator_type.to_string(), creator_id);
+    if let Some(cached) = creator_games_cache().get(&cache_key) {
+        return cached.clone();
+    }
     let client = crate::utils::get_http_client();
     let mut results: Vec<String> = Vec::new();
 
@@ -468,6 +525,7 @@ pub async fn get_games_for_creator(
         }
     }
 
+    creator_games_cache().insert(cache_key, results.clone());
     results
 }
 
@@ -476,52 +534,85 @@ pub async fn attempt_social_graph_place_id_discovery(
     asset_id: &str,
     cookie_header: &str,
 ) -> Vec<String> {
+    // Fast path: same creator → same graph. Most jobs are hundreds of assets
+    // that share a handful of creators, so this collapses the vast majority
+    // of calls to a single lookup.
+    if let Some((_, creator_id_only)) = creator_info_cache().get(asset_id).map(|v| v.clone()) {
+        if let Some(cached) = social_graph_cache().get(&creator_id_only) {
+            return cached.clone();
+        }
+    }
     let mut discovered_place_ids = HashSet::new();
     let client = crate::utils::get_http_client();
 
-    let mut auth_user_id = None;
-    if let Ok(resp) = client
-        .get("https://users.roblox.com/v1/users/authenticated")
-        .header(reqwest::header::COOKIE, cookie_header)
-        .send()
-        .await
-    {
-        if resp.status().is_success() {
-            if let Ok(data) = resp.json::<serde_json::Value>().await {
-                auth_user_id = data.get("id").and_then(serde_json::Value::as_u64);
-            }
-        }
-    }
-
-    let details_url = format!("https://economy.roblox.com/v2/assets/{asset_id}/details");
-    let details_resp = client
-        .get(&details_url)
-        .header(reqwest::header::COOKIE, cookie_header)
-        .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
-        .send()
-        .await;
-
-    let mut creator_type = String::new();
-    let mut creator_id = 0u64;
-
-    if let Ok(resp) = details_resp {
-        if resp.status().is_success() {
-            if let Ok(data) = resp.json::<serde_json::Value>().await {
-                if let Some(creator) = data.get("Creator") {
-                    if let (Some(c_type), Some(c_id)) = (
-                        creator.get("CreatorType").and_then(|t| t.as_str()),
-                        creator.get("CreatorTargetId").and_then(serde_json::Value::as_u64),
-                    ) {
-                        creator_type = c_type.to_string();
-                        creator_id = c_id;
+    // Auth user is stable for the whole session — resolve once per cookie.
+    let auth_key = cookie_header.to_string();
+    let mut auth_user_id = auth_user_id_cache().get(&auth_key).map(|v| *v);
+    if auth_user_id.is_none() {
+        if let Ok(resp) = client
+            .get("https://users.roblox.com/v1/users/authenticated")
+            .header(reqwest::header::COOKIE, cookie_header)
+            .send()
+            .await
+        {
+            if resp.status().is_success() {
+                if let Ok(data) = resp.json::<serde_json::Value>().await {
+                    auth_user_id = data.get("id").and_then(serde_json::Value::as_u64);
+                    if let Some(uid) = auth_user_id {
+                        auth_user_id_cache().insert(auth_key, uid);
                     }
                 }
             }
         }
     }
 
+    // Creator lookup is asset-specific but stable. Cache the (type, id)
+    // per asset so retries and multi-attempt runs skip the fetch.
+    let (mut creator_type, mut creator_id) = if let Some(entry) = creator_info_cache().get(asset_id)
+    {
+        entry.clone()
+    } else {
+        let details_url = format!("https://economy.roblox.com/v2/assets/{asset_id}/details");
+        let details_resp = client
+            .get(&details_url)
+            .header(reqwest::header::COOKIE, cookie_header)
+            .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
+            .send()
+            .await;
+
+        let mut c_type = String::new();
+        let mut c_id = 0u64;
+
+        if let Ok(resp) = details_resp {
+            if resp.status().is_success() {
+                if let Ok(data) = resp.json::<serde_json::Value>().await {
+                    if let Some(creator) = data.get("Creator") {
+                        if let (Some(t), Some(id)) = (
+                            creator.get("CreatorType").and_then(|t| t.as_str()),
+                            creator.get("CreatorTargetId").and_then(serde_json::Value::as_u64),
+                        ) {
+                            c_type = t.to_string();
+                            c_id = id;
+                        }
+                    }
+                }
+            }
+        }
+        if c_id != 0 {
+            creator_info_cache().insert(asset_id.to_string(), (c_type.clone(), c_id));
+        }
+        (c_type, c_id)
+    };
+    let _ = &mut creator_type; // silence unused_mut on the tuple destructure
+    let _ = &mut creator_id;
+
     if creator_id == 0 {
         return vec![];
+    }
+
+    // Second cache check now that we know the creator — same creator = same graph.
+    if let Some(cached) = social_graph_cache().get(&creator_id) {
+        return cached.clone();
     }
 
     let mut tasks = vec![];
@@ -580,12 +671,16 @@ pub async fn attempt_social_graph_place_id_discovery(
             discovered_place_ids.insert(place);
 
             if discovered_place_ids.len() >= 50 {
-                return discovered_place_ids.into_iter().collect();
+                let out: Vec<String> = discovered_place_ids.into_iter().collect();
+                social_graph_cache().insert(creator_id, out.clone());
+                return out;
             }
         }
     }
 
-    discovered_place_ids.into_iter().collect()
+    let out: Vec<String> = discovered_place_ids.into_iter().collect();
+    social_graph_cache().insert(creator_id, out.clone());
+    out
 }
 
 // Query the Internet Archive Wayback Machine for historical download URLs.
