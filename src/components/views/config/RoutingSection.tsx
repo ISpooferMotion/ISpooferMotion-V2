@@ -38,10 +38,14 @@ export default function RoutingSection() {
             <Label>{t('settings.maxConcurrency')}</Label>
             <Input
               type="number"
+              min={1}
+              max={100}
               value={config.advanced.maxConcurrency.toString()}
-              onChange={(e) =>
-                updateConfig('advanced', 'maxConcurrency', parseInt(e.target.value, 10) || 100)
-              }
+              onChange={(e) => {
+                const parsed = parseInt(e.target.value, 10);
+                const safe = Number.isFinite(parsed) ? Math.min(100, Math.max(1, parsed)) : 100;
+                updateConfig('advanced', 'maxConcurrency', safe);
+              }}
             />
           </div>
 
@@ -49,14 +53,14 @@ export default function RoutingSection() {
             <Label>{t('settings.maxDownloadConcurrency')}</Label>
             <Input
               type="number"
+              min={1}
+              max={100}
               value={config.advanced.maxDownloadConcurrency.toString()}
-              onChange={(e) =>
-                updateConfig(
-                  'advanced',
-                  'maxDownloadConcurrency',
-                  parseInt(e.target.value, 10) || 10,
-                )
-              }
+              onChange={(e) => {
+                const parsed = parseInt(e.target.value, 10);
+                const safe = Number.isFinite(parsed) ? Math.min(100, Math.max(1, parsed)) : 10;
+                updateConfig('advanced', 'maxDownloadConcurrency', safe);
+              }}
             />
           </div>
         </>

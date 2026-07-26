@@ -21,8 +21,11 @@ export const AppConfigSchema = z.object({
     excludedGroupIds: z.string().default(''),
     concurrentSpoofing: z.boolean().default(true),
     concurrentDownloading: z.boolean().default(true),
-    maxConcurrency: z.number().default(50),
-    maxDownloadConcurrency: z.number().default(10),
+    // Clamp to backend's accepted range on load — self-heals configs where
+    // a user previously typed a huge value into the input before we added
+    // a max attribute on the field.
+    maxConcurrency: z.number().min(1).max(100).catch(100).default(50),
+    maxDownloadConcurrency: z.number().min(1).max(100).catch(10).default(10),
     enableArchiveRecovery: z.boolean().default(false),
     proxyUrl: z.string().default(''),
   }),
@@ -218,6 +221,18 @@ export const useConfigStore = create<ConfigState>((set, get) => {
       };
       initConfig.spoofing.cookie = '';
       initConfig.spoofing.apiKey = '';
+      // Clamp concurrency values to the backend's accepted [1, 100] range
+      // in case an older build let the user save a larger value (the input
+      // was uncapped before we added a max attribute + backend hard-failed
+      // with a validation error on every job start).
+      const clamp = (n: number, lo: number, hi: number) =>
+        Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo;
+      initConfig.advanced.maxConcurrency = clamp(initConfig.advanced.maxConcurrency, 1, 100);
+      initConfig.advanced.maxDownloadConcurrency = clamp(
+        initConfig.advanced.maxDownloadConcurrency,
+        1,
+        100,
+      );
     } catch (e) {
       console.warn('Failed to parse saved config from localStorage', e);
     }
