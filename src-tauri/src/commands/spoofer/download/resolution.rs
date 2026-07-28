@@ -568,8 +568,7 @@ pub async fn attempt_social_graph_place_id_discovery(
 
     // Creator lookup is asset-specific but stable. Cache the (type, id)
     // per asset so retries and multi-attempt runs skip the fetch.
-    let (mut creator_type, mut creator_id) = if let Some(entry) = creator_info_cache().get(asset_id)
-    {
+    let (creator_type, creator_id) = if let Some(entry) = creator_info_cache().get(asset_id) {
         entry.clone()
     } else {
         let details_url = format!("https://economy.roblox.com/v2/assets/{asset_id}/details");
@@ -603,8 +602,6 @@ pub async fn attempt_social_graph_place_id_discovery(
         }
         (c_type, c_id)
     };
-    let _ = &mut creator_type; // silence unused_mut on the tuple destructure
-    let _ = &mut creator_id;
 
     if creator_id == 0 {
         return vec![];
@@ -657,16 +654,19 @@ pub async fn attempt_social_graph_place_id_discovery(
         }
     }
 
-    use futures::stream::{self, StreamExt};
+    // Spawn every graph query fully in parallel. Bounding this with
+    // buffer_unordered(3) turned a ~1s wall time into ~10s for the first
+    // asset per creator, since typical crawls issue ~30 queries against
+    // independent Roblox endpoints that don't share a rate-limit bucket.
+    // Matches V1's join_all approach.
     let cookie_header_str = cookie_header.to_string();
-    let mut stream = stream::iter(tasks)
-        .map(|(ct, cid)| {
-            let ch = cookie_header_str.clone();
-            async move { get_games_for_creator(&ct, cid, &ch).await }
-        })
-        .buffer_unordered(3);
-
-    while let Some(places) = stream.next().await {
+    let mut futures = Vec::with_capacity(tasks.len());
+    for (ct, cid) in tasks {
+        let ch = cookie_header_str.clone();
+        futures.push(tokio::spawn(async move { get_games_for_creator(&ct, cid, &ch).await }));
+    }
+    let results = futures::future::join_all(futures).await;
+    for places in results.into_iter().flatten() {
         for place in places {
             discovered_place_ids.insert(place);
 
