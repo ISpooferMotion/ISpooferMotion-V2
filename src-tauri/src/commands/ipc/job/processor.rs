@@ -775,7 +775,15 @@ pub async fn process_spoofer_action(
                             }
                             ctx.success_count.fetch_add(1, Ordering::Relaxed);
                             ctx.skip_count.fetch_add(1, Ordering::Relaxed);
-                            ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": true }));
+                            ctx.record_result(serde_json::json!({
+                                "id": asset_id,
+                                "name": exact_name,
+                                "type": asset_type,
+                                "success": true,
+                                "skipped": true,
+                                "reason": "already_uploaded",
+                                "errorReason": "Already uploaded in a previous run -- reused the existing spoofed ID.",
+                            }));
                             return;
                         }
 

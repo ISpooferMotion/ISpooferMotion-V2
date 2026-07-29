@@ -1132,7 +1132,11 @@ export default function SpoofingView() {
           />
         </div>
       </div>
-      <ResultsModal isOpen={resultsModalOpen} onClose={() => setResultsModalOpen(false)} />
+      <ResultsModal
+        isOpen={resultsModalOpen}
+        onClose={() => setResultsModalOpen(false)}
+        onRetryFailed={() => void handleRetryFailedAssets()}
+      />
       <PasteIdsModal open={pasteIdsOpen} onOpenChange={setPasteIdsOpen} />
 
       <Dialog

@@ -1,8 +1,16 @@
 import { save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { motion, type Variants } from 'framer-motion';
-import { ArrowRight, Check, Copy, ListChecks } from 'lucide-react';
-import { useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Check,
+  Copy,
+  ListChecks,
+  RotateCcw,
+  SkipForward,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSpooferStore } from '../../stores/spooferStore';
@@ -15,23 +23,45 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
  *
  * Provides quick actions to copy the mapping table or directly inject the spoofed IDs
  * back into a raw `.rbxlx` file if the user didn't use the Studio plugin.
+ *
+ * Also breaks down every skipped / failed asset with its reason and offers a
+ * "Retry only these" button so users don't have to re-run the whole job to
+ * catch the ones that didn't land.
  */
 export default function ResultsModal({
   isOpen,
   onClose,
+  onRetryFailed,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  onRetryFailed?: () => void;
 }) {
   const { t } = useLanguage();
   const lastReplacements = useSpooferStore((s) => s.lastReplacements);
   const assetMetadataMap = useSpooferStore((s) => s.assetMetadataMap);
   const loadedFilePath = useSpooferStore((s) => s.loadedFilePath);
   const setSpoofingLogs = useSpooferStore((s) => s.setSpoofingLogs);
+  const lastAssetResults = useSpooferStore((s) => s.lastAssetResults);
   const [copied, setCopied] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const replacementsArray = Object.entries(lastReplacements);
+
+  // Split the raw asset-result list into three visually-distinct buckets so
+  // users can see exactly which assets skipped vs failed and why. `skipped`
+  // covers dedupe hits and filter matches (kept the existing spoofed id).
+  // `failed` covers assets we actually couldn't spoof this run.
+  const { skipped, failed } = useMemo(() => {
+    const skipped: typeof lastAssetResults = [];
+    const failed: typeof lastAssetResults = [];
+    for (const r of lastAssetResults) {
+      if (r.success === false) failed.push(r);
+      else if (r.skipped) skipped.push(r);
+    }
+    return { skipped, failed };
+  }, [lastAssetResults]);
+  const hasIssues = skipped.length > 0 || failed.length > 0;
 
   const handleCopyAll = () => {
     const text = replacementsArray.map(([oldId, newId]) => `${oldId} -> ${newId}`).join('\n');
@@ -168,6 +198,83 @@ export default function ResultsModal({
           ) : (
             <div className="p-8 text-center text-muted-foreground bg-muted rounded-lg border border-border border-dashed">
               {t('results.noReplacements')}
+            </div>
+          )}
+
+          {hasIssues && (
+            <div className="flex flex-col gap-3 mt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-foreground">
+                  Skipped &amp; failed ({skipped.length + failed.length})
+                </span>
+                {failed.length > 0 && onRetryFailed && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      onRetryFailed();
+                      onClose();
+                    }}
+                    className="gap-2"
+                  >
+                    <RotateCcw size={14} />
+                    Retry {failed.length} failed
+                  </Button>
+                )}
+              </div>
+              <motion.div
+                variants={stagger}
+                initial="hidden"
+                animate="show"
+                className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-2"
+              >
+                {[...failed, ...skipped].slice(0, 200).map((r) => {
+                  const isFailed = r.success === false;
+                  const id = String(r.id ?? '');
+                  const name = r.name || `Asset ${id}`;
+                  const typeLabel = (r.type || r.assetType || '').toUpperCase();
+                  const reason = r.errorReason || (isFailed ? 'Unknown failure' : 'Skipped');
+                  return (
+                    <motion.div
+                      key={`${isFailed ? 'f' : 's'}-${id}-${r.stage ?? 'x'}`}
+                      variants={item}
+                      className={`flex flex-col gap-1 p-3 rounded-md border ${
+                        isFailed
+                          ? 'bg-destructive/10 border-destructive/30'
+                          : 'bg-muted border-border'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isFailed ? (
+                          <AlertTriangle size={14} className="text-destructive shrink-0" />
+                        ) : (
+                          <SkipForward size={14} className="text-muted-foreground shrink-0" />
+                        )}
+                        <span className="text-xs text-muted-foreground font-medium truncate">
+                          {typeLabel ? `${typeLabel} • ` : ''}
+                          {name}
+                        </span>
+                        <span className="text-xs font-mono text-muted-foreground/70 ml-auto shrink-0">
+                          {id}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-xs ${
+                          isFailed ? 'text-destructive/90' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {reason}
+                      </span>
+                    </motion.div>
+                  );
+                })}
+                {failed.length + skipped.length > 200 && (
+                  <div className="p-3 text-center text-xs font-medium text-muted-foreground bg-muted border border-border rounded-md">
+                    …and {failed.length + skipped.length - 200} more (see the logs pane for the full
+                    list).
+                  </div>
+                )}
+              </motion.div>
             </div>
           )}
 
