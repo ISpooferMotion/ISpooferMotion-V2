@@ -309,7 +309,13 @@ jobs:
   announce-release:
     name: Announce on Discord
     needs: [prepare-release, build-and-release, plugin-release]
-    if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
+    # Only announce on tag pushes and manual dispatches. Main pushes also
+    # trigger SHOULD_RELEASE=true when the version bump lands, which used to
+    # cause a double announce (once on the main push, once on the follow-up
+    # tag push). The tag push is the canonical release trigger.
+    if: >-
+      needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
+      && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

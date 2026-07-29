@@ -267,7 +267,13 @@ pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Val
                 let patches = std::mem::take(&mut guard.stored_patches);
                 return Json(serde_json::json!({ "mappings": mappings, "patches": patches }));
             } else if has_mappings {
-                let mappings = std::mem::take(&mut guard.stored_mappings);
+                // Clone -- don't drain -- when patches aren't ready yet. The
+                // plugin doesn't act on mappings-only responses; it waits for
+                // patches. If we drained here, `handle_scan_complete` would
+                // read an empty stored_mappings once the plugin's scan lands
+                // and produce zero patches, silently losing every replacement
+                // from a push-then-scan flow.
+                let mappings = guard.stored_mappings.clone();
                 return Json(serde_json::json!({ "mappings": mappings, "patches": [] }));
             }
         }

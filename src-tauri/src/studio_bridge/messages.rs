@@ -184,7 +184,11 @@ fn infer_category_from_property(property: &str) -> Option<&'static str> {
         | "RunAnimation" | "SwimAnimation" | "WalkAnimation" | "MoodAnimation" => Some("animation"),
         "SoundId" | "AudioContent" | "Asset" => Some("sound"),
         "Video" => Some("image"),
-        "MeshId" | "MeshContent" | "TextureID" | "ReferenceMeshId" | "CageMeshId" => Some("mesh"),
+        // MeshPart.TextureID (all-caps ID) is a *texture* asset, not a mesh.
+        // Keeping it in the mesh category pushes image IDs into the mesh bucket
+        // and shows up to the user as "I asked for meshes and got images".
+        "MeshId" | "MeshContent" | "ReferenceMeshId" | "CageMeshId" => Some("mesh"),
+        "TextureID" => Some("image"),
         "BackAccessory" | "FaceAccessory" | "FrontAccessory" | "HairAccessory" | "HatAccessory"
         | "NeckAccessory" | "ShouldersAccessory" | "WaistAccessory" | "Head" | "LeftArm"
         | "LeftLeg" | "RightArm" | "RightLeg" | "Torso" => Some("mesh"),
@@ -216,8 +220,11 @@ fn infer_category_from_attribute_name(property: &str) -> &'static str {
         || lower.contains("video")
         || lower.contains("decal")
         || lower.contains("icon")
-        || lower.contains("id")
     {
+        // Deliberately no `contains("id")` fallback here -- it swept any
+        // attribute with "Id" in the name (PlayerId, BadgeId, MatchId, etc.)
+        // into the image bucket regardless of what asset type the value
+        // actually pointed at.
         "image"
     } else {
         "unknown"
@@ -889,8 +896,10 @@ pub fn analyze_records(
             } else if lower.contains("image")
                 || lower.contains("texture")
                 || lower.contains("video")
-                || lower.contains("id")
             {
+                // See `infer_category_from_attribute_name`: `contains("id")`
+                // used to live here as a fallback and mis-bucketed every
+                // Value named "SomethingId" into images.
                 "image"
             } else {
                 "unknown"

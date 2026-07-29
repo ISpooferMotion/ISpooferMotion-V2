@@ -26,6 +26,9 @@ type UserFriendsCache = dashmap::DashMap<u64, Vec<u64>>;
 type CreatorGamesCache = dashmap::DashMap<(String, u64), Vec<String>>;
 type CreatorInfoCache = dashmap::DashMap<String, (String, u64)>;
 type SocialGraphCache = dashmap::DashMap<u64, Vec<String>>;
+// Cached owner-of-group lookups. `None` means the API returned no owner
+// (deleted or ownerless) -- we still cache to avoid re-hitting the endpoint.
+type GroupOwnerCache = dashmap::DashMap<u64, Option<u64>>;
 
 static AUTH_USER_ID_CACHE: OnceLock<AuthUserCache> = OnceLock::new();
 static USER_GROUPS_CACHE: OnceLock<UserGroupsCache> = OnceLock::new();
@@ -33,6 +36,7 @@ static USER_FRIENDS_CACHE: OnceLock<UserFriendsCache> = OnceLock::new();
 static CREATOR_GAMES_CACHE: OnceLock<CreatorGamesCache> = OnceLock::new();
 static CREATOR_INFO_CACHE: OnceLock<CreatorInfoCache> = OnceLock::new();
 static SOCIAL_GRAPH_CACHE: OnceLock<SocialGraphCache> = OnceLock::new();
+static GROUP_OWNER_CACHE: OnceLock<GroupOwnerCache> = OnceLock::new();
 
 fn auth_user_id_cache() -> &'static AuthUserCache {
     AUTH_USER_ID_CACHE.get_or_init(dashmap::DashMap::new)
@@ -51,6 +55,9 @@ fn creator_info_cache() -> &'static CreatorInfoCache {
 }
 fn social_graph_cache() -> &'static SocialGraphCache {
     SOCIAL_GRAPH_CACHE.get_or_init(dashmap::DashMap::new)
+}
+fn group_owner_cache() -> &'static GroupOwnerCache {
+    GROUP_OWNER_CACHE.get_or_init(dashmap::DashMap::new)
 }
 
 // Request direct URL from standard v1 asset delivery API.
@@ -435,6 +442,35 @@ pub async fn get_groups_for_user(user_id: u64, cookie_header: &str) -> Vec<(u64,
     results
 }
 
+/// Fetches the current owner of a specific group. Unlike
+/// [`get_groups_for_user`] which returns groups a user *belongs to* (with
+/// each group's owner attached), this hits the group's own detail endpoint
+/// so we can walk from a Group-owned asset back to the human behind it.
+///
+/// Returns `Ok(None)` for ownerless / deleted groups; the cache still stores
+/// the negative so we don't re-hit the endpoint.
+pub async fn get_group_owner(group_id: u64, cookie_header: &str) -> Option<u64> {
+    if let Some(cached) = group_owner_cache().get(&group_id) {
+        return *cached;
+    }
+    let client = crate::utils::get_http_client();
+    let url = format!("https://groups.roblox.com/v1/groups/{group_id}");
+    let mut owner_id: Option<u64> = None;
+
+    if let Ok(resp) = client.get(&url).header(reqwest::header::COOKIE, cookie_header).send().await {
+        if resp.status().is_success() {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                owner_id = data
+                    .get("owner")
+                    .and_then(|o| o.get("userId"))
+                    .and_then(serde_json::Value::as_u64);
+            }
+        }
+    }
+    group_owner_cache().insert(group_id, owner_id);
+    owner_id
+}
+
 pub async fn get_friends_for_user(user_id: u64, cookie_header: &str) -> Vec<u64> {
     if let Some(cached) = user_friends_cache().get(&user_id) {
         return cached.clone();
@@ -650,6 +686,39 @@ pub async fn attempt_social_graph_place_id_discovery(
         for fid in friends.into_iter().take(MAX_FRIEND_CRAWL_LIMIT) {
             if seen_owners.insert(fid) {
                 queue_games_fetch("User", fid);
+            }
+        }
+    } else if creator_type == "Group" {
+        // Walk from the group back to the human behind it. Assets owned by a
+        // group often live in the group owner's personal places (or in other
+        // groups they also run), so adding the owner's User + Group games to
+        // the candidate pool catches assets the group's own game list misses.
+        if let Some(owner_id) = get_group_owner(creator_id, cookie_header).await {
+            let mut seen_owners = HashSet::new();
+            if let Some(uid) = auth_user_id {
+                seen_owners.insert(uid);
+            }
+            seen_owners.insert(owner_id);
+
+            queue_games_fetch("User", owner_id);
+
+            // Reuse the same limits as the User-creator branch so a Group
+            // creator and its owner cost the same as a User creator.
+            let owner_groups = get_groups_for_user(owner_id, cookie_header).await;
+            for (gid, gid_owner) in owner_groups.into_iter().take(MAX_GROUP_FRIEND_CRAWL_LIMIT) {
+                queue_games_fetch("Group", gid);
+                if let Some(oid) = gid_owner {
+                    if seen_owners.insert(oid) {
+                        queue_games_fetch("User", oid);
+                    }
+                }
+            }
+
+            let owner_friends = get_friends_for_user(owner_id, cookie_header).await;
+            for fid in owner_friends.into_iter().take(MAX_FRIEND_CRAWL_LIMIT) {
+                if seen_owners.insert(fid) {
+                    queue_games_fetch("User", fid);
+                }
             }
         }
     }

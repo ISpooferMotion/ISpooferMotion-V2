@@ -300,11 +300,55 @@ pub async fn publish_asset_with_progress(
                 upload_kind.file_type = meta.file_type.clone();
                 upload_kind.extension = meta.extension.clone();
 
-                if asset_type_name.as_deref() == Some("Mesh")
-                    && (meta.file_type == "image/png" || meta.file_type == "image/jpeg")
-                {
+                let is_image_payload =
+                    meta.file_type == "image/png" || meta.file_type == "image/jpeg";
+
+                // Mesh slots occasionally hold plain image URIs in-engine (a
+                // Decal id used where a MeshId would normally live). Uploading
+                // the image and swapping the ID keeps Studio functional in
+                // those cases -- this is legit V2 behavior we preserve.
+                if is_image_payload && asset_type_name.as_deref() == Some("Mesh") {
                     upload_kind.asset_type = "Image".into();
                     upload_kind.needs_universe_permissions = true;
+                }
+
+                // Any other type-vs-payload mismatch is Roblox serving a
+                // placeholder PNG because the caller isn't authorized for the
+                // asset. Uploading the placeholder as an Image would appear
+                // "successful" but produce a broken replacement -- Studio
+                // would paste an image asset id into an AnimationId /
+                // SoundId slot and quietly break the game. Fail the upload
+                // instead so the asset gets counted as a real failure.
+                if is_image_payload
+                    && !matches!(
+                        asset_type_name.as_deref(),
+                        Some("Image") | Some("Decal") | Some("Mesh")
+                    )
+                {
+                    let msg = format!(
+                        "Download returned a placeholder image for a {} asset (Roblox likely refused access). Skipping upload to avoid corrupting the Studio replacement.",
+                        asset_type_name.as_deref().unwrap_or("unknown")
+                    );
+                    emit_transfer_update(
+                        &app,
+                        TransferUpdate {
+                            id: transfer_id.clone(),
+                            status: Some("error".into()),
+                            error: Some(msg.clone()),
+                            progress: Some(0),
+                            name: None,
+                            original_asset_id: None,
+                            direction: None,
+                            size: None,
+                            new_asset_id: None,
+                        },
+                    );
+                    return Ok(PublishResult {
+                        success: false,
+                        error: Some(msg),
+                        asset_id: None,
+                        replaced_id: None,
+                    });
                 }
             }
         }

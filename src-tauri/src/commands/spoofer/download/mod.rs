@@ -35,6 +35,56 @@ fn emit_spoofer_log(app: &AppHandle, level: &str, message: &str) {
     );
 }
 
+/// Runs both discovery passes (asset-usage + creator social-graph) and pushes
+/// the resulting per-place download URLs onto `candidate_urls`. Called once
+/// upfront when the caller supplied no place_id, and once as a fallback when
+/// the caller *did* supply a place_id but every direct URL failed.
+async fn run_discovery_and_extend_urls(
+    app: &AppHandle,
+    asset_id: &str,
+    asset_type: Option<&str>,
+    cookie_header: &str,
+    candidate_urls: &mut Vec<String>,
+) {
+    let usage_place_ids = attempt_asset_usage_place_id_discovery(asset_id, cookie_header).await;
+    if !usage_place_ids.is_empty() {
+        emit_spoofer_log(
+            app,
+            "info",
+            &format!(
+                "Asset usage discovery found {} candidate Place ID(s) for asset {asset_id}.",
+                usage_place_ids.len()
+            ),
+        );
+    }
+    for place_id in &usage_place_ids {
+        for url in
+            build_direct_asset_download_urls(asset_id, asset_type, std::slice::from_ref(place_id))
+        {
+            push_unique_url(candidate_urls, url);
+        }
+    }
+
+    let creator_place_ids = attempt_social_graph_place_id_discovery(asset_id, cookie_header).await;
+    if !creator_place_ids.is_empty() {
+        emit_spoofer_log(
+            app,
+            "info",
+            &format!(
+                "Creator graph discovery found {} candidate Place ID(s) for asset {asset_id}.",
+                creator_place_ids.len()
+            ),
+        );
+    }
+    for place_id in &creator_place_ids {
+        for url in
+            build_direct_asset_download_urls(asset_id, asset_type, std::slice::from_ref(place_id))
+        {
+            push_unique_url(candidate_urls, url);
+        }
+    }
+}
+
 // Download orchestration: manages discovery, resolution, fallbacks, and retries.
 pub async fn download_animation_asset_with_progress(
     app: AppHandle,
@@ -136,55 +186,24 @@ pub async fn download_animation_asset_with_progress(
         }
     }
 
-    // Only walk the discovery graph when the caller couldn't supply a place
-    // ID. Running discovery unconditionally bloated candidate_urls from ~4 to
-    // ~80 per asset, which the download loop then had to grind through -- a
-    // legit asset succeeds on the first URL either way, but a private asset
-    // burned minutes on the extra 76 dead URLs. Matches V1 semantics.
+    // Discovery strategy:
+    // - place_ids empty: run discovery upfront (there's no other source of URLs).
+    // - place_ids supplied: try the direct URLs first for the fast path; only
+    //   fall back to discovery below if every direct URL fails. That preserves
+    //   the "supplied place_id works? finish in ~1s" perf win while still
+    //   recovering when the caller's place_id doesn't have permission to
+    //   serve a given asset.
+    let mut discovery_attempted = false;
     if place_ids.is_empty() {
-        let usage_place_ids =
-            attempt_asset_usage_place_id_discovery(&asset_id, &cookie_header).await;
-        if !usage_place_ids.is_empty() {
-            emit_spoofer_log(
-                &app,
-                "info",
-                &format!(
-                    "Asset usage discovery found {} candidate Place ID(s) for asset {asset_id}.",
-                    usage_place_ids.len()
-                ),
-            );
-        }
-        for place_id in &usage_place_ids {
-            for url in build_direct_asset_download_urls(
-                &asset_id,
-                asset_type.as_deref(),
-                std::slice::from_ref(place_id),
-            ) {
-                push_unique_url(&mut candidate_urls, url);
-            }
-        }
-
-        let creator_place_ids =
-            attempt_social_graph_place_id_discovery(&asset_id, &cookie_header).await;
-        if !creator_place_ids.is_empty() {
-            emit_spoofer_log(
-                &app,
-                "info",
-                &format!(
-                    "Creator graph discovery found {} candidate Place ID(s) for asset {asset_id}.",
-                    creator_place_ids.len()
-                ),
-            );
-        }
-        for place_id in &creator_place_ids {
-            for url in build_direct_asset_download_urls(
-                &asset_id,
-                asset_type.as_deref(),
-                std::slice::from_ref(place_id),
-            ) {
-                push_unique_url(&mut candidate_urls, url);
-            }
-        }
+        run_discovery_and_extend_urls(
+            &app,
+            &asset_id,
+            asset_type.as_deref(),
+            &cookie_header,
+            &mut candidate_urls,
+        )
+        .await;
+        discovery_attempted = true;
     }
 
     let universe_id = if let Some(pid) = place_ids.first() {
@@ -210,176 +229,200 @@ pub async fn download_animation_asset_with_progress(
     let mut consecutive_perm_failures: usize = 0;
 
     // Iterate through candidate URLs until the file is successfully retrieved.
-    let candidate_url_count = candidate_urls.len();
+    // The outer `'phases` loop lets us run discovery as a fallback once every
+    // direct URL has been tried without success -- see the block after this
+    // `while` for the trigger.
     let mut is_first_url = true;
-    for (candidate_idx, download_url) in candidate_urls.iter().enumerate() {
-        // Periodic heartbeat so users don't think a slow asset has hung. Only
-        // fires past the first handful so short jobs stay quiet.
-        if candidate_idx > 0 && candidate_idx % 10 == 0 {
-            emit_spoofer_log(
-                &app,
-                "info",
-                &format!(
-                    "Still trying asset {asset_id}: candidate {}/{}.",
-                    candidate_idx + 1,
-                    candidate_url_count
-                ),
-            );
-        }
+    let mut i: usize = 0;
+    'phases: loop {
+        while i < candidate_urls.len() {
+            let candidate_idx = i;
+            let candidate_url_count = candidate_urls.len();
+            i += 1;
+            let download_url = &candidate_urls[candidate_idx];
 
-        // Tracks whether this specific URL exited the attempt loop via the
-        // 403/404/409 "permanent" break so we can reset the streak on any
-        // other exit (rate-limit exhaustion, transport error, timeout).
-        let mut this_url_was_perm_failure = false;
-        let is_cdn_url = download_url.contains("rbxcdn.com");
+            // Periodic heartbeat so users don't think a slow asset has hung. Only
+            // fires past the first handful so short jobs stay quiet.
+            if candidate_idx > 0 && candidate_idx % 10 == 0 {
+                emit_spoofer_log(
+                    &app,
+                    "info",
+                    &format!(
+                        "Still trying asset {asset_id}: candidate {}/{}.",
+                        candidate_idx + 1,
+                        candidate_url_count
+                    ),
+                );
+            }
 
-        let resume_offset = if is_first_url {
-            if let Ok(meta) = tokio::fs::metadata(&file_path).await {
-                meta.len()
+            // Tracks whether this specific URL exited the attempt loop via the
+            // 403/404/409 "permanent" break so we can reset the streak on any
+            // other exit (rate-limit exhaustion, transport error, timeout).
+            let mut this_url_was_perm_failure = false;
+            let is_cdn_url = download_url.contains("rbxcdn.com");
+
+            let resume_offset = if is_first_url {
+                if let Ok(meta) = tokio::fs::metadata(&file_path).await {
+                    meta.len()
+                } else {
+                    0
+                }
             } else {
                 0
-            }
-        } else {
-            0
-        };
-        is_first_url = false;
-
-        // V1 used 3 attempts / 30s timeout. The bump to 10/45s combined with
-        // retry-on-403 turned every dead URL into ~40s of wall time before we
-        // moved to the next candidate. Restore the tighter V1 budget.
-        for attempt in 0..3u64 {
-            let ua = user_agents[attempt as usize % user_agents.len()];
-            let request_place_id =
-                extract_place_id_from_url(download_url).or_else(|| place_ids.first().cloned());
-            let cookie_for_req = if is_cdn_url { None } else { Some(cookie_header.as_str()) };
-            wait_rate_limit(RateLimitBucket::AssetDownload).await;
-            let send_result = tokio::time::timeout(
-                Duration::from_secs(30),
-                send_asset_download_request_ua(
-                    &client,
-                    download_url,
-                    cookie_for_req,
-                    request_place_id.as_deref(),
-                    ua,
-                    universe_id.as_deref(),
-                    resume_offset,
-                ),
-            )
-            .await;
-            let download_resp = match send_result {
-                Ok(Ok(resp)) => resp,
-                Ok(Err(error)) => {
-                    last_error = format!("Download request failed: {error}");
-                    if attempt < 2 {
-                        tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
-                        continue;
-                    }
-                    break;
-                }
-                Err(_elapsed) => {
-                    last_error = "Download request timed out.".to_string();
-                    if attempt < 2 {
-                        tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
-                        continue;
-                    }
-                    break;
-                }
             };
+            is_first_url = false;
 
-            crate::utils::check_for_roblosecurity_update(&app, &download_resp, &cookie_header);
-            let status = download_resp.status();
-
-            if status.is_success() {
-                crate::commands::spoofer::record_adaptive_success();
-
-                let result = write_download_response(
-                    &app,
-                    download_resp,
-                    file_path,
-                    transfer_id,
-                    name,
-                    asset_id.clone(),
-                    asset_type.clone(),
-                    resume_offset,
+            // V1 used 3 attempts / 30s timeout. The bump to 10/45s combined with
+            // retry-on-403 turned every dead URL into ~40s of wall time before we
+            // moved to the next candidate. Restore the tighter V1 budget.
+            for attempt in 0..3u64 {
+                let ua = user_agents[attempt as usize % user_agents.len()];
+                let request_place_id =
+                    extract_place_id_from_url(download_url).or_else(|| place_ids.first().cloned());
+                let cookie_for_req = if is_cdn_url { None } else { Some(cookie_header.as_str()) };
+                wait_rate_limit(RateLimitBucket::AssetDownload).await;
+                let send_result = tokio::time::timeout(
+                    Duration::from_secs(30),
+                    send_asset_download_request_ua(
+                        &client,
+                        download_url,
+                        cookie_for_req,
+                        request_place_id.as_deref(),
+                        ua,
+                        universe_id.as_deref(),
+                        resume_offset,
+                    ),
                 )
                 .await;
+                let download_resp = match send_result {
+                    Ok(Ok(resp)) => resp,
+                    Ok(Err(error)) => {
+                        last_error = format!("Download request failed: {error}");
+                        if attempt < 2 {
+                            tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
+                            continue;
+                        }
+                        break;
+                    }
+                    Err(_elapsed) => {
+                        last_error = "Download request timed out.".to_string();
+                        if attempt < 2 {
+                            tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1))).await;
+                            continue;
+                        }
+                        break;
+                    }
+                };
 
-                let mut final_result = result;
-                if final_result.is_ok() {
-                    if let Ok(res) = final_result.as_mut() {
-                        res.resolved_place_id = request_place_id.clone();
+                crate::utils::check_for_roblosecurity_update(&app, &download_resp, &cookie_header);
+                let status = download_resp.status();
+
+                if status.is_success() {
+                    crate::commands::spoofer::record_adaptive_success();
+
+                    match write_download_response(
+                        &app,
+                        download_resp,
+                        file_path.clone(),
+                        transfer_id.clone(),
+                        name.clone(),
+                        asset_id.clone(),
+                        asset_type.clone(),
+                        resume_offset,
+                    )
+                    .await
+                    {
+                        Ok(mut res) => {
+                            res.resolved_place_id = request_place_id.clone();
+                            return Ok(res);
+                        }
+                        Err(e) => {
+                            // Body streaming failure ("error decoding response
+                            // body", write errors, chunked-encoding truncation).
+                            // Roblox occasionally cuts the connection mid-stream,
+                            // and previously that took the whole asset down with
+                            // no retry. Treat it like any other transient
+                            // transport error: log, backoff, and try the same
+                            // URL again -- and if attempts exhaust, fall through
+                            // to the next candidate URL.
+                            last_error = format!("Download stream failed: {e}");
+                            if attempt < 2 {
+                                tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1)))
+                                    .await;
+                                continue;
+                            }
+                            break;
+                        }
                     }
                 }
 
-                return final_result;
-            }
-
-            let mut status_reason = status.to_string();
-            if status == reqwest::StatusCode::UNAUTHORIZED {
-                let error_msg = "Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".to_string();
-                emit_transfer_update(
-                    &app,
-                    TransferUpdate {
-                        id: transfer_id.clone(),
-                        status: Some("error".into()),
-                        error: Some(error_msg.clone()),
-                        progress: Some(0),
-                        name: None,
-                        original_asset_id: None,
-                        direction: None,
-                        size: None,
-                        new_asset_id: None,
-                    },
-                );
-                return Ok(DownloadResult {
-                    success: false,
-                    file_path: None,
-                    error: Some(error_msg),
-                    resolved_place_id: None,
-                });
-            } else if status == reqwest::StatusCode::FORBIDDEN {
-                status_reason = "Permission Denied: Asset is private or copylocked.".to_string();
-            } else if status == reqwest::StatusCode::NOT_FOUND {
-                status_reason = "Not Found: Asset is invalid or missing.".to_string();
-            } else if status == reqwest::StatusCode::CONFLICT {
-                status_reason = "Conflict: Asset delivery blocked.".to_string();
-            }
-
-            last_error = format!("Download failed: {status_reason} from {download_url}");
-            crate::commands::spoofer::remote_cache::invalidate_context(&asset_id);
-
-            if should_attempt_claim(status) && !attempted_claim {
-                attempted_claim = true;
-                if let Ok(true) =
-                    auto_claim_free_asset(&app, &client, &asset_id, &cookie_header).await
-                {
-                    continue;
+                let mut status_reason = status.to_string();
+                if status == reqwest::StatusCode::UNAUTHORIZED {
+                    let error_msg = "Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".to_string();
+                    emit_transfer_update(
+                        &app,
+                        TransferUpdate {
+                            id: transfer_id.clone(),
+                            status: Some("error".into()),
+                            error: Some(error_msg.clone()),
+                            progress: Some(0),
+                            name: None,
+                            original_asset_id: None,
+                            direction: None,
+                            size: None,
+                            new_asset_id: None,
+                        },
+                    );
+                    return Ok(DownloadResult {
+                        success: false,
+                        file_path: None,
+                        error: Some(error_msg),
+                        resolved_place_id: None,
+                    });
+                } else if status == reqwest::StatusCode::FORBIDDEN {
+                    status_reason =
+                        "Permission Denied: Asset is private or copylocked.".to_string();
+                } else if status == reqwest::StatusCode::NOT_FOUND {
+                    status_reason = "Not Found: Asset is invalid or missing.".to_string();
+                } else if status == reqwest::StatusCode::CONFLICT {
+                    status_reason = "Conflict: Asset delivery blocked.".to_string();
                 }
-            }
 
-            // 403 on the asset delivery endpoint is essentially always
-            // terminal for that specific URL -- retrying the same URL with
-            // the same cookie always yields the same 403. V1 fell straight
-            // through to the next candidate here; V2's retry-on-403 loop
-            // was the single biggest wall-time cost on private assets.
+                last_error = format!("Download failed: {status_reason} from {download_url}");
+                crate::commands::spoofer::remote_cache::invalidate_context(&asset_id);
 
-            if is_retryable_download_status(status) && attempt < 2 {
-                // 429 and 5xx are transient - worth retrying on the same URL.
-                let retry_after_ms = crate::utils::extract_retry_after(&download_resp, None)
-                    .unwrap_or_else(|| 800 * (attempt + 1));
-                if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                    if let Some(ref fallbacks) = fallback_cookies {
-                        let mut current_idx = 0;
-                        for (i, fc) in fallbacks.iter().enumerate() {
-                            if cookie_header.contains(fc) {
-                                current_idx = i + 1;
-                                break;
+                if should_attempt_claim(status) && !attempted_claim {
+                    attempted_claim = true;
+                    if let Ok(true) =
+                        auto_claim_free_asset(&app, &client, &asset_id, &cookie_header).await
+                    {
+                        continue;
+                    }
+                }
+
+                // 403 on the asset delivery endpoint is essentially always
+                // terminal for that specific URL -- retrying the same URL with
+                // the same cookie always yields the same 403. V1 fell straight
+                // through to the next candidate here; V2's retry-on-403 loop
+                // was the single biggest wall-time cost on private assets.
+
+                if is_retryable_download_status(status) && attempt < 2 {
+                    // 429 and 5xx are transient - worth retrying on the same URL.
+                    let retry_after_ms = crate::utils::extract_retry_after(&download_resp, None)
+                        .unwrap_or_else(|| 800 * (attempt + 1));
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        if let Some(ref fallbacks) = fallback_cookies {
+                            let mut current_idx = 0;
+                            for (i, fc) in fallbacks.iter().enumerate() {
+                                if cookie_header.contains(fc) {
+                                    current_idx = i + 1;
+                                    break;
+                                }
                             }
-                        }
-                        if current_idx < fallbacks.len() {
-                            let next_cookie = fallbacks[current_idx].clone();
-                            cookie_header = build_roblox_cookie_header(&next_cookie);
-                            emit_spoofer_log(
+                            if current_idx < fallbacks.len() {
+                                let next_cookie = fallbacks[current_idx].clone();
+                                cookie_header = build_roblox_cookie_header(&next_cookie);
+                                emit_spoofer_log(
                                 &app,
                                 "info",
                                 &format!(
@@ -387,54 +430,55 @@ pub async fn download_animation_asset_with_progress(
                                     current_idx + 1, fallbacks.len()
                                 ),
                             );
-                            tokio::time::sleep(Duration::from_millis(500)).await;
-                            continue; // Retry the same URL with the new cookie
+                                tokio::time::sleep(Duration::from_millis(500)).await;
+                                continue; // Retry the same URL with the new cookie
+                            }
                         }
-                    }
 
-                    crate::commands::spoofer::record_adaptive_rate_limit(Some(retry_after_ms));
-                    set_rate_limit(
-                        RateLimitBucket::AssetDownload,
-                        Duration::from_millis(retry_after_ms),
-                    );
-                    if crate::commands::spoofer::should_log_rate_limit_warning("asset-download") {
-                        emit_spoofer_log(
-                            &app,
-                            "warn",
-                            &format!(
-                                "Roblox rate limited downloads; backing off for {:.1}s.",
-                                retry_after_ms as f64 / 1000.0
-                            ),
+                        crate::commands::spoofer::record_adaptive_rate_limit(Some(retry_after_ms));
+                        set_rate_limit(
+                            RateLimitBucket::AssetDownload,
+                            Duration::from_millis(retry_after_ms),
                         );
+                        if crate::commands::spoofer::should_log_rate_limit_warning("asset-download")
+                        {
+                            emit_spoofer_log(
+                                &app,
+                                "warn",
+                                &format!(
+                                    "Roblox rate limited downloads; backing off for {:.1}s.",
+                                    retry_after_ms as f64 / 1000.0
+                                ),
+                            );
+                        }
+                    } else if status.is_server_error() {
+                        crate::commands::spoofer::record_adaptive_server_error();
                     }
-                } else if status.is_server_error() {
-                    crate::commands::spoofer::record_adaptive_server_error();
+                    tokio::time::sleep(Duration::from_millis(retry_after_ms)).await;
+                    continue;
                 }
-                tokio::time::sleep(Duration::from_millis(retry_after_ms)).await;
-                continue;
+
+                // 403, 404, 409 on a specific URL are permanent for that URL.
+                // Breaking immediately lets us try the next candidate without burning
+                // 10 × backoff iterations on a URL that will never succeed (V1 behavior).
+                this_url_was_perm_failure = true;
+                break;
             }
 
-            // 403, 404, 409 on a specific URL are permanent for that URL.
-            // Breaking immediately lets us try the next candidate without burning
-            // 10 × backoff iterations on a URL that will never succeed (V1 behavior).
-            this_url_was_perm_failure = true;
-            break;
-        }
+            if this_url_was_perm_failure {
+                consecutive_perm_failures += 1;
+            } else {
+                // A non-permanent exit (rate-limit exhaustion, transport error)
+                // isn't evidence the asset is dead, so keep exploring candidates.
+                consecutive_perm_failures = 0;
+            }
 
-        if this_url_was_perm_failure {
-            consecutive_perm_failures += 1;
-        } else {
-            // A non-permanent exit (rate-limit exhaustion, transport error)
-            // isn't evidence the asset is dead, so keep exploring candidates.
-            consecutive_perm_failures = 0;
-        }
-
-        // If every recent candidate URL returned the same permanent status,
-        // the asset is almost certainly private/copylocked/missing and the
-        // remaining candidates will fail the same way. Bail out so a single
-        // dead asset can't hold the shared rate limiter for minutes.
-        if consecutive_perm_failures >= PERM_FAILURE_BAIL_THRESHOLD {
-            emit_spoofer_log(
+            // If every recent candidate URL returned the same permanent status,
+            // the asset is almost certainly private/copylocked/missing and the
+            // remaining candidates will fail the same way. Bail out so a single
+            // dead asset can't hold the shared rate limiter for minutes.
+            if consecutive_perm_failures >= PERM_FAILURE_BAIL_THRESHOLD {
+                emit_spoofer_log(
                 &app,
                 "info",
                 &format!(
@@ -443,8 +487,39 @@ pub async fn download_animation_asset_with_progress(
                     candidate_url_count
                 ),
             );
-            break;
+                break;
+            }
+        } // end while
+
+        // Every direct URL exhausted. If the caller supplied a place_id and
+        // we haven't run discovery yet, do it now as a fallback -- the
+        // supplied place_id might not have permission to serve this specific
+        // asset even if it works for others in the same job.
+        if !discovery_attempted {
+            discovery_attempted = true;
+            let before = candidate_urls.len();
+            run_discovery_and_extend_urls(
+                &app,
+                &asset_id,
+                asset_type.as_deref(),
+                &cookie_header,
+                &mut candidate_urls,
+            )
+            .await;
+            let added = candidate_urls.len().saturating_sub(before);
+            if added > 0 {
+                emit_spoofer_log(
+                    &app,
+                    "info",
+                    &format!(
+                        "Direct URLs exhausted for asset {asset_id}; falling back to {added} discovered candidate(s)."
+                    ),
+                );
+                consecutive_perm_failures = 0;
+                continue 'phases;
+            }
         }
+        break 'phases;
     }
 
     // Fall back to the Wayback Machine if all other resolution methods fail.
