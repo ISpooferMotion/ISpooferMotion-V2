@@ -74,6 +74,12 @@ pub async fn set_bridge_skip_owned_check(skip_owned: bool) -> bool {
 ///
 /// If scan records are already present, this immediately generates patch instructions
 /// so the plugin can fetch them on its next poll cycle.
+///
+/// When no records exist yet (Studio hasn't scanned since the daemon started
+/// or since the last cache reset), we can't produce patches -- but we MUST
+/// signal the plugin to run a scan, otherwise the mappings sit forever with
+/// no way to turn into patches and the user sees nothing replace. This
+/// matches the HTTP path in `handle_replace_ids`.
 #[must_use]
 pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
     let Some(data) = bridge_data() else {
@@ -83,11 +89,21 @@ pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
         return false;
     }
     let records = std::sync::Arc::clone(&data.read().await.studio_records);
-    // Generate patches from scan records if available; otherwise rely on Studio ID mapping substitution.
-    let patches = if records.is_empty() { Vec::new() } else { plan_patches(&records, &mappings) };
+    let records_empty = records.is_empty();
+    let patches = if records_empty { Vec::new() } else { plan_patches(&records, &mappings) };
     let mut guard = data.write().await;
     guard.stored_mappings = mappings;
     guard.stored_patches = patches;
+    if records_empty {
+        // Prompt the plugin to scan every asset kind on its next poll of
+        // /poll-scan-requests. Without this, a fresh Studio session receives
+        // mappings but never produces the records needed to plan patches.
+        guard.request_sounds = true;
+        guard.request_animations = true;
+        guard.request_images = true;
+        guard.request_meshes = true;
+        guard.request_script_refs = true;
+    }
     guard.notify.notify_waiters();
     true
 }

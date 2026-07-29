@@ -60,6 +60,24 @@ fn group_owner_cache() -> &'static GroupOwnerCache {
     GROUP_OWNER_CACHE.get_or_init(dashmap::DashMap::new)
 }
 
+/// Bulk-populates the per-asset creator cache from an upstream batch fetch
+/// (typically the job processor's `/catalog/items/details` response). Every
+/// entry that lands here means the first discovery pass for that asset skips
+/// its own `/v2/assets/{id}/details` HTTP call -- the single serial network
+/// hit that used to dominate first-per-creator wall time.
+pub fn prewarm_creator_info_cache<I>(entries: I)
+where
+    I: IntoIterator<Item = (String, (String, u64))>,
+{
+    let cache = creator_info_cache();
+    for (asset_id, (creator_type, creator_id)) in entries {
+        if creator_id == 0 || creator_type.is_empty() {
+            continue;
+        }
+        cache.insert(asset_id, (creator_type, creator_id));
+    }
+}
+
 // Request direct URL from standard v1 asset delivery API.
 pub async fn resolve_asset_id_location(
     app: &AppHandle,

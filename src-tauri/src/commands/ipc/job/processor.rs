@@ -140,13 +140,19 @@ async fn fetch_asset_details(
     Some(AssetDetails { name, description })
 }
 
+/// Returned alongside [`AssetDetails`] so discovery can skip the per-asset
+/// `/v2/assets/{id}/details` fetch. `creator_type` is `"User"` or `"Group"`;
+/// `creator_id` is the corresponding numeric id.
+type BatchCreatorInfo = HashMap<String, (String, u64)>;
+
 async fn batch_fetch_asset_details(
     asset_ids: &[String],
     cookie: &str,
     csrf_token: &str,
     client: &reqwest::Client,
-) -> HashMap<String, AssetDetails> {
+) -> (HashMap<String, AssetDetails>, BatchCreatorInfo) {
     let mut details = HashMap::new();
+    let mut creators: BatchCreatorInfo = HashMap::new();
     let chunks = asset_ids.chunks(120);
 
     for chunk in chunks {
@@ -193,13 +199,29 @@ async fn batch_fetch_asset_details(
                                 .unwrap_or("Uploaded by ISpooferMotion.")
                                 .to_string();
                             details.insert(id.to_string(), AssetDetails { name, description });
+
+                            // Same response also carries the creator info we
+                            // would otherwise refetch per-asset inside the
+                            // discovery pass. Capture it now so the first-per-
+                            // creator discovery skips that extra HTTP call.
+                            let creator_type = item
+                                .get("creatorType")
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string);
+                            let creator_id =
+                                item.get("creatorTargetId").and_then(serde_json::Value::as_u64);
+                            if let (Some(t), Some(cid)) = (creator_type, creator_id) {
+                                if cid != 0 && !t.is_empty() {
+                                    creators.insert(id.to_string(), (t, cid));
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
-    details
+    (details, creators)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -426,7 +448,26 @@ pub async fn process_spoofer_action(
     let asset_ids: Vec<String> = parsed_assets.iter().map(|(id, _, _, _)| id.clone()).collect();
     if preserve_metadata {
         temp_log("Fetching asset metadata in batch...", "info");
-        batch_metadata = batch_fetch_asset_details(&asset_ids, &cookie, &csrf_token, &client).await;
+        let (fetched_metadata, fetched_creators) =
+            batch_fetch_asset_details(&asset_ids, &cookie, &csrf_token, &client).await;
+        batch_metadata = fetched_metadata;
+        // Warm the discovery cache with the creator info the batch already
+        // returned. Without this, the first discovery pass per creator would
+        // do its own serial `/v2/assets/{id}/details` fetch to learn who the
+        // creator is -- one extra HTTP hop per unique creator that we can
+        // skip entirely now that we already have the data.
+        if !fetched_creators.is_empty() {
+            let creator_count = fetched_creators.len();
+            crate::commands::spoofer::download::resolution::prewarm_creator_info_cache(
+                fetched_creators,
+            );
+            temp_log(
+                &format!(
+                    "Prewarmed creator info for {creator_count} assets -- discovery will skip the per-asset details fetch."
+                ),
+                "info",
+            );
+        }
         if batch_metadata.is_empty() {
             temp_log(
                 &format!(
@@ -451,6 +492,35 @@ pub async fn process_spoofer_action(
                 "info",
             );
         }
+    }
+
+    // Fast-fail when the upfront batch calls signal broken auth. Both endpoints
+    // returning zero (or near-zero) means Roblox refuses to serve details for
+    // this account -- grinding through 217 assets with per-asset failure paths
+    // wastes minutes and produces a wall of red warnings that all say the same
+    // thing. Cut it off here with an actionable error, save the wall time.
+    let total_pre = parsed_assets.len();
+    if preserve_metadata && total_pre >= 5 && batch_metadata.is_empty() && batch_urls.is_empty() {
+        temp_log(
+            &format!(
+                "Aborting: batch endpoints returned no results for any of {total_pre} assets. This is a Roblox auth refusal, not a per-asset issue. Check: (1) ROBLOSECURITY cookie is fresh -- log out and back in on Roblox.com, then paste the new cookie into Accounts; (2) forced Place ID {} is owned by you (or your group); (3) Open Cloud API key has 'Assets: Write' AND '0.0.0.0/0' in the Accepted IPs.",
+                data.force_place_ids.clone().unwrap_or_else(|| "N/A".to_string())
+            ),
+            "error",
+        );
+        let _ = app.emit(
+            "spoofer-result",
+            serde_json::json!({
+                "success": false,
+                "output": "Auth check failed -- aborted before per-asset processing.",
+                "jobId": job_id,
+                "logFilePath": job_log_path,
+                "replacements": {},
+                "assetResults": []
+            }),
+        );
+        finish_spoofer_job(&job_id);
+        return Ok(());
     }
 
     let concurrent_enabled = data.concurrent.unwrap_or(true);
@@ -757,7 +827,16 @@ pub async fn process_spoofer_action(
                                 ctx.log(&format!("Upload error for {asset_id}: {e_str}"), "error");
                                 ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": false, "stage": "upload", "errorReason": e_str }));
                                 if e_str.contains("403 Forbidden") || e_str.contains("401 Unauthorized") {
-                                    ctx.interrupted.store(true, Ordering::Relaxed);
+                                    // Only fire the "halting job" message the
+                                    // FIRST time we set the flag, otherwise a
+                                    // burst of parallel-upload 403s spams the
+                                    // log with the same halt message.
+                                    if !ctx.interrupted.swap(true, Ordering::Relaxed) {
+                                        ctx.log(
+                                            "Halting the rest of this job -- the Open Cloud API key was rejected. Fix the key (Assets = Write, IP whitelist = 0.0.0.0/0) in the Creator Dashboard, then retry. Assets that hadn't been reached yet were NOT processed.",
+                                            "warn",
+                                        );
+                                    }
                                 }
                             }
                         }

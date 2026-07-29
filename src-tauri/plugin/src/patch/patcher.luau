@@ -631,10 +631,14 @@ local function applyPatches(patches: any)
 		)
 	)
 
-	-- Report failed patches back to the desktop app
+	-- Report failed patches back to the desktop app. Include counts so the
+	-- app can log "N/M patches applied" instead of guessing from list length.
 	pcall(function()
 		postJson("/patch-results", {
 			failedPatches = failedPatchesList,
+			succeeded = succeeded,
+			failed = failed,
+			total = succeeded + failed,
 		})
 	end)
 

@@ -140,6 +140,8 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
         guard.studio_records = std::sync::Arc::new(extracted_records);
         (std::sync::Arc::clone(&guard.studio_records), guard.stored_mappings.clone())
     };
+    let record_count = records.len();
+    let mapping_count = mappings.len();
     let records_for_patches = std::sync::Arc::clone(&records);
     let stores =
         tokio::task::spawn_blocking(move || analyze_records(&records)).await.unwrap_or_else(|e| {
@@ -164,6 +166,36 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
                 Vec::new()
             })
     };
+
+    // Diagnostics for the "replace works unstable" reports: these three
+    // numbers tell us exactly where the pipeline is losing assets. If
+    // records = 0, the plugin scan collected nothing. If mappings > 0 but
+    // patches = 0, plan_patches couldn't match any mapping id against any
+    // record value (categorization / pattern issue).
+    let patch_count = patches.len();
+    log::info!(
+        "handle_scan_complete: records={record_count} mappings={mapping_count} patches={patch_count}"
+    );
+    let _ = state.app_handle.emit(
+        "spoofer-log",
+        serde_json::json!({
+            "level": "info",
+            "message": format!(
+                "Studio scan finished: {record_count} records collected, {mapping_count} pending mappings, {patch_count} patches planned."
+            ),
+        }),
+    );
+    if mapping_count > 0 && patch_count == 0 && record_count > 0 {
+        let _ = state.app_handle.emit(
+            "spoofer-log",
+            serde_json::json!({
+                "level": "warn",
+                "message": format!(
+                    "{mapping_count} spoofed mapping(s) had no matching records in the Studio scan -- nothing to replace. The scanned instances don't reference the old asset ids, so either the assets are loaded dynamically from scripts, or the scan didn't reach the container that holds them."
+                ),
+            }),
+        );
+    }
 
     let mut guard = state.data.write().await;
     (
@@ -323,6 +355,25 @@ pub async fn handle_patch_results(
     State(state): State<AppState>,
     Json(payload): Json<Value>,
 ) -> Json<Value> {
+    // Log a summary line in the app so users can tell whether the plugin
+    // actually applied patches. Without this, patches could silently fail
+    // in the plugin (rate limit, permissions, missing instance) and the
+    // user would just see the daemon report success with no follow-up.
+    let succeeded = payload.get("succeeded").and_then(Value::as_u64).unwrap_or(0);
+    let failed = payload.get("failed").and_then(Value::as_u64).unwrap_or(0);
+    let total = payload.get("total").and_then(Value::as_u64).unwrap_or(succeeded + failed);
+    if total > 0 {
+        let level = if failed == 0 { "info" } else { "warn" };
+        let _ = state.app_handle.emit(
+            "spoofer-log",
+            serde_json::json!({
+                "level": level,
+                "message": format!(
+                    "Studio plugin applied {succeeded}/{total} patches (failed: {failed})."
+                ),
+            }),
+        );
+    }
     if let Err(e) = state.app_handle.emit("patch-results", &payload) {
         log::error!("Failed to emit patch-results event: {}", e);
     }

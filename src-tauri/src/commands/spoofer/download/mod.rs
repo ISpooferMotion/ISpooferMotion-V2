@@ -225,7 +225,14 @@ pub async fn download_animation_asset_with_progress(
     // shared rate limiter, stalling the whole job for minutes on a single
     // dead asset. Track consecutive permanent failures across candidates and
     // give up once we're clearly hitting a wall.
-    const PERM_FAILURE_BAIL_THRESHOLD: usize = 5;
+    //
+    // Threshold sits at 20 (not the original 5) because 5 was too eager --
+    // some legit assets need a long-tail URL to succeed, and 5 consecutive
+    // 403s in the early direct-URL block would bail before discovery even
+    // ran. 20 gives every asset up to ~40 URLs across the two phases,
+    // capping worst-case wall time on dead assets at ~30s while still
+    // matching v2.1's "try everything" behavior for accessible assets.
+    const PERM_FAILURE_BAIL_THRESHOLD: usize = 20;
     let mut consecutive_perm_failures: usize = 0;
 
     // Iterate through candidate URLs until the file is successfully retrieved.
