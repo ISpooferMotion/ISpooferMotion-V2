@@ -180,8 +180,12 @@ fn runtime_load_pattern() -> &'static Regex {
 
 fn infer_category_from_property(property: &str) -> Option<&'static str> {
     match property {
-        "AnimationId" | "ClimbAnimation" | "FallAnimation" | "IdleAnimation" | "JumpAnimation"
-        | "RunAnimation" | "SwimAnimation" | "WalkAnimation" | "MoodAnimation" => Some("animation"),
+        // AnimationContent is the newer Content-typed alias for AnimationId --
+        // Roblox's runtime reads whichever is set, so we scan and categorize
+        // both.
+        "AnimationId" | "AnimationContent" | "ClimbAnimation" | "FallAnimation"
+        | "IdleAnimation" | "JumpAnimation" | "RunAnimation" | "SwimAnimation"
+        | "WalkAnimation" | "MoodAnimation" => Some("animation"),
         "SoundId" | "AudioContent" | "Asset" => Some("sound"),
         "Video" => Some("image"),
         // MeshPart.TextureID (all-caps ID) is a *texture* asset, not a mesh.

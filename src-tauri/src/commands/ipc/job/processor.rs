@@ -396,10 +396,26 @@ pub async fn process_spoofer_action(
     )
     .await
     {
-        temp_log(
-            &format!("Successfully resolved {} download URLs via batch endpoint.", urls.len()),
-            "info",
-        );
+        let total_assets = parsed_assets.len();
+        if urls.is_empty() {
+            temp_log(
+                &format!(
+                    "Batch download-URL endpoint returned 0 of {total_assets} URLs. Usually means the cookie or forced Place ID can't see these assets on Roblox -- falling back to per-asset resolution, but expect most downloads to fail if the auth issue is real."
+                ),
+                "warn",
+            );
+        } else if urls.len() < total_assets {
+            temp_log(
+                &format!(
+                    "Batch endpoint resolved {}/{total_assets} download URLs; the remaining {} will fall back to per-asset resolution.",
+                    urls.len(),
+                    total_assets - urls.len()
+                ),
+                "info",
+            );
+        } else {
+            temp_log(&format!("Batch endpoint resolved all {} download URLs.", urls.len()), "info");
+        }
         batch_urls = urls;
     } else {
         temp_log("Failed to resolve download URLs via batch endpoint. Falling back to individual resolution.", "warn");
@@ -411,13 +427,30 @@ pub async fn process_spoofer_action(
     if preserve_metadata {
         temp_log("Fetching asset metadata in batch...", "info");
         batch_metadata = batch_fetch_asset_details(&asset_ids, &cookie, &csrf_token, &client).await;
-        temp_log(
-            &format!(
-                "Successfully resolved metadata for {} assets via batch endpoint.",
-                batch_metadata.len()
-            ),
-            "info",
-        );
+        if batch_metadata.is_empty() {
+            temp_log(
+                &format!(
+                    "Batch metadata endpoint returned 0 of {} results. This usually means Roblox refused to serve details for these assets to the current cookie -- downloads will still be attempted, but any placeholder-image responses will be skipped rather than uploaded as fake replacements.",
+                    asset_ids.len()
+                ),
+                "warn",
+            );
+        } else if batch_metadata.len() < asset_ids.len() {
+            temp_log(
+                &format!(
+                    "Resolved metadata for {}/{} assets ({} skipped by Roblox).",
+                    batch_metadata.len(),
+                    asset_ids.len(),
+                    asset_ids.len() - batch_metadata.len()
+                ),
+                "info",
+            );
+        } else {
+            temp_log(
+                &format!("Resolved metadata for all {} assets.", batch_metadata.len()),
+                "info",
+            );
+        }
     }
 
     let concurrent_enabled = data.concurrent.unwrap_or(true);
@@ -734,8 +767,18 @@ pub async fn process_spoofer_action(
                         let err_msg = res.error.unwrap_or_default();
                         let is_upstream_inaccessible = err_msg.contains("Permission Denied") || err_msg.contains("Asset is private") || err_msg.contains("copylocked") || err_msg.contains("Conflict: Asset delivery blocked") || err_msg.contains("Not Found: Asset");
                         let (level, msg) = if is_upstream_inaccessible {
-                            let reason = if err_msg.contains("Not Found") { "missing or invalid" } else if err_msg.contains("Conflict") { "blocked by Roblox" } else { "private or copylocked" };
-                            ("warn", format!("Skipped {asset_id} ({reason}) - Roblox refused the download."))
+                            let reason = if err_msg.contains("Not Found") {
+                                "asset id doesn't exist"
+                            } else if err_msg.contains("Conflict") {
+                                // Asset delivery 409: the asset exists but the
+                                // signed-in user + selected Place don't have
+                                // permission to fetch it. Different from 403,
+                                // which means the asset itself is locked.
+                                "your account or forced Place ID doesn't have access"
+                            } else {
+                                "private or copylocked"
+                            };
+                            ("warn", format!("Skipped {asset_id} ({reason})."))
                         } else {
                             ("error", format!("Download failed for {asset_id}: {err_msg}"))
                         };
@@ -744,8 +787,23 @@ pub async fn process_spoofer_action(
                     }
                     Err(e) => {
                         ctx.fail_count.fetch_add(1, Ordering::Relaxed);
-                        ctx.log(&format!("Download error for {asset_id}: {e}"), "error");
-                        ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": false, "stage": "download", "errorReason": e.to_string() }));
+                        let raw = e.to_string();
+                        // Translate common reqwest jargon into something a
+                        // tester can act on. Everything else falls through
+                        // with the original message.
+                        let human = if raw.contains("error decoding response body") {
+                            "Roblox cut the connection mid-download (or sent a corrupt/gzipped body). Retries didn't recover -- try again in a moment.".to_string()
+                        } else if raw.contains("timed out") || raw.contains("timeout") {
+                            "Download timed out. Roblox is likely rate-limiting or slow -- try again shortly.".to_string()
+                        } else if raw.contains("ConnectionReset") || raw.contains("connection reset") {
+                            "Roblox reset the connection during download. Usually transient.".to_string()
+                        } else if raw.contains("dns error") {
+                            "DNS lookup failed for a Roblox host. Check your network / VPN.".to_string()
+                        } else {
+                            raw.clone()
+                        };
+                        ctx.log(&format!("Download error for {asset_id}: {human}"), "error");
+                        ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": false, "stage": "download", "errorReason": raw }));
                     }
                 }
 
@@ -838,10 +896,37 @@ pub async fn process_spoofer_action(
 
     let summary = format!("Total Assets: {total}\nSuccessful: {success} (Skipped Uploads: {skipped})\nFailed: {failed}");
     ctx.log(&summary, if completed_successfully { "success" } else { "warn" });
+
+    // If the job effectively failed across the board, surface the most likely
+    // root cause instead of leaving the user staring at a wall of red warnings.
+    if total > 0 && success == 0 && failed > 0 {
+        ctx.log(
+            "Every asset failed. This is almost always an auth problem, not a bug -- the cookie or forced Place ID can't access these assets on Roblox. Try: (1) refreshing the ROBLOSECURITY cookie in Accounts, (2) picking a Place you actually own for the forced Place ID, (3) confirming the Open Cloud API key belongs to the same account/group.",
+            "warn",
+        );
+    } else if total > 0 && failed > success && failed > total / 2 {
+        ctx.log(
+            &format!(
+                "Over half the assets failed ({failed}/{total}). If most are 'placeholder image' or 'blocked by Roblox' errors, your cookie or forced Place ID probably doesn't have access to this creator's assets."
+            ),
+            "warn",
+        );
+    }
+
     if !final_replacements.is_empty() {
         ctx.log(
-            "Auto-replacement queued! Don't forget to save your place in Studio afterwards.",
+            &format!(
+                "{} replacement(s) queued to the Studio plugin bridge. They only apply once Studio is running with the ISpooferMotion plugin loaded -- watch the plugin status pill in the app. Don't forget to save your place after the replacements land.",
+                final_replacements.len()
+            ),
             "info",
+        );
+    } else if success > 0 {
+        // Successful uploads but no replacements queued -- almost always means
+        // the mapping got dropped somewhere. Flag it clearly.
+        ctx.log(
+            "Uploads succeeded but no replacements got queued to the plugin. If this reproduces please share the log -- it means the mapping-collection step failed.",
+            "warn",
         );
     }
 

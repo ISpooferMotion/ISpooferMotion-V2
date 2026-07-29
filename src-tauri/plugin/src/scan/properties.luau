@@ -274,6 +274,13 @@ local function scanSpecialInstanceAssets(
 
 	if obj:IsA("Animation") then
 		captureProperty(records, obj, "AnimationId", scannedProps)
+		-- AnimationContent is the newer Content-typed alias for AnimationId.
+		-- Roblox's runtime reads whichever is set, so patching only AnimationId
+		-- leaves AnimationContent holding the original asset -- the character
+		-- plays the un-spoofed animation and the user sees "it didn't replace".
+		-- Scanner needs to capture both so the daemon plans patches for both;
+		-- the patcher already handles Content values (see patcher.luau).
+		captureProperty(records, obj, "AnimationContent", scannedProps)
 	end
 
 	if obj:IsA("Sound") then

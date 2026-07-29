@@ -325,9 +325,13 @@ pub async fn publish_asset_with_progress(
                         Some("Image") | Some("Decal") | Some("Mesh")
                     )
                 {
+                    let type_label = asset_type_name.as_deref().unwrap_or("unknown");
+                    let article = match type_label.chars().next() {
+                        Some(c) if "AEIOUaeiou".contains(c) => "an",
+                        _ => "a",
+                    };
                     let msg = format!(
-                        "Download returned a placeholder image for a {} asset (Roblox likely refused access). Skipping upload to avoid corrupting the Studio replacement.",
-                        asset_type_name.as_deref().unwrap_or("unknown")
+                        "Download returned a placeholder image for {article} {type_label} asset (Roblox refused access, usually because the cookie or forced Place ID can't see this asset). Skipping upload to avoid pasting an image id into an {type_label} slot in Studio."
                     );
                     emit_transfer_update(
                         &app,
