@@ -247,42 +247,71 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
     // to the plugin bridge. If memory injection already replaced a value,
     // the plugin's scan will see the new id and plan_patches produces no
     // patch for it -- idempotent, no double work.
+    // The spoof job itself (download + upload) already finished successfully
+    // before we get here -- the replacements map is populated. Persist it
+    // NOW so it survives any subsequent apply-step failures. Otherwise a
+    // user who spoofs without Studio open loses the mapping table entirely
+    // when the apply step throws, even though the assets were uploaded.
+    setLastReplacements(replacements);
+
     if (config.advanced.memoryInjectionEnabled) {
       setSpoofingLogs((prev) => appendSpoofingLog(prev, 'Starting Memory Injection (Beta)...'));
       const pid = await invoke<number | null>('find_studio_process');
       if (!pid) {
-        throw new Error('Roblox Studio is not running.');
+        setSpoofingLogs((prev) =>
+          appendSpoofingLog(
+            prev,
+            "[INFO] Studio isn't running -- skipping memory injection. Mappings are ready; open Studio and hit Retry Replacement (or copy the IDs from the Results panel).",
+          ),
+        );
+      } else {
+        const results = await invoke<Record<string, { total_replaced: number }>>(
+          'scan_and_replace_multiple_strings',
+          {
+            pid,
+            replacements,
+          },
+        );
+
+        let total = 0;
+        for (const [, res] of Object.entries(results)) {
+          total += res.total_replaced;
+        }
+
+        setSpoofingLogs((prev) =>
+          appendSpoofingLog(
+            prev,
+            `Memory injection complete! Patched ${total} exact matches in memory. Handing any length-mismatched pairs to the plugin bridge...`,
+          ),
+        );
       }
+    }
 
-      const results = await invoke<Record<string, { total_replaced: number }>>(
-        'scan_and_replace_multiple_strings',
-        {
-          pid,
-          replacements,
-        },
-      );
-
-      let total = 0;
-      for (const [, res] of Object.entries(results)) {
-        total += res.total_replaced;
-      }
-
+    try {
+      await queueStudioReplacements(replacements);
       setSpoofingLogs((prev) =>
         appendSpoofingLog(
           prev,
-          `Memory injection complete! Patched ${total} exact matches in memory. Handing any length-mismatched pairs to the plugin bridge...`,
+          "Queued replacements to plugin bridge. The Studio plugin will auto-replace anything memory injection couldn't patch.",
         ),
       );
+    } catch (bridgeErr: unknown) {
+      const msg = String(bridgeErr);
+      // Plugin/Studio not being reachable isn't a spoof failure. The upload
+      // side already completed; the user can apply the mappings later by
+      // opening Studio and hitting the Retry Replacement button, or by
+      // copying the IDs from the Results panel and pasting them wherever.
+      if (msg.includes('plugin') || msg.includes('Studio') || msg.includes('bridge')) {
+        setSpoofingLogs((prev) =>
+          appendSpoofingLog(
+            prev,
+            `[INFO] ${Object.keys(replacements).length} replacement(s) generated but the Studio plugin isn't connected. Open Studio with the ISpooferMotion plugin loaded and use Retry Replacement, or copy the IDs from the Results panel.`,
+          ),
+        );
+      } else {
+        throw bridgeErr;
+      }
     }
-
-    await queueStudioReplacements(replacements);
-    setSpoofingLogs((prev) =>
-      appendSpoofingLog(
-        prev,
-        "Queued replacements to plugin bridge. The Studio plugin will auto-replace anything memory injection couldn't patch.",
-      ),
-    );
-    setLastReplacements(replacements);
   } catch (e: unknown) {
     const errorStr = String(e);
     // These are expected non-fatal outcomes - log as info rather than showing an error toast.
