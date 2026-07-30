@@ -944,18 +944,6 @@ pub async fn process_spoofer_action(
     );
     finish_spoofer_job(&job_id);
 
-    if completed_successfully {
-        if let Ok(disc) = ctx.discoveries.lock() {
-            for (asset_id, place_id) in disc.iter() {
-                crate::commands::spoofer::remote_cache::push_discovery(
-                    app.clone(),
-                    asset_id.clone(),
-                    place_id.clone(),
-                );
-            }
-        }
-    }
-
     let is_download_only = data.upload_types.as_ref().is_some_and(|types| {
         types.contains(&"download".to_string()) && !types.contains(&"upload".to_string())
     });
@@ -965,6 +953,34 @@ pub async fn process_spoofer_action(
         let _ = app
             .opener()
             .open_path(base_downloads_dir.to_string_lossy().to_string(), None::<String>);
+    }
+
+    if completed_successfully {
+        let discoveries = ctx
+            .discoveries
+            .lock()
+            .map(|disc| disc.iter().cloned().collect::<HashMap<_, _>>())
+            .unwrap_or_default();
+        let write_failures = stream::iter(discoveries)
+            .map(|(asset_id, place_id)| async move {
+                crate::commands::spoofer::remote_cache::push_discovery(asset_id, place_id).await
+            })
+            .buffer_unordered(8)
+            .filter_map(|result| async move { result.err() })
+            .collect::<Vec<_>>()
+            .await;
+
+        if !write_failures.is_empty() {
+            let first_error = write_failures.first().map(String::as_str).unwrap_or("unknown error");
+            ctx.log(
+                &format!(
+                    "Failed to contribute {} discovery entry/entries to the community cache. First error: {}",
+                    write_failures.len(),
+                    first_error
+                ),
+                "warn",
+            );
+        }
     }
 
     Ok(())

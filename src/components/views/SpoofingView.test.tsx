@@ -114,6 +114,7 @@ vi.mock('./spoofing/SpoofingHeader', () => ({
   SpoofProgressOverlay: () => <div data-testid="spoof-progress-overlay" />,
 }));
 vi.mock('./spoofing/ProfileDropdowns', () => ({
+  AccountSwitcher: () => <div data-testid="account-switcher">AccountSwitcher</div>,
   AvatarDropdown: () => <div data-testid="avatar-dropdown">AvatarDropdown</div>,
   GroupDropdown: () => <div data-testid="group-dropdown">GroupDropdown</div>,
   parseAudioQuota: vi.fn().mockReturnValue(null),

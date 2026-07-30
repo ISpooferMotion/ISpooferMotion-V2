@@ -43,6 +43,15 @@ export function useAppInitialization() {
 
   // Fetch remote config (Maintenance Mode) and initialize remote cache
   useEffect(() => {
+    let cancelled = false;
+    const tauriRuntime = isTauriRuntime();
+
+    // Opt-out must not depend on the config server being reachable. Doing this
+    // before the fetch also closes the window where an old endpoint stays active.
+    if (tauriRuntime && !telemetryEnabled) {
+      void invoke('initialize_remote_cache', { pushUrl: null }).catch(console.warn);
+    }
+
     const fetchConfig = async () => {
       try {
         const baseUrl =
@@ -50,56 +59,62 @@ export function useAppInitialization() {
             ? 'https://ispoofermotion.com'
             : import.meta.env.VITE_API_BASE_URL;
         let res;
-        if (isTauriRuntime()) {
+        if (tauriRuntime) {
           const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
           res = await tauriFetch(`${baseUrl}/api/config`);
         } else {
           res = await fetch(`${baseUrl}/api/config`);
         }
-        if (res.ok) {
-          const data = await res.json();
-          if (data.maintenanceMode) {
-            setMaintenance({ mode: true, message: data.maintenanceMessage });
-          }
-          if (isTauriRuntime()) {
-            if (telemetryEnabled) {
-              const pushUrl = data.communityCacheUrl || `${baseUrl}/api/v1/cache/discovery`;
-              invoke('initialize_remote_cache', { pushUrl }).catch(console.warn);
-            } else {
-              invoke('initialize_remote_cache', { pushUrl: null }).catch(console.warn);
-            }
-          }
+        if (!res.ok || cancelled) return;
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        const maintenanceMode = data.maintenanceMode === true;
+        setMaintenance({
+          mode: maintenanceMode,
+          message:
+            maintenanceMode && typeof data.maintenanceMessage === 'string'
+              ? data.maintenanceMessage
+              : '',
+        });
+
+        if (tauriRuntime && telemetryEnabled) {
+          const pushUrl =
+            typeof data.communityCacheUrl === 'string' && data.communityCacheUrl.trim()
+              ? data.communityCacheUrl
+              : `${baseUrl}/api/v1/cache/discovery`;
+          void invoke('initialize_remote_cache', { pushUrl }).catch(console.warn);
         }
       } catch (e) {
-        console.warn('Could not connect to app config server:', e);
+        if (!cancelled) {
+          console.warn('Could not connect to app config server:', e);
+        }
       }
     };
-    fetchConfig();
+
+    void fetchConfig();
+    return () => {
+      cancelled = true;
+    };
   }, [telemetryEnabled]);
 
   // Heartbeat
   useEffect(() => {
-    if (!isTauriRuntime()) return;
+    if (!isTauriRuntime() || !telemetryEnabled) return;
+
     const sendHeartbeat = async () => {
       try {
         const baseUrl =
           import.meta.env.VITE_API_BASE_URL === undefined
             ? 'https://ispoofermotion.com'
             : import.meta.env.VITE_API_BASE_URL;
-        if (isTauriRuntime()) {
-          const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-          await tauriFetch(`${baseUrl}/api/dev/heartbeat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ source: 'spoofer' }),
-          });
-        } else {
-          await fetch(`${baseUrl}/api/dev/heartbeat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ source: 'spoofer' }),
-          });
-        }
+        const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+        await tauriFetch(`${baseUrl}/api/dev/heartbeat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: 'spoofer' }),
+        });
       } catch (e) {
         // ignore network errors for heartbeat
       }
@@ -108,7 +123,7 @@ export function useAppInitialization() {
     sendHeartbeat();
     const interval = setInterval(sendHeartbeat, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [telemetryEnabled]);
 
   // Global Shortcuts & Dragging Prevention
   useEffect(() => {
