@@ -591,8 +591,15 @@ export default function SpoofingView() {
     const selectedGroup = runContext?.selectedGroupId ?? config.spoofing.selectedGroup;
     const spoofSounds = runContext?.spoofSounds ?? config.spoofing.audio;
     const uploadTypes = runContext?.uploadTypes ?? config.spoofing.uploadTypes;
+    // Emit a persistent log line at every early-return so users can see WHY
+    // clicking "Run Spoofer" appeared to do nothing. A toast alone
+    // disappears in a few seconds and leaves the logs panel empty, which
+    // reads as "nothing happened".
     if (cookie.length < 50) {
-      logIsm('warn', 'Add a valid Roblox cookie before spoofing.', true);
+      const msg =
+        'Cannot start spoofer: no valid Roblox cookie. Open Accounts and paste a fresh .ROBLOSECURITY value, then try again.';
+      logIsm('warn', msg, true);
+      setLogs((prev) => appendSpoofingLog(prev, `[WARN] ${msg}\n`));
       return;
     }
 
@@ -600,7 +607,10 @@ export default function SpoofingView() {
       await validateCookieProfile(cookie);
     } catch (e) {
       addDebugLog('warn', ['Pre-spoofing cookie validation failed', e]);
-      logIsm('warn', 'Your Roblox cookie is invalid or expired. Update it before spoofing.', true);
+      const msg =
+        'Cannot start spoofer: the current Roblox cookie is invalid or expired. Refresh the cookie in Accounts.';
+      logIsm('warn', msg, true);
+      setLogs((prev) => appendSpoofingLog(prev, `[WARN] ${msg}\n`));
       return;
     }
 
@@ -664,7 +674,10 @@ export default function SpoofingView() {
     }
 
     if (finalAssetIds.size === 0) {
-      logIsm('warn', 'No valid assets selected or found for spoofing.', true);
+      const msg =
+        'Cannot start spoofer: no valid asset IDs found. Paste some IDs into "Additional IDs to Spoof", load a place file, or scan Studio first.';
+      logIsm('warn', msg, true);
+      setLogs((prev) => appendSpoofingLog(prev, `[WARN] ${msg}\n`));
       return;
     }
 
