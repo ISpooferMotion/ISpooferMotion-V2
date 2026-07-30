@@ -61,30 +61,140 @@ local function toAssetUri(value: any): string?
 	return if assetId then "rbxassetid://" .. assetId else nil
 end
 
+--- Every property name we know is Content-typed on modern Roblox.
+---
+--- The scan side accepts values from ANY known-asset property, but the patch
+--- side used to only know how to encode Content values when reading the
+--- current value came back typed as `Content`. When that read failed (plugin
+--- sandbox permission edge cases) or `Content.fromUri` was unavailable
+--- (older Studio builds), coerce would fall through and try to assign a raw
+--- digit string to a Content property -- Studio silently rejects that and
+--- the "patch" appears to succeed but nothing changes.
+---
+--- This map lets us encode by property name even when the readback fails.
+local CONTENT_PROPERTIES: { [string]: boolean } = {
+	AnimationId = true,
+	AnimationContent = true,
+	SoundId = true,
+	AudioContent = true,
+	MeshId = true,
+	MeshContent = true,
+	TextureId = true,
+	["TextureID"] = true,
+	Texture = true,
+	Image = true,
+	HoverImage = true,
+	PressedImage = true,
+	Graphic = true,
+	ShirtTemplate = true,
+	PantsTemplate = true,
+	Video = true,
+	Asset = true,
+	SkyboxBk = true,
+	SkyboxDn = true,
+	SkyboxFt = true,
+	SkyboxLf = true,
+	SkyboxRt = true,
+	SkyboxUp = true,
+	SunTextureId = true,
+	MoonTextureId = true,
+	ReferenceMeshId = true,
+	CageMeshId = true,
+	ColorMap = true,
+	MetalnessMap = true,
+	NormalMap = true,
+	RoughnessMap = true,
+	BaseTextureId = true,
+	OverlayTextureId = true,
+	ClimbAnimation = true,
+	FallAnimation = true,
+	IdleAnimation = true,
+	JumpAnimation = true,
+	RunAnimation = true,
+	SwimAnimation = true,
+	WalkAnimation = true,
+	MoodAnimation = true,
+}
+
+--- Property names that historically hold a raw int64 asset id rather than a
+--- Content value (mostly HumanoidDescription body parts and PackageLink).
+local NUMBER_ASSET_PROPERTIES: { [string]: boolean } = {
+	Face = true,
+	Head = true,
+	LeftArm = true,
+	LeftLeg = true,
+	RightArm = true,
+	RightLeg = true,
+	Torso = true,
+	GraphicTShirt = true,
+	Pants = true,
+	Shirt = true,
+	PackageId = true,
+	AssetId = true,
+}
+
+--- Tries every known way to build a `Content` value from a raw asset id or
+--- URI. `Content.fromUri` is the modern API; `Content.new` covered older
+--- builds. Returns `nil` if neither is available in this Studio version --
+--- caller falls back to a plain URI string in that case.
+local function buildContentValue(value: any): any
+	local uri = toAssetUri(value) or tostring(value)
+	local ok, contentObj = pcall(function()
+		-- luacheck: ignore
+		return (Content :: any).fromUri(uri)
+	end)
+	if ok and contentObj then
+		return contentObj
+	end
+	local ok2, contentObj2 = pcall(function()
+		-- luacheck: ignore
+		return (Content :: any).new(uri)
+	end)
+	if ok2 and contentObj2 then
+		return contentObj2
+	end
+	return nil
+end
+
 --- Safely converts an incoming patch value into the type expected by the property.
 ---
---- For example, if the property expects a `Content` object (like a TextureId), this
---- wraps the raw string before we try to assign it.
+--- Strategy: use the current-value type when we can read it, otherwise fall
+--- back to a hardcoded property-name lookup. The old code returned the raw
+--- input on any readback failure, which silently no-op'd every Content-typed
+--- property whose readback errored inside the sandbox.
 local function coercePropertyValue(obj: Instance, property: string, value: any): any
 	local readOk, currentValue = pcall(function()
 		return (obj :: any)[property]
 	end)
-	if not readOk then
-		return value
+
+	if readOk then
+		if type(currentValue) == "number" then
+			local assetId = normalizeAssetId(value)
+			return if assetId then tonumber(assetId) else tonumber(value) or value
+		elseif typeof(currentValue) == "Content" then
+			local contentObj = buildContentValue(value)
+			if contentObj ~= nil then
+				return contentObj
+			end
+			-- Content constructors missing -- fall through so the property-
+			-- name path can try a raw URI string as a last resort.
+		end
 	end
 
-	if type(currentValue) == "number" then
-		local assetId = normalizeAssetId(value)
-		return if assetId then tonumber(assetId) else tonumber(value) or value
-	elseif typeof(currentValue) == "Content" then
-		local uri = toAssetUri(value) or value
-		local ok, contentObj = pcall(function()
-			-- luacheck: ignore
-			return (Content :: any).fromUri(uri)
-		end)
-		if ok and contentObj then
+	-- Read failed OR the type didn't match a known encoder. Guess from the
+	-- property name so we don't silently no-op an assignment to a Content
+	-- property that reads back as `nil` or errors in this Studio context.
+	if CONTENT_PROPERTIES[property] then
+		local contentObj = buildContentValue(value)
+		if contentObj ~= nil then
 			return contentObj
 		end
+		return toAssetUri(value) or tostring(value)
+	end
+
+	if NUMBER_ASSET_PROPERTIES[property] then
+		local assetId = normalizeAssetId(value)
+		return if assetId then tonumber(assetId) else tonumber(value) or value
 	end
 
 	return value
