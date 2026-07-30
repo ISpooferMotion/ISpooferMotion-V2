@@ -236,6 +236,17 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
 
     setSpoofingLogs((prev) => appendSpoofingLog(prev, '\nApplying replacements to Studio...'));
 
+    // Memory injection and the plugin bridge are complementary, not
+    // exclusive. Memory injection can only patch length-matching id pairs
+    // (WriteProcessMemory writes bytes in-place, so 10-digit -> 15-digit
+    // pairs get skipped). The plugin bridge handles those length-mismatched
+    // cases plus anything memory injection missed. Running only one leaves
+    // gaps -- length-mismatched pairs silently don't get replaced.
+    //
+    // Order matters: memory injection first (fast, in-process), then queue
+    // to the plugin bridge. If memory injection already replaced a value,
+    // the plugin's scan will see the new id and plan_patches produces no
+    // patch for it -- idempotent, no double work.
     if (config.advanced.memoryInjectionEnabled) {
       setSpoofingLogs((prev) => appendSpoofingLog(prev, 'Starting Memory Injection (Beta)...'));
       const pid = await invoke<number | null>('find_studio_process');
@@ -259,20 +270,19 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
       setSpoofingLogs((prev) =>
         appendSpoofingLog(
           prev,
-          `Memory injection complete! Patched ${total} exact matches in memory.`,
+          `Memory injection complete! Patched ${total} exact matches in memory. Handing any length-mismatched pairs to the plugin bridge...`,
         ),
       );
-      setLastReplacements(replacements);
-    } else {
-      await queueStudioReplacements(replacements);
-      setSpoofingLogs((prev) =>
-        appendSpoofingLog(
-          prev,
-          'Queued replacements to plugin bridge. The Studio plugin will auto-replace them automatically!',
-        ),
-      );
-      setLastReplacements(replacements);
     }
+
+    await queueStudioReplacements(replacements);
+    setSpoofingLogs((prev) =>
+      appendSpoofingLog(
+        prev,
+        "Queued replacements to plugin bridge. The Studio plugin will auto-replace anything memory injection couldn't patch.",
+      ),
+    );
+    setLastReplacements(replacements);
   } catch (e: unknown) {
     const errorStr = String(e);
     // These are expected non-fatal outcomes - log as info rather than showing an error toast.
