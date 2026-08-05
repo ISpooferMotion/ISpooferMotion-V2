@@ -18,6 +18,20 @@ pub(super) fn get_secrets_keyring_entry() -> crate::error::Result<Entry> {
     })
 }
 
+// The Open Cloud API key lives in its own credential entry, separate from the
+// ProfileSecrets blob. The blob carries the long .ROBLOSECURITY cookie -- often
+// duplicated across the top-level `cookie`, `profileCookies`, and `accountSecrets`
+// fields -- so it can exceed Windows Credential Manager's 2560-byte
+// CredentialBlob cap, at which point CredWriteW rejects the whole blob and every
+// secret in it is lost. The API key has no re-detection fallback the way the cookie
+// does (Studio credentials), so giving it its own entry keeps it from disappearing
+// on restart when the blob write fails.
+pub(super) fn get_opencloud_api_key_entry() -> crate::error::Result<Entry> {
+    Entry::new("ISpooferMotion.OpenCloudApiKey", "default").map_err(|e| {
+        crate::error::AppError::Custom(format!("Failed to open API key credential store: {e}"))
+    })
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn load_renderer_settings(app: AppHandle) -> crate::error::Result<AnyValue> {
@@ -51,32 +65,49 @@ pub async fn load_profile_secrets(app: AppHandle) -> crate::error::Result<AnyVal
     .await
     .unwrap_or(None);
 
-    if let Some(password) = password_result {
-        if let Ok(value) = serde_json::from_str(&password) {
-            return Ok(AnyValue(value));
+    let mut value = if let Some(password) = password_result {
+        match serde_json::from_str(&password) {
+            Ok(value) => value,
+            Err(_) => Value::Object(serde_json::Map::new()),
+        }
+    } else {
+        let path = get_profile_secrets_path(&app)?;
+        if path.exists() {
+            let legacy_secrets = read_json_file(&path).await;
+            if legacy_secrets.is_object() {
+                let json_str = serde_json::to_string(&legacy_secrets)?;
+                let _ = tokio::task::spawn_blocking(move || {
+                    let entry = get_secrets_keyring_entry()?;
+                    entry.set_password(&json_str).map_err(|error| {
+                        crate::error::AppError::Custom(format!(
+                            "Failed to migrate secrets into credential store: {error}"
+                        ))
+                    })
+                })
+                .await
+                .map_err(|e| crate::error::AppError::Custom(e.to_string()))?;
+                let _ = tokio::fs::remove_file(path).await;
+            }
+            legacy_secrets
+        } else {
+            Value::Object(serde_json::Map::new())
+        }
+    };
+
+    // The API key is the authoritative value from its own entry; fall back to
+    // whatever the blob carries (back-compat for installs that only have it there).
+    let api_key = tokio::task::spawn_blocking(|| {
+        get_opencloud_api_key_entry().ok().and_then(|e| e.get_password().ok())
+    })
+    .await
+    .unwrap_or(None);
+    if let Some(api_key) = api_key {
+        if let Some(obj) = value.as_object_mut() {
+            obj.insert("apiKey".to_string(), Value::String(api_key));
         }
     }
 
-    let path = get_profile_secrets_path(&app)?;
-    if !path.exists() {
-        return Ok(AnyValue(Value::Object(serde_json::Map::new())));
-    }
-    let legacy_secrets = read_json_file(&path).await;
-    if legacy_secrets.is_object() {
-        let json_str = serde_json::to_string(&legacy_secrets)?;
-        tokio::task::spawn_blocking(move || {
-            let entry = get_secrets_keyring_entry()?;
-            entry.set_password(&json_str).map_err(|error| {
-                crate::error::AppError::Custom(format!(
-                    "Failed to migrate secrets into credential store: {error}"
-                ))
-            })
-        })
-        .await
-        .map_err(|e| crate::error::AppError::Custom(e.to_string()))??;
-        let _ = tokio::fs::remove_file(path).await;
-    }
-    Ok(AnyValue(legacy_secrets))
+    Ok(AnyValue(value))
 }
 
 #[tauri::command]
@@ -129,8 +160,16 @@ pub async fn save_profile_secrets(
         all_secrets = data.clone();
     }
 
+    let api_key_value = all_secrets.get("apiKey").and_then(|v| v.as_str()).map(str::to_string);
     let json_str = serde_json::to_string(&all_secrets)?;
     tokio::task::spawn_blocking(move || {
+        // Persist the API key first in its own entry so a valid key is not lost
+        // when the cookie-bearing blob below exceeds the CredentialBlob cap.
+        if let Some(api_key) = api_key_value {
+            if let Ok(entry) = get_opencloud_api_key_entry() {
+                let _ = entry.set_password(&api_key);
+            }
+        }
         let entry = get_secrets_keyring_entry()?;
         entry.set_password(&json_str).map_err(|error| {
             crate::error::AppError::Custom(format!(
@@ -155,6 +194,9 @@ pub async fn clear_profile_secrets(
 ) -> crate::error::Result<bool> {
     let _ = tokio::task::spawn_blocking(|| {
         if let Ok(entry) = get_secrets_keyring_entry() {
+            let _ = entry.delete_credential();
+        }
+        if let Ok(entry) = get_opencloud_api_key_entry() {
             let _ = entry.delete_credential();
         }
     })

@@ -57,6 +57,10 @@ describe('configStore', () => {
   it('saves secrets to backend', async () => {
     const invokeMock = (tauriCore.invoke as any).mockResolvedValueOnce(undefined);
 
+    // saveSecrets is gated on secretsLoaded so the restart cookie-auto-detect
+    // race can't wipe a not-yet-loaded API key. Simulate a completed load.
+    useConfigStore.setState({ secretsLoaded: true });
+
     useConfigStore
       .getState()
       .updateCategory('spoofing', { cookie: 'new_cookie', apiKey: 'new_key' });
@@ -70,5 +74,20 @@ describe('configStore', () => {
         accountSecrets: {},
       },
     });
+  });
+
+  it('does not save secrets before the initial load completes', async () => {
+    // Guards the restart race: cookie auto-detect fires saveSecrets on mount
+    // before loadSecrets() has restored the API key. Without this guard, that
+    // save reads apiKey='' and overwrites the persisted key with empty.
+    const invokeMock = (tauriCore.invoke as any).mockResolvedValueOnce(undefined);
+    useConfigStore.setState({ secretsLoaded: false });
+
+    useConfigStore
+      .getState()
+      .updateCategory('spoofing', { cookie: 'race_cookie', apiKey: 'race_key' });
+    await useConfigStore.getState().saveSecrets();
+
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });
