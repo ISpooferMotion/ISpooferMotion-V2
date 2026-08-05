@@ -14,9 +14,33 @@ local gui = nil
 local statusText = nil
 local logsScrollingFrame = nil
 local connectionStatusText = nil
+--- Number of log lines ever added, used both for eviction and for naming labels.
+--- It must be declared up here with the rest of the module state: the header's
+--- Clear button lives inside `createPluginGui`, and a local declared further down
+--- (beside the LogService listener) would not be in scope there - the button would
+--- silently read and write a global of the same name instead.
+local logCounter = 0
 
 local currentAccentColor = Color3.fromHex("#10b981")
 local activeTabIndicators = {}
+
+--- Removes every log line from the panel and resets the eviction counter.
+---
+--- Purely local to Studio - it clears what the panel is showing and does not need
+--- the desktop app, so it works while disconnected.
+local function clearPluginLogs()
+	if not logsScrollingFrame then
+		return
+	end
+
+	for _, child in ipairs(logsScrollingFrame:GetChildren()) do
+		if child:IsA("TextLabel") then
+			child:Destroy()
+		end
+	end
+
+	logCounter = 0
+end
 
 --- Bootstraps the ScreenGui and injects it into CoreGui.
 ---
@@ -213,29 +237,29 @@ local function createPluginGui()
 	statusText.Text = "Waiting for Desktop App..."
 	statusText.Parent = header
 
-	local copyLogsButton = Instance.new("TextButton")
-	copyLogsButton.Name = "CopyLogsButton"
-	copyLogsButton.Size = UDim2.fromOffset(92, 28)
-	copyLogsButton.Position = UDim2.new(1, -52, 0.5, 0)
-	copyLogsButton.AnchorPoint = Vector2.new(1, 0.5)
-	copyLogsButton.BackgroundTransparency = 1
-	copyLogsButton.BorderSizePixel = 0
-	copyLogsButton.Font = Enum.Font.BuilderSansMedium
-	copyLogsButton.TextSize = 12
-	copyLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
-	copyLogsButton.Text = "Export Logs"
-	copyLogsButton.AutoButtonColor = false
-	copyLogsButton.ClipsDescendants = true
-	copyLogsButton.Parent = header
+	local openLogsButton = Instance.new("TextButton")
+	openLogsButton.Name = "OpenLogsButton"
+	openLogsButton.Size = UDim2.fromOffset(92, 28)
+	openLogsButton.Position = UDim2.new(1, -52, 0.5, 0)
+	openLogsButton.AnchorPoint = Vector2.new(1, 0.5)
+	openLogsButton.BackgroundTransparency = 1
+	openLogsButton.BorderSizePixel = 0
+	openLogsButton.Font = Enum.Font.BuilderSansMedium
+	openLogsButton.TextSize = 12
+	openLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
+	openLogsButton.Text = "Open Logs"
+	openLogsButton.AutoButtonColor = false
+	openLogsButton.ClipsDescendants = true
+	openLogsButton.Parent = header
 
-	copyLogsButton.MouseEnter:Connect(function()
-		copyLogsButton.TextColor3 = Color3.fromHex("#fafafa")
+	openLogsButton.MouseEnter:Connect(function()
+		openLogsButton.TextColor3 = Color3.fromHex("#fafafa")
 	end)
-	copyLogsButton.MouseLeave:Connect(function()
-		copyLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
+	openLogsButton.MouseLeave:Connect(function()
+		openLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
 	end)
-	copyLogsButton.MouseButton1Click:Connect(function()
-		ripple(copyLogsButton)
+	openLogsButton.MouseButton1Click:Connect(function()
+		ripple(openLogsButton)
 		local logs = {}
 		if logsScrollingFrame then
 			for _, child in ipairs(logsScrollingFrame:GetChildren()) do
@@ -255,12 +279,22 @@ local function createPluginGui()
 				finalString = "(No logs generated yet)"
 			end
 
+			local serverStorage = game:GetService("ServerStorage")
+
+			-- Replace the previous export rather than stacking another script in
+			-- ServerStorage: those are saved with the place, so repeated exports
+			-- used to leave a pile of "ISpooferMotion_Logs" copies behind.
+			local previousExport = serverStorage:FindFirstChild("ISpooferMotion_Logs")
+			if previousExport then
+				previousExport:Destroy()
+			end
+
 			local logScript = Instance.new("Script")
 			logScript.Name = "ISpooferMotion_Logs"
 			logScript.Source = "-- ISpooferMotion Logs\n-- Copy the contents below:\n\n--[[\n"
 				.. finalString
 				.. "\n]]"
-			logScript.Parent = game:GetService("ServerStorage")
+			logScript.Parent = serverStorage
 
 			local exportSuccess, err = pcall(function()
 				-- selene: allow(deprecated)
@@ -268,19 +302,53 @@ local function createPluginGui()
 			end)
 
 			if exportSuccess then
-				copyLogsButton.Text = "Exported!"
+				openLogsButton.Text = "Opened!"
 			else
-				warn("ISpooferMotion Export Logs Failed: " .. tostring(err))
-				copyLogsButton.Text = "Error"
+				warn("ISpooferMotion Open Logs Failed: " .. tostring(err))
+				openLogsButton.Text = "Error"
 			end
 
 			task.delay(1.5, function()
-				if copyLogsButton then
-					copyLogsButton.Text = "Export Logs"
-					copyLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
+				if openLogsButton then
+					openLogsButton.Text = "Open Logs"
+					openLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
 				end
 			end)
 		end
+	end)
+
+	local clearLogsButton = Instance.new("TextButton")
+	clearLogsButton.Name = "ClearLogsButton"
+	clearLogsButton.Size = UDim2.fromOffset(56, 28)
+	clearLogsButton.Position = UDim2.new(1, -148, 0.5, 0)
+	clearLogsButton.AnchorPoint = Vector2.new(1, 0.5)
+	clearLogsButton.BackgroundTransparency = 1
+	clearLogsButton.BorderSizePixel = 0
+	clearLogsButton.Font = Enum.Font.BuilderSansMedium
+	clearLogsButton.TextSize = 12
+	clearLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
+	clearLogsButton.Text = "Clear"
+	clearLogsButton.AutoButtonColor = false
+	clearLogsButton.ClipsDescendants = true
+	clearLogsButton.Parent = header
+
+	clearLogsButton.MouseEnter:Connect(function()
+		clearLogsButton.TextColor3 = Color3.fromHex("#fafafa")
+	end)
+	clearLogsButton.MouseLeave:Connect(function()
+		clearLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
+	end)
+	clearLogsButton.MouseButton1Click:Connect(function()
+		ripple(clearLogsButton)
+		clearPluginLogs()
+		clearLogsButton.Text = "Cleared"
+
+		task.delay(1.5, function()
+			if clearLogsButton and clearLogsButton.Parent then
+				clearLogsButton.Text = "Clear"
+				clearLogsButton.TextColor3 = Color3.fromHex("#a1a1aa")
+			end
+		end)
 	end)
 
 	-- Removed header separator line per user request
@@ -592,17 +660,239 @@ local function createPluginGui()
 	settingsPadding.PaddingBottom = UDim.new(0, 12)
 	settingsPadding.Parent = settingsContainer
 
-	local function createSettingInput(order, key, labelText, descText, warningText, defaultValue)
+	-- Shared tooltip for every settings row. Parented directly to the ScreenGui (not the
+	-- ScrollingFrame) so it escapes clipping when a row near the edge is hovered.
+	local TOOLTIP_WIDTH = 260
+
+	local tooltip = Instance.new("Frame")
+	tooltip.Name = "SettingTooltip"
+	tooltip.BackgroundColor3 = Color3.fromHex("#18181b")
+	tooltip.BorderSizePixel = 0
+	tooltip.Size = UDim2.fromOffset(TOOLTIP_WIDTH, 0)
+	tooltip.AutomaticSize = Enum.AutomaticSize.Y
+	tooltip.Visible = false
+	tooltip.ZIndex = 50
+	-- Must never sink input: it floats above the panel and would otherwise steal
+	-- clicks and hover events meant for the sliders underneath it.
+	tooltip.Active = false
+	tooltip.Parent = gui
+
+	local tooltipCorner = Instance.new("UICorner")
+	tooltipCorner.CornerRadius = UDim.new(0, 6)
+	tooltipCorner.Parent = tooltip
+
+	local tooltipStroke = Instance.new("UIStroke")
+	tooltipStroke.Color = Color3.fromHex("#3f3f46")
+	tooltipStroke.Thickness = 1
+	tooltipStroke.Parent = tooltip
+
+	local tooltipPadding = Instance.new("UIPadding")
+	tooltipPadding.PaddingLeft = UDim.new(0, 10)
+	tooltipPadding.PaddingRight = UDim.new(0, 10)
+	tooltipPadding.PaddingTop = UDim.new(0, 8)
+	tooltipPadding.PaddingBottom = UDim.new(0, 8)
+	tooltipPadding.Parent = tooltip
+
+	local tooltipText = Instance.new("TextLabel")
+	tooltipText.Name = "Text"
+	tooltipText.BackgroundTransparency = 1
+	tooltipText.Size = UDim2.new(1, 0, 0, 0)
+	tooltipText.AutomaticSize = Enum.AutomaticSize.Y
+	tooltipText.Font = Enum.Font.BuilderSansMedium
+	tooltipText.TextSize = 12
+	tooltipText.TextColor3 = Color3.fromHex("#e4e4e7")
+	tooltipText.TextXAlignment = Enum.TextXAlignment.Left
+	tooltipText.TextYAlignment = Enum.TextYAlignment.Top
+	tooltipText.TextWrapped = true
+	tooltipText.Parent = tooltip
+
+	-- Tooltip timing, following the conventions desktop UI toolkits use:
+	--  * wait before the first appearance, so sweeping the cursor across rows
+	--    does not fire a burst of tooltips (hover intent),
+	--  * once one has been shown, a neighbouring row shows instantly while the
+	--    tooltip is still "warm" - scanning a list should not feel sluggish,
+	--  * leave a short grace period on the way out so brushing over the gap
+	--    between two rows does not make it blink.
+	local TOOLTIP_SHOW_DELAY = 0.45
+	local TOOLTIP_HIDE_DELAY = 0.12
+	local TOOLTIP_WARM_WINDOW = 0.4
+	local TOOLTIP_FADE_TIME = 0.12
+	local tooltipFadeInfo =
+		TweenInfo.new(TOOLTIP_FADE_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+	--- Bumped by every show/hide request. Pending `task.delay` callbacks capture
+	--- the current value and bail out when it no longer matches, which is how a
+	--- scheduled show or hide gets cancelled.
+	local tooltipToken = 0
+	local tooltipShown = false
+	local tooltipHiddenAt = 0
+	--- Set while a slider is being dragged: a tooltip hovering next to the cursor
+	--- during a drag is pure distraction, so we keep it away until the drag ends.
+	local tooltipDragSuppressed = false
+	local tooltipDesiredY = 0
+
+	--- Keeps the tooltip fully on screen. `AutomaticSize` settles a frame after
+	--- the text changes, so this also runs on every size change.
+	local function clampTooltipVertically()
+		local viewportHeight = gui.AbsoluteSize.Y
+		local height = tooltip.AbsoluteSize.Y
+		local y = tooltipDesiredY
+		if viewportHeight > 0 and height > 0 then
+			y = math.clamp(y, 8, math.max(8, viewportHeight - height - 8))
+		end
+		tooltip.Position = UDim2.fromOffset(tooltip.Position.X.Offset, y)
+	end
+
+	tooltip:GetPropertyChangedSignal("AbsoluteSize"):Connect(clampTooltipVertically)
+
+	--- Fades every part of the tooltip together. A Frame has no group
+	--- transparency, so the background, border, and text each get their own tween.
+	local function fadeTooltipTo(transparency)
+		TweenService:Create(tooltip, tooltipFadeInfo, { BackgroundTransparency = transparency })
+			:Play()
+		TweenService:Create(tooltipStroke, tooltipFadeInfo, { Transparency = transparency }):Play()
+		TweenService:Create(tooltipText, tooltipFadeInfo, { TextTransparency = transparency })
+			:Play()
+	end
+
+	--- Positions the tooltip OUTSIDE the panel bounds, vertically aligned with
+	--- `anchor`. An earlier version put it directly below the hovered row, where
+	--- it covered the next row's slider track and made those sliders hard to grab.
+	local function placeTooltip(anchor, text)
+		tooltipText.Text = text
+
+		local panelPos = container.AbsolutePosition
+		local panelSize = container.AbsoluteSize
+		local viewportWidth = gui.AbsoluteSize.X
+
+		-- Prefer the right of the panel; flip to the left when there is no room.
+		local x = panelPos.X + panelSize.X + 8
+		if viewportWidth > 0 and x + TOOLTIP_WIDTH > viewportWidth then
+			x = panelPos.X - TOOLTIP_WIDTH - 8
+		end
+
+		tooltipDesiredY = anchor.AbsolutePosition.Y
+		tooltip.Position = UDim2.fromOffset(x, tooltipDesiredY)
+		clampTooltipVertically()
+	end
+
+	local function revealTooltip(anchor, text)
+		placeTooltip(anchor, text)
+		tooltipShown = true
+		tooltip.Visible = true
+		fadeTooltipTo(0)
+	end
+
+	local function concealTooltip()
+		tooltipShown = false
+		tooltipHiddenAt = os.clock()
+		fadeTooltipTo(1)
+
+		local token = tooltipToken
+		task.delay(TOOLTIP_FADE_TIME, function()
+			-- Skip if something asked for a tooltip again while we were fading.
+			if token == tooltipToken and not tooltipShown then
+				tooltip.Visible = false
+			end
+		end)
+	end
+
+	--- Asks for the tooltip to appear for `anchor`, honouring the show delay.
+	local function requestTooltip(anchor, text)
+		if tooltipDragSuppressed then
+			return
+		end
+
+		tooltipToken += 1
+		local token = tooltipToken
+
+		-- Still warm from a recent tooltip: show without making the user wait.
+		if tooltipShown or (os.clock() - tooltipHiddenAt) < TOOLTIP_WARM_WINDOW then
+			revealTooltip(anchor, text)
+			return
+		end
+
+		task.delay(TOOLTIP_SHOW_DELAY, function()
+			if token == tooltipToken and not tooltipDragSuppressed then
+				revealTooltip(anchor, text)
+			end
+		end)
+	end
+
+	--- Asks for the tooltip to go away. Pass `immediate` to skip the grace period
+	--- (used when a drag starts, where waiting would look like a glitch).
+	local function dismissTooltip(immediate)
+		tooltipToken += 1
+		local token = tooltipToken
+
+		if immediate then
+			if tooltipShown then
+				concealTooltip()
+			end
+			return
+		end
+
+		task.delay(TOOLTIP_HIDE_DELAY, function()
+			if token == tooltipToken and tooltipShown then
+				concealTooltip()
+			end
+		end)
+	end
+
+	local function suppressTooltipForDrag()
+		tooltipDragSuppressed = true
+		dismissTooltip(true)
+	end
+
+	local function releaseTooltipDragSuppression()
+		tooltipDragSuppressed = false
+	end
+
+	--- Trims a float to at most 2 decimals and drops trailing zeros, so a
+	--- unit-scaled value reads like "8" or "0.5" instead of "8.00000001".
+	local function formatDisplayNumber(v)
+		local rounded = string.format("%.2f", v)
+		rounded = string.gsub(rounded, "0+$", "")
+		rounded = string.gsub(rounded, "%.$", "")
+		return rounded
+	end
+
+	--- Builds one settings row as a draggable slider (track + handle) with a synced
+	--- editable value box for exact entry. Description/warning text live in a hover
+	--- tooltip instead of always-visible labels.
+	---
+	--- `unit`/`scale` are optional: when set, the slider operates in human units
+	--- (e.g. min/max/step/defaultValue given in MB) while `scale` (e.g. 1000000)
+	--- converts to/from the raw value actually persisted via `plugin:SetSetting`,
+	--- so a byte-count setting can show "8 MB" instead of "8000000".
+	local function createSliderSetting(
+		order,
+		key,
+		labelText,
+		descText,
+		guidanceText,
+		defaultValue,
+		minValue,
+		maxValue,
+		step,
+		unit,
+		scale
+	)
+		local hasUnit = unit ~= nil and unit ~= ""
+		local valueScale = scale or 1
+		local rightMargin = hasUnit and 110 or 80
+		local boxOffset = hasUnit and -110 or -72
+
 		local frame = Instance.new("Frame")
 		frame.Name = "Setting_" .. key
-		frame.Size = UDim2.new(1, 0, 0, 80)
+		frame.Size = UDim2.new(1, 0, 0, 64)
 		frame.BackgroundTransparency = 1
 		frame.LayoutOrder = order
 		frame.Parent = settingsContainer
 
 		local label = Instance.new("TextLabel")
 		label.Name = "Label"
-		label.Size = UDim2.new(1, -120, 0, 20)
+		label.Size = UDim2.new(1, -rightMargin, 0, 20)
 		label.BackgroundTransparency = 1
 		label.Font = Enum.Font.BuilderSansBold
 		label.TextSize = 13
@@ -611,135 +901,664 @@ local function createPluginGui()
 		label.Text = labelText
 		label.Parent = frame
 
-		local desc = Instance.new("TextLabel")
-		desc.Name = "Description"
-		desc.Size = UDim2.new(1, -120, 0, 18)
-		desc.Position = UDim2.fromOffset(0, 22)
-		desc.BackgroundTransparency = 1
-		desc.Font = Enum.Font.BuilderSansMedium
-		desc.TextSize = 12
-		desc.TextColor3 = Color3.fromHex("#a1a1aa")
-		desc.TextXAlignment = Enum.TextXAlignment.Left
-		desc.TextYAlignment = Enum.TextYAlignment.Top
-		desc.TextWrapped = true
-		desc.Text = descText
-		desc.Parent = frame
+		local valueBox = Instance.new("TextBox")
+		valueBox.Name = "Value"
+		valueBox.Size = UDim2.fromOffset(72, 24)
+		valueBox.Position = UDim2.new(1, boxOffset, 0, -2)
+		valueBox.BackgroundColor3 = Color3.fromHex("#09090b")
+		valueBox.Font = Enum.Font.RobotoMono
+		valueBox.TextSize = 13
+		valueBox.TextColor3 = Color3.fromHex("#ffffff")
+		valueBox.ClearTextOnFocus = false
+		valueBox.Parent = frame
 
-		local warning = Instance.new("TextLabel")
-		warning.Name = "Warning"
-		warning.Size = UDim2.new(1, -120, 0, 28)
-		warning.Position = UDim2.fromOffset(0, 44)
-		warning.BackgroundTransparency = 1
-		warning.Font = Enum.Font.BuilderSansMedium
-		warning.TextSize = 11
-		warning.TextColor3 = Color3.fromHex("#f97316") -- Orange 500
-		warning.TextXAlignment = Enum.TextXAlignment.Left
-		warning.TextYAlignment = Enum.TextYAlignment.Top
-		warning.TextWrapped = true
-		warning.Text = "⚠ " .. warningText
-		warning.Parent = frame
+		local valueBoxCorner = Instance.new("UICorner")
+		valueBoxCorner.CornerRadius = UDim.new(0, 6)
+		valueBoxCorner.Parent = valueBox
 
-		local inputContainer = Instance.new("Frame")
-		inputContainer.Size = UDim2.fromOffset(100, 32)
-		inputContainer.Position = UDim2.new(1, -100, 0, 24)
-		inputContainer.BackgroundColor3 = Color3.fromHex("#09090b")
-		inputContainer.Parent = frame
+		local valueBoxStroke = Instance.new("UIStroke")
+		valueBoxStroke.Color = Color3.fromHex("#27272a")
+		valueBoxStroke.Thickness = 1
+		valueBoxStroke.Parent = valueBox
 
-		local inCorner = Instance.new("UICorner")
-		inCorner.CornerRadius = UDim.new(0, 6)
-		inCorner.Parent = inputContainer
-
-		local inStroke = Instance.new("UIStroke")
-		inStroke.Color = Color3.fromHex("#27272a")
-		inStroke.Thickness = 1
-		inStroke.Parent = inputContainer
-
-		local textBox = Instance.new("TextBox")
-		textBox.Size = UDim2.fromScale(1, 1)
-		textBox.BackgroundTransparency = 1
-		textBox.Font = Enum.Font.RobotoMono
-		textBox.TextSize = 13
-		textBox.TextColor3 = Color3.fromHex("#ffffff")
-
-		local currentVal = plugin:GetSetting(key)
-		if currentVal == nil then
-			currentVal = defaultValue
+		if hasUnit then
+			local unitLabel = Instance.new("TextLabel")
+			unitLabel.Name = "Unit"
+			unitLabel.Size = UDim2.fromOffset(30, 24)
+			unitLabel.Position = UDim2.new(1, -30, 0, -2)
+			unitLabel.BackgroundTransparency = 1
+			unitLabel.Font = Enum.Font.BuilderSansMedium
+			unitLabel.TextSize = 12
+			unitLabel.TextColor3 = Color3.fromHex("#71717a")
+			unitLabel.TextXAlignment = Enum.TextXAlignment.Left
+			unitLabel.Text = unit
+			unitLabel.Parent = frame
 		end
-		textBox.Text = tostring(currentVal)
-		textBox.Parent = inputContainer
 
-		textBox.FocusLost:Connect(function()
-			local num = tonumber(textBox.Text)
+		local track = Instance.new("Frame")
+		track.Name = "Track"
+		track.Size = UDim2.new(1, 0, 0, 6)
+		track.Position = UDim2.fromOffset(0, 40)
+		track.BackgroundColor3 = Color3.fromHex("#27272a")
+		track.BorderSizePixel = 0
+		track.Active = true
+		track.Parent = frame
+
+		local trackCorner = Instance.new("UICorner")
+		trackCorner.CornerRadius = UDim.new(1, 0)
+		trackCorner.Parent = track
+
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.BackgroundColor3 = currentAccentColor
+		fill.BorderSizePixel = 0
+		fill.Size = UDim2.new(0, 0, 1, 0)
+		fill.Parent = track
+
+		local fillCorner = Instance.new("UICorner")
+		fillCorner.CornerRadius = UDim.new(1, 0)
+		fillCorner.Parent = fill
+
+		local handle = Instance.new("Frame")
+		handle.Name = "Handle"
+		handle.Size = UDim2.fromOffset(14, 14)
+		handle.AnchorPoint = Vector2.new(0.5, 0.5)
+		handle.Position = UDim2.new(0, 0, 0.5, 0)
+		handle.BackgroundColor3 = Color3.fromHex("#fafafa")
+		handle.BorderSizePixel = 0
+		handle.ZIndex = 2
+		handle.Parent = track
+
+		local handleCorner = Instance.new("UICorner")
+		handleCorner.CornerRadius = UDim.new(1, 0)
+		handleCorner.Parent = handle
+
+		local tooltipContent = descText .. "\n\n" .. guidanceText
+
+		-- MouseLeave passes cursor coordinates, so these must be wrapped: connecting
+		-- `dismissTooltip` directly would read the X coordinate as `immediate`.
+		label.MouseEnter:Connect(function()
+			requestTooltip(frame, tooltipContent)
+		end)
+		label.MouseLeave:Connect(function()
+			dismissTooltip()
+		end)
+		track.MouseEnter:Connect(function()
+			requestTooltip(frame, tooltipContent)
+		end)
+		track.MouseLeave:Connect(function()
+			dismissTooltip()
+		end)
+
+		local function roundToStep(v)
+			v = math.clamp(v, minValue, maxValue)
+			return math.floor((v - minValue) / step + 0.5) * step + minValue
+		end
+
+		local function applyValue(v, flashColor)
+			local alpha = (v - minValue) / (maxValue - minValue)
+			handle.Position = UDim2.new(alpha, 0, 0.5, 0)
+			fill.Size = UDim2.new(alpha, 0, 1, 0)
+			valueBox.Text = hasUnit and formatDisplayNumber(v) or tostring(v)
+			if flashColor then
+				valueBoxStroke.Color = flashColor
+				task.delay(1, function()
+					valueBoxStroke.Color = Color3.fromHex("#27272a")
+				end)
+			end
+		end
+
+		-- Persisted settings are always raw (e.g. bytes); convert into display
+		-- units (e.g. MB) here so the slider/box only ever deal with `unit` scale.
+		local persistedRaw = plugin:GetSetting(key)
+		local currentVal
+		if persistedRaw == nil then
+			currentVal = defaultValue
+		else
+			currentVal = persistedRaw / valueScale
+		end
+		currentVal = roundToStep(currentVal)
+		applyValue(currentVal)
+
+		-- Same stale-value guard as the range slider: a value saved under wider
+		-- bounds is clamped for display, so write the clamped one back to keep the
+		-- UI and what `runtime.luau` reads in agreement.
+		local clampedRaw = math.floor(currentVal * valueScale + 0.5)
+		if persistedRaw ~= nil and persistedRaw ~= clampedRaw then
+			plugin:SetSetting(key, clampedRaw)
+			-- Overwriting someone's saved setting should never happen quietly.
+			if type(logToPlugin) == "function" then
+				logToPlugin(
+					string.format(
+						"[Warning] %s was saved as %s, which is outside the allowed range - adjusted to %s.",
+						labelText,
+						tostring(persistedRaw),
+						tostring(clampedRaw)
+					)
+				)
+			end
+		end
+
+		local function commitValue(v, flashColor)
+			currentVal = roundToStep(v)
+			applyValue(currentVal, flashColor)
+			plugin:SetSetting(key, math.floor(currentVal * valueScale + 0.5))
+		end
+
+		-- Named distinctly from the panel-header `dragging` flag further up: the two
+		-- are unrelated, and shadowing it there trips selene's shadowing lint.
+		local sliderDragging = false
+
+		local function updateFromInputX(inputX)
+			local trackPos = track.AbsolutePosition.X
+			local trackWidth = track.AbsoluteSize.X
+			local alpha = math.clamp((inputX - trackPos) / trackWidth, 0, 1)
+			commitValue(minValue + alpha * (maxValue - minValue))
+		end
+
+		local function beginDrag(input)
+			sliderDragging = true
+			suppressTooltipForDrag()
+			updateFromInputX(input.Position.X)
+		end
+
+		track.InputBegan:Connect(function(input)
+			if
+				input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch
+			then
+				beginDrag(input)
+			end
+		end)
+		handle.InputBegan:Connect(function(input)
+			if
+				input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch
+			then
+				beginDrag(input)
+			end
+		end)
+
+		game:GetService("UserInputService").InputChanged:Connect(function(input)
+			if
+				sliderDragging
+				and (
+					input.UserInputType == Enum.UserInputType.MouseMovement
+					or input.UserInputType == Enum.UserInputType.Touch
+				)
+			then
+				updateFromInputX(input.Position.X)
+			end
+		end)
+
+		game:GetService("UserInputService").InputEnded:Connect(function(input)
+			if
+				sliderDragging
+				and (
+					input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch
+				)
+			then
+				sliderDragging = false
+				releaseTooltipDragSuppression()
+			end
+		end)
+
+		valueBox.FocusLost:Connect(function()
+			local num = tonumber(valueBox.Text)
 			if num then
-				plugin:SetSetting(key, num)
-				inStroke.Color = Color3.fromHex("#10b981") -- flash green on save
-				task.delay(1, function()
-					inStroke.Color = Color3.fromHex("#27272a")
-				end)
+				commitValue(num, Color3.fromHex("#10b981")) -- flash green on save
 			else
-				textBox.Text = tostring(plugin:GetSetting(key) or defaultValue)
-				inStroke.Color = Color3.fromHex("#ef4444") -- flash red on invalid-
-				task.delay(1, function()
-					inStroke.Color = Color3.fromHex("#27272a")
-				end)
+				applyValue(currentVal, Color3.fromHex("#ef4444")) -- flash red on invalid
 			end
 		end)
 	end
 
-	createSettingInput(
-		-1,
+	--- Builds a single row with TWO handles on one track for a start/end pair
+	--- (currently only the daemon port range). Each handle has its own synced
+	--- value box; the handles cannot cross, and the gap between them is capped
+	--- at `maxSpan` so a careless drag cannot balloon the range - see the
+	--- `discovery.luau` warning below for why that matters.
+	---
+	--- `dangerCheck(startVal, endVal)`, if given, is re-run on every change; when
+	--- it returns true the track/handles turn orange and a persistent warning
+	--- (not just the hover tooltip) explains why - for a real, code-verified risk,
+	--- not a hypothetical one.
+	local function createRangeSliderSetting(
+		order,
+		keyStart,
+		keyEnd,
+		labelText,
+		descText,
+		guidanceText,
+		defaultStart,
+		defaultEnd,
+		minValue,
+		maxValue,
+		step,
+		maxSpan,
+		dangerCheck
+	)
+		local frame = Instance.new("Frame")
+		frame.Name = "Setting_" .. keyStart .. "_" .. keyEnd
+		frame.Size = UDim2.new(1, 0, 0, dangerCheck and 86 or 64)
+		frame.BackgroundTransparency = 1
+		frame.LayoutOrder = order
+		frame.Parent = settingsContainer
+
+		local label = Instance.new("TextLabel")
+		label.Name = "Label"
+		label.Size = UDim2.new(1, -160, 0, 20)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.BuilderSansBold
+		label.TextSize = 13
+		label.TextColor3 = Color3.fromHex("#fafafa")
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.Text = labelText
+		label.Parent = frame
+
+		local function createValueBox(rightOffset)
+			local box = Instance.new("TextBox")
+			box.Name = "Value"
+			box.Size = UDim2.fromOffset(72, 24)
+			box.Position = UDim2.new(1, rightOffset, 0, -2)
+			box.BackgroundColor3 = Color3.fromHex("#09090b")
+			box.Font = Enum.Font.RobotoMono
+			box.TextSize = 13
+			box.TextColor3 = Color3.fromHex("#ffffff")
+			box.ClearTextOnFocus = false
+			box.Parent = frame
+
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 6)
+			corner.Parent = box
+
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.fromHex("#27272a")
+			stroke.Thickness = 1
+			stroke.Parent = box
+
+			return box, stroke
+		end
+
+		local startBox, startBoxStroke = createValueBox(-156)
+		local endBox, endBoxStroke = createValueBox(-72)
+
+		local dash = Instance.new("TextLabel")
+		dash.Size = UDim2.fromOffset(12, 24)
+		dash.Position = UDim2.new(1, -84, 0, -2)
+		dash.BackgroundTransparency = 1
+		dash.Font = Enum.Font.BuilderSansMedium
+		dash.TextSize = 13
+		dash.TextColor3 = Color3.fromHex("#52525b")
+		dash.TextXAlignment = Enum.TextXAlignment.Center
+		dash.Text = "-"
+		dash.Parent = frame
+
+		local track = Instance.new("Frame")
+		track.Name = "Track"
+		track.Size = UDim2.new(1, 0, 0, 6)
+		track.Position = UDim2.fromOffset(0, 40)
+		track.BackgroundColor3 = Color3.fromHex("#27272a")
+		track.BorderSizePixel = 0
+		track.Active = true
+		track.Parent = frame
+
+		local trackCorner = Instance.new("UICorner")
+		trackCorner.CornerRadius = UDim.new(1, 0)
+		trackCorner.Parent = track
+
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.BackgroundColor3 = currentAccentColor
+		fill.BorderSizePixel = 0
+		fill.Parent = track
+
+		local fillCorner = Instance.new("UICorner")
+		fillCorner.CornerRadius = UDim.new(1, 0)
+		fillCorner.Parent = fill
+
+		local function createHandle()
+			local handle = Instance.new("Frame")
+			handle.Name = "Handle"
+			handle.Size = UDim2.fromOffset(14, 14)
+			handle.AnchorPoint = Vector2.new(0.5, 0.5)
+			handle.Position = UDim2.new(0, 0, 0.5, 0)
+			handle.BackgroundColor3 = Color3.fromHex("#fafafa")
+			handle.BorderSizePixel = 0
+			handle.ZIndex = 2
+			handle.Parent = track
+
+			local handleCorner = Instance.new("UICorner")
+			handleCorner.CornerRadius = UDim.new(1, 0)
+			handleCorner.Parent = handle
+
+			return handle
+		end
+
+		local startHandle = createHandle()
+		local endHandle = createHandle()
+
+		local dangerLabel = nil
+		if dangerCheck then
+			dangerLabel = Instance.new("TextLabel")
+			dangerLabel.Name = "DangerWarning"
+			dangerLabel.Size = UDim2.new(1, 0, 0, 30)
+			dangerLabel.Position = UDim2.fromOffset(0, 50)
+			dangerLabel.BackgroundTransparency = 1
+			dangerLabel.Font = Enum.Font.BuilderSansMedium
+			dangerLabel.TextSize = 11
+			dangerLabel.TextColor3 = Color3.fromHex("#f97316")
+			dangerLabel.TextXAlignment = Enum.TextXAlignment.Left
+			dangerLabel.TextYAlignment = Enum.TextYAlignment.Top
+			dangerLabel.TextWrapped = true
+			dangerLabel.Visible = false
+			dangerLabel.Parent = frame
+		end
+
+		local tooltipContent = descText .. "\n\n" .. guidanceText
+
+		-- MouseLeave passes cursor coordinates, so these must be wrapped: connecting
+		-- `dismissTooltip` directly would read the X coordinate as `immediate`.
+		label.MouseEnter:Connect(function()
+			requestTooltip(frame, tooltipContent)
+		end)
+		label.MouseLeave:Connect(function()
+			dismissTooltip()
+		end)
+		track.MouseEnter:Connect(function()
+			requestTooltip(frame, tooltipContent)
+		end)
+		track.MouseLeave:Connect(function()
+			dismissTooltip()
+		end)
+
+		local function roundToStep(v)
+			v = math.clamp(v, minValue, maxValue)
+			return math.floor((v - minValue) / step + 0.5) * step + minValue
+		end
+
+		local storedStart = plugin:GetSetting(keyStart)
+		local storedEnd = plugin:GetSetting(keyEnd)
+
+		local startVal = roundToStep(storedStart == nil and defaultStart or storedStart)
+		local endVal = roundToStep(storedEnd == nil and defaultEnd or storedEnd)
+		if startVal > endVal then
+			startVal, endVal = endVal, startVal
+		end
+
+		-- A value saved by an older build can sit outside the current bounds (this
+		-- range used to allow 1024-20000). `roundToStep` clamps it for display, so
+		-- persist the clamped value too - otherwise the slider would show one port
+		-- range while `runtime.luau` kept scanning the stale one.
+		local clampedStart = storedStart ~= nil and storedStart ~= startVal
+		local clampedEnd = storedEnd ~= nil and storedEnd ~= endVal
+		if clampedStart then
+			plugin:SetSetting(keyStart, startVal)
+		end
+		if clampedEnd then
+			plugin:SetSetting(keyEnd, endVal)
+		end
+		-- Overwriting someone's saved setting should never happen quietly.
+		if (clampedStart or clampedEnd) and type(logToPlugin) == "function" then
+			logToPlugin(
+				string.format(
+					"[Warning] Saved daemon port range was outside %d-%d - adjusted to %d-%d.",
+					minValue,
+					maxValue,
+					startVal,
+					endVal
+				)
+			)
+		end
+
+		--- Re-evaluates `dangerCheck` against the current range and flips the
+		--- track/handles orange plus reveals `dangerLabel` when it fires. A no-op
+		--- when this setting was built without a `dangerCheck`.
+		local function updateDangerState()
+			if not dangerCheck then
+				return
+			end
+			local isDangerous, message = dangerCheck(startVal, endVal)
+			if isDangerous then
+				dangerLabel.Text = "⚠ " .. (message or "This range is risky.")
+				dangerLabel.Visible = true
+				fill.BackgroundColor3 = Color3.fromHex("#f97316")
+				startHandle.BackgroundColor3 = Color3.fromHex("#f97316")
+				endHandle.BackgroundColor3 = Color3.fromHex("#f97316")
+			else
+				dangerLabel.Visible = false
+				fill.BackgroundColor3 = currentAccentColor
+				startHandle.BackgroundColor3 = Color3.fromHex("#fafafa")
+				endHandle.BackgroundColor3 = Color3.fromHex("#fafafa")
+			end
+		end
+
+		local function render()
+			local startAlpha = (startVal - minValue) / (maxValue - minValue)
+			local endAlpha = (endVal - minValue) / (maxValue - minValue)
+			startHandle.Position = UDim2.new(startAlpha, 0, 0.5, 0)
+			endHandle.Position = UDim2.new(endAlpha, 0, 0.5, 0)
+			fill.Position = UDim2.new(startAlpha, 0, 0, 0)
+			fill.Size = UDim2.new(endAlpha - startAlpha, 0, 1, 0)
+			startBox.Text = tostring(startVal)
+			endBox.Text = tostring(endVal)
+			updateDangerState()
+		end
+
+		render()
+
+		local function flash(stroke, color)
+			stroke.Color = color
+			task.delay(1, function()
+				stroke.Color = Color3.fromHex("#27272a")
+			end)
+		end
+
+		--- Moves the start handle, clamping so it never passes the end handle
+		--- and so the gap between the two never exceeds `maxSpan`.
+		local function commitStart(v, flashColor)
+			v = roundToStep(v)
+			v = math.min(v, endVal)
+			v = math.max(v, endVal - maxSpan)
+			startVal = v
+			render()
+			plugin:SetSetting(keyStart, startVal)
+			if flashColor then
+				flash(startBoxStroke, flashColor)
+			end
+		end
+
+		--- Mirror of `commitStart` for the end handle.
+		local function commitEnd(v, flashColor)
+			v = roundToStep(v)
+			v = math.max(v, startVal)
+			v = math.min(v, startVal + maxSpan)
+			endVal = v
+			render()
+			plugin:SetSetting(keyEnd, endVal)
+			if flashColor then
+				flash(endBoxStroke, flashColor)
+			end
+		end
+
+		-- "start" | "end" | nil - which handle the current drag gesture is moving.
+		local draggingHandle = nil
+
+		local function valueFromInputX(inputX)
+			local trackPos = track.AbsolutePosition.X
+			local trackWidth = track.AbsoluteSize.X
+			local alpha = math.clamp((inputX - trackPos) / trackWidth, 0, 1)
+			return minValue + alpha * (maxValue - minValue)
+		end
+
+		local function updateFromInputX(inputX)
+			local rawVal = valueFromInputX(inputX)
+			if draggingHandle == "start" then
+				commitStart(rawVal)
+			elseif draggingHandle == "end" then
+				commitEnd(rawVal)
+			end
+		end
+
+		local function beginDrag(handleKind, input)
+			draggingHandle = handleKind
+			suppressTooltipForDrag()
+			updateFromInputX(input.Position.X)
+		end
+
+		local function isPointerInput(input)
+			return input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch
+		end
+
+		startHandle.InputBegan:Connect(function(input)
+			if isPointerInput(input) then
+				beginDrag("start", input)
+			end
+		end)
+		endHandle.InputBegan:Connect(function(input)
+			if isPointerInput(input) then
+				beginDrag("end", input)
+			end
+		end)
+		track.InputBegan:Connect(function(input)
+			if not isPointerInput(input) then
+				return
+			end
+			-- Clicking bare track (not a handle) jumps whichever handle is nearer.
+			local rawVal = valueFromInputX(input.Position.X)
+			local nearestKind = (math.abs(rawVal - startVal) <= math.abs(rawVal - endVal))
+					and "start"
+				or "end"
+			beginDrag(nearestKind, input)
+		end)
+
+		game:GetService("UserInputService").InputChanged:Connect(function(input)
+			if
+				draggingHandle
+				and (
+					input.UserInputType == Enum.UserInputType.MouseMovement
+					or input.UserInputType == Enum.UserInputType.Touch
+				)
+			then
+				updateFromInputX(input.Position.X)
+			end
+		end)
+
+		game:GetService("UserInputService").InputEnded:Connect(function(input)
+			if draggingHandle and isPointerInput(input) then
+				draggingHandle = nil
+				releaseTooltipDragSuppression()
+			end
+		end)
+
+		startBox.FocusLost:Connect(function()
+			local num = tonumber(startBox.Text)
+			if num then
+				commitStart(num, Color3.fromHex("#10b981")) -- flash green on save
+			else
+				render()
+				flash(startBoxStroke, Color3.fromHex("#ef4444")) -- flash red on invalid
+			end
+		end)
+
+		endBox.FocusLost:Connect(function()
+			local num = tonumber(endBox.Text)
+			if num then
+				commitEnd(num, Color3.fromHex("#10b981")) -- flash green on save
+			else
+				render()
+				flash(endBoxStroke, Color3.fromHex("#ef4444")) -- flash red on invalid
+			end
+		end)
+	end
+
+	createRangeSliderSetting(
+		1,
 		"ISpooferMotion_PORT_START",
-		"Daemon Port Start",
-		"Starting port the plugin scans to discover the desktop daemon.",
-		"Lower: may miss the daemon if it binds above this port. Higher: narrows the scan range and may fail to connect.",
-		14285
-	)
-	createSettingInput(
-		2,
 		"ISpooferMotion_PORT_END",
-		"Daemon Port End",
-		"Ending port the plugin scans to discover the desktop daemon.",
-		"Lower than Port Start: scan will never succeed. Higher: scan takes longer but is more resilient to daemon port changes.",
-		14289
+		"Daemon Port Scan Range",
+		"Which local ports the plugin checks to find the desktop app.",
+		"Recommended: 14285-14289\n\nThe app only ever uses these five ports. If all five are busy it moves to a random high port that scanning cannot reach anyway, so widening this only adds probes and slows discovery.",
+		14285,
+		14289,
+		14280,
+		14320,
+		1,
+		40,
+		function(startVal, endVal)
+			local span = endVal - startVal
+			if span > 20 then
+				return true,
+					string.format(
+						"%d ports = %d concurrent probes. The app only uses 14285-14289; scanning wider just slows discovery.",
+						span + 1,
+						(span + 1) * 2
+					)
+			end
+			return false, nil
+		end
 	)
-	createSettingInput(
-		3,
+	createSliderSetting(
+		2,
 		"ISpooferMotion_SEND_CHUNK_SIZE",
 		"Scan Chunk Size",
-		"Max asset records packed into one HTTP request during a scan.",
-		"Lower: safer for huge games with slow HTTP, but scans take more round-trips. Higher: faster scans but may hit request size limits and cause errors.",
-		5000
+		"How many assets get packed into each upload while scanning your place.",
+		"Recommended: 5000\n\nUploads also flush every 500 KB, whichever comes first - so raising this past a few thousand usually changes nothing. Lower it only if scans keep failing on a slow connection.",
+		5000,
+		500,
+		20000,
+		250
 	)
-	createSettingInput(
-		4,
+	createSliderSetting(
+		3,
 		"ISpooferMotion_MAX_SCRIPT_BYTES",
 		"Max Script Size",
-		"Scripts larger than this (in bytes) are skipped entirely during scanning and patching.",
-		"Lower: large scripts with IDs inside them will be silently skipped and not replaced. Higher: very large scripts are read into memory - may crash Studio on low-RAM machines.",
-		8000000
+		"Scripts bigger than this are skipped - IDs inside them will not be replaced.",
+		"Recommended: 8 MB (the maximum)\n\nThe desktop app discards anything larger anyway, so 8 MB covers the most scripts. Lower it only if scanning runs Studio out of memory.",
+		8,
+		0.1,
+		8,
+		0.1,
+		"MB",
+		1000000
 	)
-	createSettingInput(
-		5,
+	createSliderSetting(
+		4,
 		"ISpooferMotion_MAX_PATCHES",
 		"Max Patches Per Batch",
-		"Maximum number of asset replacements applied in one patch operation.",
-		"Lower: massive games may not get all IDs replaced in one run - re-run needed. Higher: very large batches can freeze Studio temporarily while changes are applied.",
-		10000
+		"How many replacements the plugin applies in one pass.",
+		'Recommended: 10000\n\nThis only decides when a "large batch" note appears in the Console - bigger batches still finish in full, just with more pauses. Nothing breaks either way.',
+		10000,
+		500,
+		50000,
+		500
 	)
-	createSettingInput(
-		6,
+	createSliderSetting(
+		5,
 		"ISpooferMotion_MAX_HTTP_BODY",
 		"Max HTTP Body",
-		"Maximum byte size of a single outgoing HTTP payload to the daemon.",
-		"Lower: large scan payloads will be truncated or refused, causing incomplete scans. Higher: oversized payloads risk Studio memory spikes or timeouts on slow connections.",
-		10000000
+		"Size limit for each upload the plugin sends to the desktop app.",
+		"Recommended: 10 MB\n\nThe app rejects anything over 64 MB regardless, so higher values do nothing. Lower it if uploads time out on a slow connection.",
+		10,
+		1,
+		50,
+		1,
+		"MB",
+		1000000
 	)
-	createSettingInput(
-		7,
+	createSliderSetting(
+		6,
 		"ISpooferMotion_MAX_HTTP_RESP",
 		"Max HTTP Response",
-		"Maximum byte size accepted for a single HTTP response from the daemon.",
-		"Lower: large patch responses from the daemon will be rejected, causing failed replacements. Higher: very large responses consume more memory and may slow the UI.",
+		"Size limit for each reply the plugin accepts from the desktop app.",
+		'Recommended: 1 MB\n\nReplies are normally far smaller; this is just a memory guard. Raise it if the Console shows "Invalid JSON response" on a very large place.',
+		1,
+		0.1,
+		10,
+		0.1,
+		"MB",
 		1000000
 	)
 
@@ -818,7 +1637,6 @@ local function createPluginGui()
 	return gui
 end
 
-local logCounter = 0
 local logConnection = nil
 local LogService = game:GetService("LogService")
 
