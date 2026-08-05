@@ -108,6 +108,56 @@ fn first_valid_place_id(raw: Option<&str>) -> Option<String> {
     valid_place_ids(raw).into_iter().next()
 }
 
+// Abort a job early only when there is no realistic path to the assets. The
+// batch endpoints return empty for recoverable assets too, so batch-emptiness
+// alone is insufficient. A forced place (direct URLs) or a discovery probe that
+// finds candidate places both rule out the abort.
+const fn should_fast_fail_on_empty_batches(
+    preserve_metadata: bool,
+    total_assets: usize,
+    forced_place_present: bool,
+    batch_metadata_empty: bool,
+    batch_urls_empty: bool,
+    discovery_found_places: bool,
+) -> bool {
+    preserve_metadata
+        && total_assets >= 5
+        && !forced_place_present
+        && batch_metadata_empty
+        && batch_urls_empty
+        && !discovery_found_places
+}
+
+// Reachability probe: does per-asset discovery find any candidate place for the
+// sample asset? Mirrors the download loop's resolution. Best-effort; errors ->
+// false.
+async fn sample_discovery_reachable(app: &AppHandle, cookie: &str, sample_asset_id: &str) -> bool {
+    match crate::commands::spoofer::get_asset_creator_for_asset(
+        app.clone(),
+        sample_asset_id.to_string(),
+        cookie.to_string(),
+    )
+    .await
+    {
+        Ok((creator_type, creator_id)) => {
+            // Cap at 3 places -- we only need to know whether ANY exist. Result is
+            // cached, so the real download loop reuses it rather than refetching.
+            crate::commands::spoofer::get_place_id_from_creator(
+                app.clone(),
+                creator_type,
+                creator_id,
+                cookie.to_string(),
+                Some(3),
+                None,
+            )
+            .await
+            .map(|places| !places.is_empty())
+            .unwrap_or(false)
+        }
+        Err(_) => false,
+    }
+}
+
 fn numeric_value_to_string(value: &serde_json::Value) -> Option<String> {
     value
         .as_u64()
@@ -494,13 +544,32 @@ pub async fn process_spoofer_action(
         }
     }
 
-    // Fast-fail when the upfront batch calls signal broken auth. Both endpoints
-    // returning zero (or near-zero) means Roblox refuses to serve details for
-    // this account -- grinding through 217 assets with per-asset failure paths
-    // wastes minutes and produces a wall of red warnings that all say the same
-    // thing. Cut it off here with an actionable error, save the wall time.
+    // Abort only when no path to the assets remains. Empty batch endpoints alone
+    // are insufficient (recoverable assets return empty too), so the probe below
+    // runs only once the cheap gates hold. See should_fast_fail_on_empty_batches.
     let total_pre = parsed_assets.len();
-    if preserve_metadata && total_pre >= 5 && batch_metadata.is_empty() && batch_urls.is_empty() {
+    let forced_place_present = !forced_place_ids.is_empty();
+    let cheap_gate = preserve_metadata
+        && total_pre >= 5
+        && !forced_place_present
+        && batch_metadata.is_empty()
+        && batch_urls.is_empty();
+    let discovery_found_places = if cheap_gate {
+        match asset_ids.first() {
+            Some(sample) => sample_discovery_reachable(&app, &cookie, sample).await,
+            None => false,
+        }
+    } else {
+        false
+    };
+    if should_fast_fail_on_empty_batches(
+        preserve_metadata,
+        total_pre,
+        forced_place_present,
+        batch_metadata.is_empty(),
+        batch_urls.is_empty(),
+        discovery_found_places,
+    ) {
         temp_log(
             &format!(
                 "Aborting: batch endpoints returned no results for any of {total_pre} assets. This is a Roblox auth refusal, not a per-asset issue. Check: (1) ROBLOSECURITY cookie is fresh -- log out and back in on Roblox.com, then paste the new cookie into Accounts; (2) forced Place ID {} is owned by you (or your group); (3) Open Cloud API key has 'Assets: Write' AND '0.0.0.0/0' in the Accepted IPs.",
@@ -1086,6 +1155,23 @@ mod tests {
         assert_eq!(first_valid_place_id(Some("abc, 456, 789")), Some("456".to_string()));
         assert_eq!(first_valid_place_id(Some("  999  , 888 ")), Some("999".to_string()));
         assert_eq!(first_valid_place_id(Some("123a, 456")), Some("456".to_string()));
+    }
+
+    #[test]
+    fn fast_fail_requires_no_recovery_path() {
+        // No forced place, both batches empty, discovery found nothing -> abort.
+        assert!(should_fast_fail_on_empty_batches(true, 10, false, true, true, false));
+        // Discovery found places -> recoverable, no abort.
+        assert!(!should_fast_fail_on_empty_batches(true, 10, false, true, true, true));
+        // Forced place -> direct URLs available, no abort.
+        assert!(!should_fast_fail_on_empty_batches(true, 10, true, true, true, false));
+        // A batch endpoint returned data -> no abort.
+        assert!(!should_fast_fail_on_empty_batches(true, 10, false, false, true, false));
+        assert!(!should_fast_fail_on_empty_batches(true, 10, false, true, false, false));
+        // Fewer than 5 assets -> no abort.
+        assert!(!should_fast_fail_on_empty_batches(true, 4, false, true, true, false));
+        // Metadata preservation off -> signal doesn't apply.
+        assert!(!should_fast_fail_on_empty_batches(false, 10, false, true, true, false));
     }
 
     #[test]
