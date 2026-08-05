@@ -221,7 +221,9 @@ local pollFailureStreak = 0
 local patchFailureStreak = 0
 
 local function markConnectionLost(baseUrl: string, reason: string)
-	logToPlugin("[Warning] [ISpooferMotion] Lost connection to " .. baseUrl .. " (" .. reason .. ")")
+	logToPlugin(
+		"[Warning] [ISpooferMotion] Lost connection to " .. baseUrl .. " (" .. reason .. ")"
+	)
 	setConnectionStatus(false)
 	setPluginGuiStatus("Lost connection; reconnecting...")
 	BASE_URL = nil
@@ -244,12 +246,15 @@ function startPolling(): ()
 
 	task.spawn(function()
 		local wasConnected = false
+		-- Log the "why we can't connect" reason once per disconnect episode, not
+		-- every discovery cycle, so the console isn't spammed while waiting.
+		local reasonLogged = false
 		while polling do
 			-- Only re-run discovery when we genuinely have no connection.
 			-- Re-running on a timer caused reconnect spam because the
 			-- probe race could pick a different URL for the same server.
 			if not BASE_URL then
-				local connected, changed = discoverServer()
+				local connected, changed, reason = discoverServer()
 				lastDiscovery = os.clock()
 				if connected and changed and BASE_URL then
 					logToPlugin("[ISpooferMotion] Connected to " .. BASE_URL)
@@ -257,13 +262,24 @@ function startPolling(): ()
 					setPluginGuiStatus("Waiting for scan or replacements...")
 					task.spawn(fetchApiDumpProperties)
 					wasConnected = true
+					reasonLogged = false
 					pollFailureStreak = 0
 					patchFailureStreak = 0
-				elseif not connected and wasConnected then
-					wasConnected = false
-					logToPlugin("[Warning] [ISpooferMotion] Desktop App not found; reconnecting...")
+				elseif not connected then
 					setConnectionStatus(false)
-					setPluginGuiStatus("Waiting for Desktop App...")
+					-- Silent: this runs every discovery cycle while disconnected, so
+					-- it must not spam the console. The reason below logs once.
+					setPluginGuiStatus("Waiting for Desktop App...", true)
+					-- Surface the actual reason once per episode. Covers the
+					-- initial never-connected case too, not just a dropped link.
+					if not reasonLogged then
+						reasonLogged = true
+						logToPlugin(
+							"[Warning] [ISpooferMotion] "
+								.. (reason or "Desktop App not found; reconnecting...")
+						)
+					end
+					wasConnected = false
 				end
 			end
 			task.wait(BASE_URL and 1 or 2)
@@ -316,7 +332,10 @@ function startPolling(): ()
 				if not patchOk then
 					patchFailureStreak += 1
 					if patchFailureStreak >= POLL_FAIL_THRESHOLD then
-						markConnectionLost(baseUrl, "patch poll failed " .. patchFailureStreak .. "x")
+						markConnectionLost(
+							baseUrl,
+							"patch poll failed " .. patchFailureStreak .. "x"
+						)
 					end
 				else
 					-- Successful patch poll is also a heartbeat.
@@ -331,7 +350,9 @@ function startPolling(): ()
 							elseif patchRunning then
 								logToPlugin("[Warning] Patch already running, ignoring patches")
 							else
-								logToPlugin("Received " .. #patches .. " replacements from Desktop App")
+								logToPlugin(
+									"Received " .. #patches .. " replacements from Desktop App"
+								)
 								autoReplaceEnabled = false
 								setPluginGuiStatus(
 									"Applying " .. #patches .. " targeted replacements..."

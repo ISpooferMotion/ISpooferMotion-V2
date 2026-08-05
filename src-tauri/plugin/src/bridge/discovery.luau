@@ -19,11 +19,14 @@ end
 
 --- Makes a single health probe to `url` and stores the result if valid.
 --- Decrements `pendingRef[1]` when done so the caller knows when all probes finished.
+-- statsRef tallies why probes failed so discoverServer can explain a failed
+-- connect: `responded` = got any HTTP reply, `wrongApp` = replied but wasn't us.
 local function probeUrl(
 	url: string,
 	results: { { url: string, startedAt: number, health: any } },
 	pendingRef: { number },
-	cancelledRef: { boolean }
+	cancelledRef: { boolean },
+	statsRef: { responded: number, wrongApp: number }
 )
 	-- Soft timeout: if this probe is not done within DISCOVERY_REQUEST_TIMEOUT_SECS,
 	-- the deadline task decrements pending so the scan can proceed without it.
@@ -56,6 +59,7 @@ local function probeUrl(
 	if not done then
 		done = true
 		if ok and response and response.Success and not cancelledRef[1] then
+			statsRef.responded += 1
 			local decodedOk, decoded = decodeJsonResponseBody(response)
 			if decodedOk and responseLooksLikeAppHealth(decoded) then
 				local startedAt = tonumber(decoded.startedAt) or 0
@@ -64,6 +68,8 @@ local function probeUrl(
 					startedAt = startedAt,
 					health = decoded,
 				})
+			else
+				statsRef.wrongApp += 1
 			end
 		end
 		pendingRef[1] -= 1
@@ -76,29 +82,39 @@ end
 --- All probes run concurrently with a per-request 2-second soft deadline so a
 --- single stalled connection (firewall/AV intercepting loopback traffic) cannot
 --- block the entire scan for 5+ seconds.
-local function discoverServer(): (boolean, boolean)
+local function discoverServer(): (boolean, boolean, string?)
 	local results: { { url: string, startedAt: number, health: any } } = {}
 	-- pendingRef[1] is a shared counter decremented by each completed probe task.
 	local pendingRef = { 0 }
 	local cancelledRef = { false }
+	local statsRef = { responded = 0, wrongApp = 0 }
+
+	-- Read the port range live each cycle so changing it in Settings takes effect
+	-- without a plugin reload (the module-level PORT_START/PORT_END are read only
+	-- once at load). Falls back to those defaults if the setting is missing.
+	local portStart = tonumber(plugin:GetSetting("ISpooferMotion_PORT_START")) or PORT_START
+	local portEnd = tonumber(plugin:GetSetting("ISpooferMotion_PORT_END")) or PORT_END
+	if portStart > portEnd then
+		portStart, portEnd = portEnd, portStart
+	end
 
 	-- IMP-8: Fast path - probe the last known URL first. If it responds before
 	-- the full scan completes, the sort below will pick it as the best candidate.
 	if BASE_URL then
 		pendingRef[1] += 1
-		task.spawn(probeUrl, BASE_URL, results, pendingRef, cancelledRef)
+		task.spawn(probeUrl, BASE_URL, results, pendingRef, cancelledRef, statsRef)
 	end
 
 	-- Full port scan using only loopback addresses. External DNS (e.g. nip.io) adds
 	-- latency and is a hard failure point for users without internet access.
 	local hosts = { "127.0.0.1", "localhost" }
-	for port = PORT_START, PORT_END do
+	for port = portStart, portEnd do
 		for _, host in ipairs(hosts) do
 			local url = "http://" .. host .. ":" .. port
 			-- Skip if already covered by the fast-path probe above.
 			if url ~= BASE_URL then
 				pendingRef[1] += 1
-				task.spawn(probeUrl, url, results, pendingRef, cancelledRef)
+				task.spawn(probeUrl, url, results, pendingRef, cancelledRef, statsRef)
 			end
 		end
 	end
@@ -131,5 +147,20 @@ local function discoverServer(): (boolean, boolean)
 		return true, changed
 	end
 
-	return false, false
+	-- No daemon found: explain why using what the probes observed.
+	local reason
+	if statsRef.wrongApp > 0 then
+		reason = string.format(
+			"Found a server on ports %d-%d but it isn't ISpooferMotion. Close other apps using these ports.",
+			portStart,
+			portEnd
+		)
+	else
+		reason = string.format(
+			"No desktop app found on ports %d-%d. Make sure it's running. If it is, the app uses 14285-14289 by default -- check the Daemon Port range in Settings covers those.",
+			portStart,
+			portEnd
+		)
+	end
+	return false, false, reason
 end
