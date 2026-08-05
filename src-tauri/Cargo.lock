@@ -120,7 +120,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "app"
-version = "2.5.11"
+version = "2.5.12"
 dependencies = [
  "aes-gcm",
  "aho-corasick",
@@ -2799,7 +2799,9 @@ version = "3.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eebcc3aff044e5944a8fbaf69eb277d11986064cba30c468730e8b9909fb551c"
 dependencies = [
+ "byteorder",
  "log",
+ "windows-sys 0.60.2",
  "zeroize",
 ]
 

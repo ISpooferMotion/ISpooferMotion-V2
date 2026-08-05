@@ -332,6 +332,13 @@ export const useConfigStore = create<ConfigState>((set, get) => {
     },
     saveSecrets: async () => {
       if (!isTauriRuntime()) return;
+      // Don't persist until the initial load has finished. On restart, the
+      // cookie auto-detect fires applyValidatedCookie -> saveSecrets on mount,
+      // racing loadSecrets(). If that save wins, it reads the not-yet-restored
+      // apiKey (still '') and overwrites the persisted key with empty --
+      // silently wiping the Open Cloud API key every restart. Waiting for
+      // secretsLoaded guarantees the saved key is in state before any write.
+      if (!get().secretsLoaded) return;
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         const state = get();

@@ -29,6 +29,32 @@ fn emit_spoofer_log(app: &AppHandle, level: &str, message: &str) {
     );
 }
 
+// Image-family AssetTypeIds (Image, Decal, textures). Matches the mapping in
+// domain::roblox_api (1|11|13|2|21|22|38 => image).
+const fn asset_type_id_is_image(type_id: i64) -> bool {
+    matches!(type_id, 1 | 2 | 11 | 13 | 21 | 22 | 38)
+}
+
+// Best-effort AssetTypeId lookup via the economy API. Returns None on failure or
+// inaccessible asset; callers treat None as "unconfirmed".
+async fn fetch_real_asset_type_id(asset_id: &str, cookie: &str) -> Option<i64> {
+    let cookie_header = crate::utils::build_roblox_cookie_header(cookie);
+    let client = crate::utils::get_http_client();
+    let url = format!("https://economy.roblox.com/v2/assets/{asset_id}/details");
+    let resp = client
+        .get(&url)
+        .header(reqwest::header::COOKIE, &cookie_header)
+        .header(reqwest::header::USER_AGENT, "RobloxStudio/WinInet")
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let data = resp.json::<crate::domain::roblox_api::EconomyAssetDetails>().await.ok()?;
+    data.asset_type_id
+}
+
 #[derive(Serialize, specta::Type)]
 struct UploadMetadataCreator {
     #[serde(skip_serializing_if = "Option::is_none", rename = "userId")]
@@ -312,19 +338,44 @@ pub async fn publish_asset_with_progress(
                     upload_kind.needs_universe_permissions = true;
                 }
 
-                // Any other type-vs-payload mismatch is Roblox serving a
-                // placeholder PNG because the caller isn't authorized for the
-                // asset. Uploading the placeholder as an Image would appear
-                // "successful" but produce a broken replacement -- Studio
-                // would paste an image asset id into an AnimationId /
-                // SoundId slot and quietly break the game. Fail the upload
-                // instead so the asset gets counted as a real failure.
-                if is_image_payload
+                // An image payload for a non-image type is either a genuinely
+                // image asset (mistyped, e.g. a texture pasted as Animation) or a
+                // placeholder PNG served on access denial. The real AssetTypeId is
+                // the only reliable discriminator. Fetch it only on this mismatch
+                // path: confirmed image -> reclassify and upload; otherwise
+                // (including unconfirmed) -> keep the reject.
+                let mismatch = is_image_payload
                     && !matches!(
                         asset_type_name.as_deref(),
                         Some("Image") | Some("Decal") | Some("Mesh")
-                    )
-                {
+                    );
+                let confirmed_real_image = if mismatch {
+                    match original_asset_id.as_deref() {
+                        Some(id) => matches!(
+                            fetch_real_asset_type_id(id, &cookie).await,
+                            Some(tid) if asset_type_id_is_image(tid)
+                        ),
+                        None => false,
+                    }
+                } else {
+                    false
+                };
+
+                if confirmed_real_image {
+                    emit_spoofer_log(
+                        &app,
+                        "info",
+                        &format!(
+                            "Asset {} is actually an Image (was typed '{}'); uploading it as an Image instead of discarding it.",
+                            original_asset_id.as_deref().unwrap_or("?"),
+                            asset_type_name.as_deref().unwrap_or("unknown"),
+                        ),
+                    );
+                    upload_kind.asset_type = "Image".into();
+                    upload_kind.needs_universe_permissions = true;
+                }
+
+                if mismatch && !confirmed_real_image {
                     let type_label = asset_type_name.as_deref().unwrap_or("unknown");
                     let article = match type_label.chars().next() {
                         Some(c) if "AEIOUaeiou".contains(c) => "an",
@@ -837,7 +888,7 @@ pub async fn publish_asset_with_progress(
 
 #[cfg(test)]
 mod tests {
-    use super::upload_kind_for_type;
+    use super::{asset_type_id_is_image, upload_kind_for_type};
 
     #[test]
     fn maps_image_and_mesh_upload_kinds() {
@@ -848,5 +899,19 @@ mod tests {
         let mesh = upload_kind_for_type(Some("Mesh"));
         assert_eq!(mesh.asset_type, "Mesh");
         assert_eq!(mesh.extension, "mesh");
+    }
+
+    #[test]
+    fn image_family_asset_type_ids_are_recognised() {
+        // Image(1), Decal(13) and the other texture-ish ids are images: an image
+        // payload for these is real content, not a placeholder.
+        for image_id in [1, 2, 11, 13, 21, 22, 38] {
+            assert!(asset_type_id_is_image(image_id), "id {image_id} should be image");
+        }
+        // Animation(24), Audio(3), Mesh(40): an image payload here is a genuine
+        // placeholder and must stay rejected.
+        for non_image in [24, 3, 40, 10, 0] {
+            assert!(!asset_type_id_is_image(non_image), "id {non_image} should not be image");
+        }
     }
 }
