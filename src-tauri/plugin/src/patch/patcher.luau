@@ -178,6 +178,11 @@ local function coercePropertyValue(obj: Instance, property: string, value: any):
 			end
 			-- Content constructors missing -- fall through so the property-
 			-- name path can try a raw URI string as a last resort.
+		elseif typeof(currentValue) == "ContentId" then
+			-- ContentId properties (e.g. Animation.AnimationId on modern Roblox)
+			-- accept a plain rbxassetid:// string but reject a Content object,
+			-- which is what the Content branch above would have produced.
+			return toAssetUri(value) or tostring(value)
 		end
 	end
 
