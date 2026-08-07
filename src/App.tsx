@@ -6,6 +6,7 @@ import Sidebar from './components/layout/Sidebar';
 import StatusBar from './components/layout/StatusBar';
 import Titlebar from './components/layout/Titlebar';
 import { RobloxStatusBanner } from './components/shared/RobloxStatusBanner';
+import { PortDiagnosticBanner } from './components/shared/PortDiagnosticBanner';
 import WatermarkEngine from './components/layout/WatermarkEngine';
 
 import { useConfig } from './contexts/ConfigContext';
@@ -79,6 +80,7 @@ export default function App() {
 
           <div className="flex-1 relative overflow-hidden bg-transparent flex flex-col">
             <RobloxStatusBanner isVisible={isRobloxApiDown} />
+            <PortDiagnosticBanner />
 
             <div className="flex-1 relative overflow-hidden">
               <Suspense fallback={<div className="w-full h-full bg-background/50" />}>
