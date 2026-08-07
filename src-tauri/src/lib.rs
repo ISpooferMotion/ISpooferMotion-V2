@@ -100,6 +100,7 @@ macro_rules! specta_commands {
             crate::studio_bridge::set_bridge_skip_owned_check,
             crate::studio_bridge::get_plugin_bridge_port,
             crate::studio_bridge::get_studio_health_status,
+            crate::studio_bridge::get_port_diagnostic,
             crate::studio_bridge::get_studio_asset_snapshots
         ]
     };

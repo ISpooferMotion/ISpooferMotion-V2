@@ -31,6 +31,11 @@ export const en: TranslationTree = {
     notSyncedToStudio: 'Not Synced to Studio',
     robloxApiDown:
       'Roblox APIs are currently experiencing issues. Some features may be unavailable.',
+    portDiagnosticFailed:
+      'Could not start the plugin server: all ports 14285-14320 are occupied. Close other ISpooferMotion instances or programs using these ports, then restart the app.',
+    portDiagnosticExtended:
+      "The app is now serving on port {port} because the default plugin ports 14285-14289 were busy. Set the Studio plugin's Daemon Port Scan Range to 14285-{port} so it can connect.",
+    portDiagnosticOccupied: 'Ports occupied by: {processes}',
     animationLoadFailed: 'Could not load this animation. It might be deleted or unsupported.',
     animationPrivate:
       'Private animation. Please add your cookie in the Spoofing config to view this.',

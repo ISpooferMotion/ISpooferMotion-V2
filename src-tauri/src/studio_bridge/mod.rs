@@ -41,6 +41,10 @@ use server::{
 
 const PLUGIN_PORT_START: u16 = 14285;
 const PLUGIN_PORT_END: u16 = 14289;
+/// Upper bound of the incremental port search. If every port from
+/// PLUGIN_PORT_START through this value is occupied, the bridge fails loudly
+/// instead of binding to a random OS port the Studio plugin could never reach.
+const PLUGIN_PORT_FALLBACK_END: u16 = 14320;
 const STUDIO_PROTOCOL_VERSION: u8 = 3;
 const MAX_STUDIO_RECORDS: usize = 2_000_000;
 const MAX_SCRIPT_SOURCE_BYTES: usize = 8_000_000;
@@ -54,6 +58,24 @@ pub fn bridge_data() -> Option<Arc<RwLock<AssetServerStateData>>> {
 
 pub(crate) fn active_bridge_port() -> &'static RwLock<Option<u16>> {
     ACTIVE_BRIDGE_PORT.get_or_init(|| RwLock::new(None))
+}
+
+// Snapshot of how the plugin HTTP server's port binding went: whether it landed
+// on the default 14285-14289 range or had to move past it, and which processes
+// are squatting on the defaults. The Studio plugin can't read this until it
+// connects (it needs the port to connect), so the desktop app surfaces it as a
+// banner instructing the user to widen the plugin's Daemon Port Scan Range.
+static PORT_DIAGNOSTIC: OnceLock<RwLock<Value>> = OnceLock::new();
+
+fn port_diagnostic() -> &'static RwLock<Value> {
+    PORT_DIAGNOSTIC.get_or_init(|| {
+        RwLock::new(json!({
+            "boundPort": null,
+            "defaultsOccupied": [],
+            "extended": false,
+            "failed": false
+        }))
+    })
 }
 
 /// Toggles whether the plugin should skip checking if the user actually owns the assets.
@@ -123,17 +145,48 @@ pub struct AppState {
 pub async fn start_server(app_handle: AppHandle) {
     let data = Arc::new(RwLock::new(AssetServerStateData::default()));
     let _ = BRIDGE_DATA.set(Arc::clone(&data));
-    let Some((listener, addr)) = bind_available_listener().await else {
-        log::error!("Could not start plugin HTTP server: no available TCP ports found");
+    let Some((listener, addr, occupied_defaults)) = bind_available_listener().await else {
+        log::error!(
+            "Could not start plugin HTTP server: all ports {}-{} are occupied. \
+             Close other ISpooferMotion instances or programs using these ports.",
+            PLUGIN_PORT_START,
+            PLUGIN_PORT_FALLBACK_END
+        );
+        *port_diagnostic().write().await = json!({
+            "boundPort": null,
+            "defaultsOccupied": [],
+            "extended": false,
+            "failed": true
+        });
         return;
     };
+    let bound_port = addr.port();
+    let extended = bound_port > PLUGIN_PORT_END;
+    let defaults_occupied = detect_occupied_ports(&occupied_defaults).await;
+    if extended {
+        let names: Vec<String> =
+            defaults_occupied.iter().map(|o| format!("{}:{}", o.exe, o.port)).collect();
+        log::warn!(
+            "Plugin server moved past the default ports to {bound_port}: ports \
+             14285-14289 occupied by [{}]. Set the Studio plugin's Daemon Port \
+             Scan Range to 14285-{bound_port} so it can find the app.",
+            names.join(", ")
+        );
+    }
+    let occupied_value = serde_json::to_value(&defaults_occupied).unwrap_or(Value::Null);
+    *port_diagnostic().write().await = json!({
+        "boundPort": bound_port,
+        "defaultsOccupied": occupied_value,
+        "extended": extended,
+        "failed": false
+    });
     let state = AppState {
         data: Arc::clone(&data),
-        bridge_port: addr.port(),
+        bridge_port: bound_port,
         started_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis(),
         app_handle: app_handle.clone(),
     };
-    *active_bridge_port().write().await = Some(addr.port());
+    *active_bridge_port().write().await = Some(bound_port);
 
     // Allow localhost/tauri origins to enable web frontend access.
     let cors = CorsLayer::new()
@@ -232,23 +285,195 @@ pub async fn get_plugin_bridge_port() -> Option<u16> {
     *active_bridge_port().read().await
 }
 
-/// Iterates over a small port range to accommodate multiple Studio instances.
-///
-/// We try 14285-14289 first, and if all are taken, we ask the OS for any free port.
-async fn bind_available_listener() -> Option<(tokio::net::TcpListener, SocketAddr)> {
-    for port in PLUGIN_PORT_START..=PLUGIN_PORT_END {
-        let addr = SocketAddr::from(([127, 0, 0, 1], port));
-        if let Ok(listener) = tokio::net::TcpListener::bind(addr).await {
-            return Some((listener, addr));
+/// A default plugin port (14285-14289) that is already in use, with the name of
+/// the process holding it (when it can be determined).
+#[derive(serde::Serialize, Clone)]
+struct OccupiedPort {
+    port: u16,
+    exe: String,
+}
+
+/// Resolves the owning process name for each occupied default port. Windows uses
+/// the native TCP table + process image query; macOS/Linux shell out to `lsof`.
+async fn detect_occupied_ports(ports: &[u16]) -> Vec<OccupiedPort> {
+    if ports.is_empty() {
+        return Vec::new();
+    }
+    let ports = ports.to_vec();
+    tokio::task::spawn_blocking(move || {
+        let owners = port_owners(&ports);
+        ports
+            .iter()
+            .map(|&p| {
+                let exe = owners.get(&p).cloned().unwrap_or_else(|| "unknown".to_string());
+                OccupiedPort { port: p, exe }
+            })
+            .collect::<Vec<_>>()
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// Maps the given default ports to the process name holding each one. Returns an
+/// empty entry for ports whose owner can't be determined.
+#[cfg(windows)]
+fn port_owners(ports: &[u16]) -> std::collections::HashMap<u16, String> {
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        GetExtendedTcpTable, MIB_TCPTABLE_OWNER_PID,
+    };
+
+    const AF_INET: u32 = 2;
+    // TCP_TABLE_OWNER_PID_ALL returns every TCP row with its owning PID.
+    const TCP_TABLE_OWNER_PID_ALL: i32 = 5;
+
+    let mut map = std::collections::HashMap::new();
+    let mut size: u32 = 0;
+    // First call discovers the required buffer size.
+    unsafe {
+        GetExtendedTcpTable(
+            std::ptr::null_mut(),
+            &mut size,
+            0,
+            AF_INET,
+            TCP_TABLE_OWNER_PID_ALL,
+            0,
+        );
+    }
+    if size == 0 {
+        return map;
+    }
+    let mut buf: Vec<u8> = vec![0u8; size as usize];
+    let ret = unsafe {
+        GetExtendedTcpTable(
+            buf.as_mut_ptr() as *mut std::ffi::c_void,
+            &mut size,
+            0,
+            AF_INET,
+            TCP_TABLE_OWNER_PID_ALL,
+            0,
+        )
+    };
+    if ret != 0 {
+        return map;
+    }
+    let table = buf.as_ptr() as *const MIB_TCPTABLE_OWNER_PID;
+    unsafe {
+        let count = (*table).dwNumEntries as usize;
+        let rows = std::slice::from_raw_parts((*table).table.as_ptr(), count);
+        for row in rows {
+            let addr = row.dwLocalAddr.to_ne_bytes();
+            // A bind to 127.0.0.1 is blocked by a listener on loopback or on
+            // 0.0.0.0 (any interface), so match both.
+            if addr != [127, 0, 0, 1] && addr != [0, 0, 0, 0] {
+                continue;
+            }
+            let port = u16::from_be((row.dwLocalPort >> 16) as u16);
+            if !ports.contains(&port) {
+                continue;
+            }
+            let pid = row.dwOwningPid;
+            map.entry(port).or_insert_with(|| process_image_name(pid));
         }
     }
-    let addr = SocketAddr::from(([127, 0, 0, 1], 0));
-    if let Ok(listener) = tokio::net::TcpListener::bind(addr).await {
-        if let Ok(local_addr) = listener.local_addr() {
-            return Some((listener, local_addr));
+    map
+}
+
+#[cfg(windows)]
+fn process_image_name(pid: u32) -> String {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return "unknown".to_string();
+        }
+        let mut buf = [0u16; 260];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(handle, 0, buf.as_mut_ptr(), &mut len);
+        CloseHandle(handle);
+        if ok == 0 {
+            return "unknown".to_string();
+        }
+        let path = String::from_utf16_lossy(&buf[..len as usize]);
+        path.rsplit(['\\', '/']).next().unwrap_or(&path).to_string()
+    }
+}
+
+#[cfg(not(windows))]
+fn port_owners(ports: &[u16]) -> std::collections::HashMap<u16, String> {
+    use std::process::Command;
+    let mut map = std::collections::HashMap::new();
+    let (lo, hi) = match (ports.iter().min(), ports.iter().max()) {
+        (Some(&lo), Some(&hi)) => (lo, hi),
+        _ => return map,
+    };
+    // `lsof -iTCP:lo-hi -sTCP:LISTEN` lists listeners in the range. -n -P skip
+    // the DNS/port name resolution that would slow it down and change the format.
+    let filter = format!("-iTCP:{lo}-{hi}");
+    let out = match Command::new("lsof").args(["-nP", filter.as_str(), "-sTCP:LISTEN"]).output() {
+        Ok(o) => o,
+        Err(_) => return map, // lsof missing (rare on macOS; common on minimal Linux).
+    };
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    for line in stdout.lines().skip(1) {
+        let cmd = match line.split_whitespace().next() {
+            Some(c) => c,
+            None => continue,
+        };
+        if let Some(port) = extract_listen_port(line) {
+            if ports.contains(&port) {
+                map.entry(port).or_insert_with(|| cmd.to_string());
+            }
+        }
+    }
+    map
+}
+
+#[cfg(not(windows))]
+fn extract_listen_port(line: &str) -> Option<u16> {
+    let idx = line.find("(LISTEN)")?;
+    let before = &line[..idx];
+    let colon = before.rfind(':')?;
+    let num: String = before[colon + 1..].chars().take_while(|c| c.is_ascii_digit()).collect();
+    num.parse().ok()
+}
+
+/// Iterates over the port range to accommodate multiple Studio instances.
+///
+/// We try 14285-14289 first (the plugin's default scan range), then keep
+/// incrementing up to PLUGIN_PORT_FALLBACK_END rather than asking the OS for a
+/// random port. A random port lands in the 49152+ ephemeral range, far outside
+/// any scan range the plugin can reach, so the desktop app would look alive
+/// while the plugin could never find it. Returns the listener, its address, and
+/// the default ports (14285-14289) that were already occupied, used to report
+/// which process is squatting on them.
+async fn bind_available_listener() -> Option<(tokio::net::TcpListener, SocketAddr, Vec<u16>)> {
+    let mut occupied_defaults: Vec<u16> = Vec::new();
+    for port in PLUGIN_PORT_START..=PLUGIN_PORT_FALLBACK_END {
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        match tokio::net::TcpListener::bind(addr).await {
+            Ok(listener) => return Some((listener, addr, occupied_defaults)),
+            Err(_) => {
+                if port <= PLUGIN_PORT_END {
+                    occupied_defaults.push(port);
+                }
+            }
         }
     }
     None
+}
+
+/// Reports whether the plugin HTTP server landed on its default ports or had to
+/// move past them, and which processes are occupying the defaults.
+#[tauri::command]
+#[specta::specta]
+#[must_use]
+pub async fn get_port_diagnostic() -> AnyValue {
+    let guard = port_diagnostic().read().await;
+    AnyValue((*guard).clone())
 }
 
 /// Checks if the Studio plugin has polled the daemon recently.
