@@ -890,8 +890,10 @@ export default function AssetExplorer({ isOpen, setIsOpen, onScanReceived }: Ass
                         <span className="text-primary font-bold">{t('misc.scanningStudio')}</span>
                         <span className="text-text-muted">
                           {scanStatus.current_service} (
-                          {Math.round((scanStatus.scanned / Math.max(1, scanStatus.total)) * 100)}
-                          %)
+                          {Number.isFinite(scanStatus.total) && scanStatus.total > 0
+                            ? `${Math.round((scanStatus.scanned / scanStatus.total) * 100)}%`
+                            : `${scanStatus.scanned ?? 0} scanned`}
+                          )
                         </span>
                       </div>
                     ) : studioConnected ? (

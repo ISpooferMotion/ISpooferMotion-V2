@@ -104,9 +104,84 @@ local function scanValueObjectRecord(records: { Record }, obj: Instance)
 	end
 end
 
+--- Extracts asset IDs from a script source in-place (Luau), without shipping
+--- the full source to the daemon. This is the "asset IDs" scan mode: far less
+--- payload for large scripts (a few IDs instead of megabytes of source), at the
+--- cost of less context than the daemon's full-moon AST extraction. Users who
+--- need the full extraction switch to "fullSource" mode.
+local function extractScriptAssetIds(source: string): { string }
+	local ids: { string } = {}
+	local seen: { [string]: boolean } = {}
+
+	local function add(id: string)
+		-- Asset IDs are at least 7 digits; skip repeating-digit runs (e.g. 1111111)
+		-- which are almost never asset IDs.
+		if #id < 7 then
+			return
+		end
+		local first = string.sub(id, 1, 1)
+		local allSame = true
+		for i = 2, #id do
+			if string.sub(id, i, i) ~= first then
+				allSame = false
+				break
+			end
+		end
+		if not allSame and not seen[id] then
+			seen[id] = true
+			table.insert(ids, id)
+		end
+	end
+
+	-- Explicit rbxassetid:// URIs.
+	for id in string.gmatch(source, "rbxassetid://(%d+)") do
+		add(id)
+	end
+	-- roblox.com/asset?id= URIs (case-insensitive-ish, matches the daemon path).
+	for id in string.gmatch(source, "[Aa]sset/%?[Ii][Dd]=(%d+)") do
+		add(id)
+	end
+	-- Bare numbers >= 7 digits preceded by assignment/call/table context, to
+	-- catch LoadAsset(1234567) / local x = 1234567 without matching digits
+	-- embedded inside longer identifiers or strings.
+	for id in string.gmatch(source, "[=:{,(]%s*(%d%d%d%d%d%d%d+)") do
+		add(id)
+	end
+
+	return ids
+end
+
 --- Extracts the source code from scripts so the daemon can rewrite raw IDs.
+---
+--- Scan mode (ISpooferMotion_SCRIPT_SCAN_MODE setting):
+---   "assetIds"  (default) — extract IDs locally, send a compact record. Fast,
+---                low payload, but less context than the daemon's AST extraction.
+---   "fullSource"          — send the full source; the daemon AST-parses it.
+---                Most accurate, but ships megabytes for large scripts.
+---   "off"                 — skip script scanning entirely.
 local function scanScriptSourceRecord(records: { Record }, obj: Instance)
 	if not obj:IsA("LuaSourceContainer") or obj.ClassName == "CoreScript" then
+		return
+	end
+
+	-- Skip script scanning if the user deselected "scripts" in the scan popup.
+	local scanScripts = false
+	for _, t in ipairs(activeScanTypes) do
+		if t == "scripts" then
+			scanScripts = true
+			break
+		end
+	end
+	if not scanScripts then
+		return
+	end
+
+	-- Use the mode pushed from the desktop app (falls back to the plugin setting
+	-- if the app didn't send one, so manual plugin-only scans still work).
+	local mode = activeScriptScanMode
+		or plugin:GetSetting("ISpooferMotion_SCRIPT_SCAN_MODE")
+		or "assetIds"
+	if mode == "off" then
 		return
 	end
 
@@ -123,17 +198,29 @@ local function scanScriptSourceRecord(records: { Record }, obj: Instance)
 		return
 	end
 
-	if source and source ~= "" then
-		if #source <= MAX_SCRIPT_SOURCE_BYTES then
-			addRecord(records, obj, "Source", source, false)
-		else
-			local fullName = "Unknown"
-			pcall(function()
-				fullName = obj:GetFullName()
-			end)
-			logToPlugin(
-				"[Warning] " .. "[ISpooferMotion] Skipping oversized script source: " .. fullName
-			)
+	if not source or source == "" then
+		return
+	end
+	if #source > MAX_SCRIPT_SOURCE_BYTES then
+		local fullName = "Unknown"
+		pcall(function()
+			fullName = obj:GetFullName()
+		end)
+		logToPlugin(
+			"[Warning] " .. "[ISpooferMotion] Skipping oversized script source: " .. fullName
+		)
+		return
+	end
+
+	if mode == "fullSource" then
+		addRecord(records, obj, "Source", source, false)
+	else
+		-- assetIds: extract IDs locally and send a compact record. The daemon
+		-- builds the script-ref list from these IDs and, at patch time, sends an
+		-- old->new mapping back (the plugin re-reads the source and applies it).
+		local ids = extractScriptAssetIds(source)
+		if #ids > 0 then
+			addRecord(records, obj, "SourceIds", HttpService:JSONEncode(ids), false)
 		end
 	end
 end

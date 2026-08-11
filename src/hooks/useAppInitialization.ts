@@ -41,6 +41,16 @@ export function useAppInitialization() {
 
   const telemetryEnabled = useConfigStore((s) => s.config.general.telemetryEnabled);
 
+  // Push the configured proxy URL to the Rust backend so all outbound Roblox
+  // calls route through it. An empty value falls back to the OS system proxy
+  // (Windows WinINET — what VPN "proxy mode" apps like Happ set). Runs on mount
+  // and whenever the setting changes.
+  const proxyUrl = useConfigStore((s) => s.config.advanced.proxyUrl);
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    void invoke('set_proxy_url', { url: proxyUrl || null }).catch(console.warn);
+  }, [proxyUrl]);
+
   // Fetch remote config (Maintenance Mode) and initialize remote cache
   useEffect(() => {
     let cancelled = false;

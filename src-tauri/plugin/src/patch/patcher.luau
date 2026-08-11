@@ -318,8 +318,8 @@ local function applyPatch(patch: Patch): (boolean, string?)
 	end
 
 	if patch.action == "setProperty" then
-		if string.sub(patch.property, 1, 13) == "__Attribute__:" then
-			local attr = string.sub(patch.property, 14)
+		if string.sub(patch.property, 1, 14) == "__Attribute__:" then
+			local attr = string.sub(patch.property, 15)
 			local okProperty, propertyErr = validatePropertyName(attr)
 			if not okProperty then
 				return false, propertyErr
@@ -473,12 +473,32 @@ local function applyPatch(patch: Patch): (boolean, string?)
 			return false, "Target is not a script"
 		end
 
-		local source = if type(patch.value) == "string"
-			then patch.value
-			else tostring(patch.value or "")
-		-- if #source > MAX_SCRIPT_SOURCE_BYTES then
-		-- 	return false, "Script source patch too large"
-		-- end
+		local source
+		if type(patch.value) == "table" then
+			-- assetIds scan mode: the daemon sends an old->new ID mapping. Re-read
+			-- the current source and apply the replacements locally, using the same
+			-- digit-boundary-safe patterns as the manual replace path.
+			local readOk, current = pcall(function()
+				return (obj :: any).Source
+			end)
+			if not readOk or not current or current == "" then
+				return false, "Could not read source to apply ID mapping"
+			end
+			source = current
+			for oldId, newId in pairs(patch.value) do
+				local oId, nId = tostring(oldId), tostring(newId)
+				local safePattern = "([=:{,]%s*)" .. oId .. "(%f[%D])"
+				source = string.gsub(source, safePattern, "%1" .. nId .. "%2")
+				source = string.gsub(source, "rbxassetid://" .. oId, "rbxassetid://" .. nId)
+				source =
+					string.gsub(source, "(roblox%.com/[Aa]sset/%?[Ii][Dd]=)" .. oId, "%1" .. nId)
+			end
+		elseif type(patch.value) == "string" then
+			-- fullSource scan mode: the daemon sends the fully-rewritten source.
+			source = patch.value
+		else
+			source = tostring(patch.value or "")
+		end
 
 		local ok, err
 		if #source >= 200000 then

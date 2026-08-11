@@ -1480,19 +1480,19 @@ local function createPluginGui()
 		"ISpooferMotion_PORT_END",
 		"Daemon Port Scan Range",
 		"Which local ports the plugin checks to find the desktop app.",
-		"Recommended: 14285-14289\n\nThe app only ever uses these five ports. If all five are busy it moves to a random high port that scanning cannot reach anyway, so widening this only adds probes and slows discovery.",
+		"Recommended: 14285-14289.\n\nThe app tries 14285-14289 first; if all five are busy it moves up one port at a time to 14320. Widen this range only if the port diagnostic says the app landed above 14289.",
 		14285,
 		14289,
 		14280,
 		14320,
 		1,
-		40,
+		20,
 		function(startVal, endVal)
 			local span = endVal - startVal
-			if span > 20 then
+			if span > 10 then
 				return true,
 					string.format(
-						"%d ports = %d concurrent probes. The app only uses 14285-14289; scanning wider just slows discovery.",
+						"%d ports = %d probes. Keep this range narrow: the app defaults to 14285-14289 and only climbs higher if those are occupied.",
 						span + 1,
 						(span + 1) * 2
 					)
@@ -1562,6 +1562,7 @@ local function createPluginGui()
 		1000000
 	)
 
+	-- Script scan mode is configured in the Desktop App's Scan Studio popup.
 	local restartNote = Instance.new("TextLabel")
 	restartNote.Name = "RestartNote"
 	restartNote.Size = UDim2.new(1, 0, 0, 40)

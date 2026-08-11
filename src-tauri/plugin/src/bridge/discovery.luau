@@ -13,6 +13,13 @@
 --- antivirus/firewall intercepts can cause longer stalls.
 local DISCOVERY_REQUEST_TIMEOUT_SECS = 2
 
+-- Roblox's HttpService rejects more than ~10 concurrent RequestAsync calls
+-- with "Number of requests exceeded limit". Every probe in an over-limit
+-- batch dies silently inside its pcall, so the plugin reports "no desktop
+-- app found" even though the app is running fine. 8 keeps us safely under
+-- the cap while still parallelising the scan.
+local MAX_CONCURRENT_PROBES = 8
+
 local function responseLooksLikeAppHealth(decoded: any): boolean
 	return type(decoded) == "table" and decoded.app == "ISpooferMotion"
 end
@@ -79,13 +86,25 @@ end
 --- Sweeps the known port range looking for the desktop daemon.
 ---
 --- If we already have a `BASE_URL`, we probe it first for a fast reconnect path.
---- All probes run concurrently with a per-request 2-second soft deadline so a
---- single stalled connection (firewall/AV intercepting loopback traffic) cannot
---- block the entire scan for 5+ seconds.
+--- Probes run in batches of `MAX_CONCURRENT_PROBES` with a per-request 2-second
+--- soft deadline, so a single stalled connection (firewall/AV intercepting
+--- loopback traffic) cannot block the entire scan.
 local function discoverServer(): (boolean, boolean, string?)
+	-- Guard: when HttpService is disabled, every RequestAsync call throws
+	-- inside its pcall and the scan reports "no desktop app found" even though
+	-- the app is running fine. Detect this up front so the user gets a clear,
+	-- actionable message instead of a confusing port-range error.
+	local httpOk, httpEnabled = pcall(function()
+		return (HttpService :: any).HttpEnabled
+	end)
+	if httpOk and not httpEnabled then
+		return false,
+			false,
+			"Roblox HttpService is disabled. Enable 'Allow HTTP Requests' "
+				.. "in Game Settings > Security, then the plugin will connect automatically."
+	end
+
 	local results: { { url: string, startedAt: number, health: any } } = {}
-	-- pendingRef[1] is a shared counter decremented by each completed probe task.
-	local pendingRef = { 0 }
 	local cancelledRef = { false }
 	local statsRef = { responded = 0, wrongApp = 0 }
 
@@ -98,31 +117,51 @@ local function discoverServer(): (boolean, boolean, string?)
 		portStart, portEnd = portEnd, portStart
 	end
 
-	-- IMP-8: Fast path - probe the last known URL first. If it responds before
-	-- the full scan completes, the sort below will pick it as the best candidate.
+	-- Build the probe list. The last known BASE_URL goes first (fast reconnect),
+	-- then 127.0.0.1 ports, then localhost. 127.0.0.1 is tried first because the
+	-- app binds to it directly; localhost is a fallback for unusual DNS setups.
+	local urls: { string } = {}
 	if BASE_URL then
-		pendingRef[1] += 1
-		task.spawn(probeUrl, BASE_URL, results, pendingRef, cancelledRef, statsRef)
+		table.insert(urls, BASE_URL)
 	end
-
-	-- Full port scan using only loopback addresses. External DNS (e.g. nip.io) adds
-	-- latency and is a hard failure point for users without internet access.
-	local hosts = { "127.0.0.1", "localhost" }
 	for port = portStart, portEnd do
-		for _, host in ipairs(hosts) do
-			local url = "http://" .. host .. ":" .. port
-			-- Skip if already covered by the fast-path probe above.
-			if url ~= BASE_URL then
-				pendingRef[1] += 1
-				task.spawn(probeUrl, url, results, pendingRef, cancelledRef, statsRef)
-			end
+		local url = "http://127.0.0.1:" .. port
+		if url ~= BASE_URL then
+			table.insert(urls, url)
+		end
+	end
+	for port = portStart, portEnd do
+		local url = "http://localhost:" .. port
+		if url ~= BASE_URL then
+			table.insert(urls, url)
 		end
 	end
 
-	-- Wait for all probes to finish or for the hard deadline (per-request timeout + buffer).
-	local hardDeadline = os.clock() + DISCOVERY_REQUEST_TIMEOUT_SECS + 0.5
-	while pendingRef[1] > 0 and os.clock() < hardDeadline do
-		task.wait(0.05)
+	-- Probe in batches of MAX_CONCURRENT_PROBES to stay under Roblox's
+	-- HttpService concurrency limit. Each batch waits for its probes to
+	-- finish (or time out) before starting the next. On localhost the app
+	-- responds in <100ms, so the matching batch finishes almost instantly.
+	local idx = 1
+	while idx <= #urls do
+		local batchPending = { 0 }
+		local batchSize = math.min(MAX_CONCURRENT_PROBES, #urls - idx + 1)
+
+		for j = idx, idx + batchSize - 1 do
+			batchPending[1] += 1
+			task.spawn(probeUrl, urls[j], results, batchPending, cancelledRef, statsRef)
+		end
+
+		local batchDeadline = os.clock() + DISCOVERY_REQUEST_TIMEOUT_SECS + 0.5
+		while batchPending[1] > 0 and os.clock() < batchDeadline do
+			task.wait(0.05)
+		end
+
+		-- Early exit: no need to scan more ports if we already found the app.
+		if #results > 0 then
+			break
+		end
+
+		idx += batchSize
 	end
 	-- Signal any in-flight deadline tasks they should no-op.
 	cancelledRef[1] = true

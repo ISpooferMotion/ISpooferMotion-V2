@@ -56,6 +56,12 @@ local patchRunning = false
 local autoReplaceEnabled = false
 local lastDiscovery = 0
 
+--- Scan options pushed from the desktop app via the /poll response. Defaults
+--- match the backend's defaults (all types, assetIds mode) so a scan still
+--- works if the app sends nothing.
+local activeScanTypes: { string } = { "sounds", "animations", "images", "meshes", "scripts" }
+local activeScriptScanMode: string = "assetIds"
+
 --- The specific top-level containers we care about when scanning for assets.
 --- We explicitly ignore places like CoreGui to avoid engine warnings and crashes.
 local SERVICES_TO_SCAN = {

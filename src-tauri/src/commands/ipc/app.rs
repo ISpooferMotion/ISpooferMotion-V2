@@ -51,6 +51,17 @@ pub fn get_app_version() -> String {
     APP_VERSION.to_string()
 }
 
+/// Updates the proxy URL used for outbound Roblox/API calls. Pass an empty
+/// string or `None` to fall back to the OS system proxy (Windows WinINET, which
+/// VPN "proxy mode" apps like Happ set). Called from the frontend on startup and
+/// whenever the Proxy URL setting changes.
+#[tauri::command]
+#[specta::specta]
+pub fn set_proxy_url(url: Option<String>) -> bool {
+    crate::utils::set_explicit_proxy(url);
+    true
+}
+
 #[tauri::command]
 #[specta::specta]
 #[must_use]

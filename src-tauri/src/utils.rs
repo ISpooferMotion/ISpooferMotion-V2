@@ -9,12 +9,76 @@ use std::path::Path;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Emitter};
 
-static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-// Cache the proxy client to maintain connection pooling.
+// A no-proxy client for loopback only. The Studio plugin bridge runs on
+// 127.0.0.1 and must never be routed through a proxy, or Studio communication
+// breaks. Everything else uses `get_http_client()`, which is proxy-aware.
+static LOCAL_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+// The user's explicitly-configured proxy URL (Settings -> Routing -> Proxy URL),
+// which overrides the OS system proxy. Set from the frontend via `set_proxy_url`.
+static EXPLICIT_PROXY: OnceLock<std::sync::RwLock<Option<String>>> = OnceLock::new();
+
+// Cached proxy-aware client keyed by the effective proxy URL, so connection
+// pools are reused while the proxy is unchanged and rebuilt on hot-swap.
 static PROXY_CLIENT: OnceLock<std::sync::RwLock<(Option<String>, reqwest::Client)>> =
     OnceLock::new();
 
-/// Builds a new generic reqwest client, optionally configuring a proxy.
+/// Sets the user's explicit proxy URL, or `None` to fall back to the OS system
+/// proxy. Called from the frontend on startup and whenever the setting changes.
+pub fn set_explicit_proxy(url: Option<String>) {
+    let lock = EXPLICIT_PROXY.get_or_init(|| std::sync::RwLock::new(None));
+    if let Ok(mut guard) = lock.write() {
+        let normalized = url.and_then(|s| {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        });
+        *guard = normalized;
+    }
+}
+
+/// The effective proxy URL: the user's explicit setting if present, otherwise
+/// the OS system proxy. On Windows the system proxy is the WinINET registry
+/// value (the one browsers and VPN "proxy mode" apps like Happ set); reqwest
+/// does not read it by default, which is why the app failed under Happ's Proxy
+/// mode while TUN mode worked. On other platforms reqwest reads HTTP_PROXY /
+/// HTTPS_PROXY env vars itself, so we return None here and let reqwest handle it.
+fn effective_proxy_url() -> Option<String> {
+    if let Some(lock) = EXPLICIT_PROXY.get() {
+        if let Ok(guard) = lock.read() {
+            if let Some(url) = guard.as_ref() {
+                return Some(url.clone());
+            }
+        }
+    }
+    system_proxy()
+}
+
+/// Returns a `reqwest::Proxy` for the effective proxy, for custom client
+/// builders (per-call timeouts, no-redirect) that can't use the shared client.
+pub fn effective_reqwest_proxy() -> Option<reqwest::Proxy> {
+    let url = effective_proxy_url()?;
+    reqwest::Proxy::all(&url).ok()
+}
+
+/// Builds a reqwest client with a custom timeout and the effective proxy applied.
+/// For calls that need a different timeout than the shared 15s client but still
+/// must respect the proxy (e.g. quick validation calls with a 5s timeout).
+pub fn build_client_with_timeout(timeout: std::time::Duration) -> reqwest::Client {
+    let mut builder = reqwest::Client::builder()
+        .timeout(timeout)
+        .pool_idle_timeout(std::time::Duration::from_secs(90))
+        .pool_max_idle_per_host(32);
+    if let Some(proxy) = effective_reqwest_proxy() {
+        builder = builder.proxy(proxy);
+    }
+    builder.build().unwrap_or_else(|_| reqwest::Client::new())
+}
+
+/// Builds a new reqwest client, optionally configuring a proxy.
 fn build_client(proxy_url: Option<&str>) -> reqwest::Client {
     let mut builder = reqwest::Client::builder()
         // Use a 15-second timeout.
@@ -32,15 +96,43 @@ fn build_client(proxy_url: Option<&str>) -> reqwest::Client {
     builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
-/// Returns a globally cached, thread-safe HTTP client with default settings.
-pub fn get_http_client() -> &'static reqwest::Client {
-    HTTP_CLIENT.get_or_init(|| build_client(None))
+/// Returns a cached, proxy-aware HTTP client for outbound calls (Roblox APIs,
+/// asset downloads, etc.). The proxy is the user's explicit proxyUrl if set,
+/// otherwise the OS system proxy. The client is rebuilt only when the effective
+/// proxy changes, so connection pools are preserved between calls.
+pub fn get_http_client() -> reqwest::Client {
+    let proxy = effective_proxy_url();
+    let lock = PROXY_CLIENT.get_or_init(|| std::sync::RwLock::new((None, build_client(None))));
+
+    if let Ok(read_guard) = lock.read() {
+        if read_guard.0.as_deref() == proxy.as_deref() {
+            return read_guard.1.clone();
+        }
+    }
+
+    if let Ok(mut write_guard) = lock.write() {
+        if write_guard.0.as_deref() == proxy.as_deref() {
+            return write_guard.1.clone();
+        }
+        let new_client = build_client(proxy.as_deref());
+        write_guard.0 = proxy;
+        write_guard.1 = new_client.clone();
+        return new_client;
+    }
+
+    build_client(proxy.as_deref())
 }
 
-/// Returns a cached HTTP client bound to the specified proxy URL.
-///
-/// If the proxy changes, the cached client is destroyed and rebuilt. This ensures
-/// we do not leak connection pools while allowing the user to hot-swap proxy servers.
+/// Returns a cached client with NO proxy, for loopback only (the Studio plugin
+/// bridge at 127.0.0.1). Routing localhost through a proxy would break Studio
+/// communication.
+pub fn get_local_http_client() -> &'static reqwest::Client {
+    LOCAL_CLIENT.get_or_init(|| build_client(None))
+}
+
+/// Returns a cached HTTP client bound to an explicit proxy URL. Used by the
+/// spoofer job, which carries proxyUrl in the job config so a mid-run proxy
+/// change doesn't swap the client out from under an active job.
 pub fn get_http_client_with_proxy(proxy_url: Option<&str>) -> reqwest::Client {
     let lock = PROXY_CLIENT.get_or_init(|| std::sync::RwLock::new((None, build_client(None))));
 
@@ -62,6 +154,110 @@ pub fn get_http_client_with_proxy(proxy_url: Option<&str>) -> reqwest::Client {
     }
 
     build_client(proxy_url)
+}
+
+/// Reads the OS system proxy. On Windows this is the WinINET registry setting
+/// (`ProxyEnable` + `ProxyServer`) that browsers and VPN proxy-mode apps use.
+/// Returns None when no system proxy is configured.
+#[cfg(windows)]
+fn system_proxy() -> Option<String> {
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER, KEY_READ, REG_DWORD,
+        REG_EXPAND_SZ, REG_SZ,
+    };
+
+    fn encw(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+
+    let subkey = encw("Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings");
+    let enable_name = encw("ProxyEnable");
+    let server_name = encw("ProxyServer");
+
+    unsafe {
+        let mut hkey: HKEY = std::ptr::null_mut();
+        if RegOpenKeyExW(HKEY_CURRENT_USER, subkey.as_ptr(), 0, KEY_READ, &mut hkey) != 0 {
+            return None;
+        }
+
+        // ProxyEnable is a DWORD (0/1).
+        let mut enabled: u32 = 0;
+        let mut enabled_len: u32 = 4;
+        let mut enabled_type: u32 = 0;
+        let _ = RegQueryValueExW(
+            hkey,
+            enable_name.as_ptr(),
+            std::ptr::null_mut(),
+            &mut enabled_type,
+            &mut enabled as *mut u32 as *mut u8,
+            &mut enabled_len,
+        );
+        let proxy_enabled = enabled_type == REG_DWORD && enabled != 0;
+
+        let mut server: Option<String> = None;
+        if proxy_enabled {
+            // ProxyServer is a REG_SZ like "127.0.0.1:8080" or
+            // "http=127.0.0.1:8080;https=127.0.0.1:8080".
+            let mut buf = [0u16; 512];
+            let mut buf_len: u32 = (buf.len() * 2) as u32;
+            let mut server_type: u32 = 0;
+            if RegQueryValueExW(
+                hkey,
+                server_name.as_ptr(),
+                std::ptr::null_mut(),
+                &mut server_type,
+                buf.as_mut_ptr() as *mut u8,
+                &mut buf_len,
+            ) == 0
+                && (server_type == REG_SZ || server_type == REG_EXPAND_SZ)
+            {
+                let nul = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+                let raw = String::from_utf16_lossy(&buf[..nul]);
+                server = parse_wininet_proxy(&raw);
+            }
+        }
+
+        RegCloseKey(hkey);
+        server
+    }
+}
+
+/// Normalizes a WinINET `ProxyServer` string into a single proxy URL suitable
+/// for `reqwest::Proxy::all`. Handles both the all-protocols form ("host:port")
+/// and the per-protocol form ("http=h:p;https=h:p"), preferring `https=`/`http=`.
+fn parse_wininet_proxy(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+
+    let entry = if raw.contains('=') {
+        raw.split(';').find_map(|part| {
+            let (key, val) = part.split_once('=')?;
+            let val = val.trim();
+            if val.is_empty() {
+                return None;
+            }
+            let key = key.trim();
+            if key.eq_ignore_ascii_case("https") || key.eq_ignore_ascii_case("http") {
+                Some(val)
+            } else {
+                None
+            }
+        })
+    } else {
+        Some(raw)
+    };
+
+    entry.map(|addr| if addr.contains("://") { addr.to_string() } else { format!("http://{addr}") })
+}
+
+/// On non-Windows, reqwest reads HTTP_PROXY/HTTPS_PROXY/ALL_PROXY env vars by
+/// default (the `system-proxy` feature), so there's nothing to do here —
+/// returning None lets reqwest apply that env-var proxy itself.
+#[cfg(not(windows))]
+fn system_proxy() -> Option<String> {
+    None
 }
 
 /// Parses rate-limit headers to determine if we need to back off.

@@ -290,7 +290,7 @@ where
         return Ok(resolved_assets);
     }
 
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build()?;
+    let client = crate::utils::build_client_with_timeout(Duration::from_secs(10));
     let cookie_header_value = Arc::new(HeaderValue::from_str(&cookie_header)?);
 
     let semaphore = Arc::new(Semaphore::new(8));
@@ -359,7 +359,7 @@ where
         return Ok(HashMap::new());
     }
 
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(5)).build()?;
+    let client = crate::utils::build_client_with_timeout(Duration::from_secs(5));
     let mut resolved_map = resolve_via_catalog(&client, &asset_ids, false).await;
 
     let mut remaining_ids = asset_ids;
@@ -472,7 +472,7 @@ pub async fn validate_asset_ids(
         return Ok(HashMap::new());
     }
 
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(5)).build()?;
+    let client = crate::utils::build_client_with_timeout(Duration::from_secs(5));
     let mut result_map = resolve_via_catalog(&client, &asset_ids, true).await;
 
     let mut remaining_ids = asset_ids;

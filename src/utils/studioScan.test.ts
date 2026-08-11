@@ -91,9 +91,7 @@ describe('studioScan', () => {
     vi.mocked(tauriCore.invoke).mockResolvedValue({ scanStatus: { scanning: true }, synced: true });
 
     const scanPromise = triggerStudioScan();
-    const expectPromise = expect(scanPromise).rejects.toThrow(
-      /Studio scan is taking longer than 5 minutes/,
-    );
+    const expectPromise = expect(scanPromise).rejects.toThrow(/no progress for 5 minutes/);
 
     // 5 minutes = 300,000ms
     await vi.advanceTimersByTimeAsync(300000);
