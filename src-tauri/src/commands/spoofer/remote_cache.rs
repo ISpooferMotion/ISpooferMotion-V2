@@ -179,7 +179,7 @@ pub async fn push_discovery(asset_id: String, place_id: String) -> Result<(), St
     };
 
     let context = RemoteAssetContext { asset_id, place_id };
-    write_remote_context(crate::utils::get_http_client(), &url, &context, true).await
+    write_remote_context(&crate::utils::get_http_client(), &url, &context, true).await
 }
 
 #[tauri::command]
@@ -222,7 +222,7 @@ pub async fn initialize_remote_cache(
                             for (asset_id, place_id) in existing {
                                 let context = RemoteAssetContext { asset_id, place_id };
                                 if let Err(error) =
-                                    write_remote_context(client, &pu_clone, &context, true).await
+                                    write_remote_context(&client, &pu_clone, &context, true).await
                                 {
                                     migration_succeeded = false;
                                     log::warn!("Failed to migrate community-cache entry: {error}");
@@ -318,7 +318,7 @@ mod tests {
             place_id: "987654321".to_string(),
         };
 
-        write_remote_context(&reqwest::Client::new(), &url, &context, false)
+        write_remote_context(&crate::utils::get_http_client(), &url, &context, false)
             .await
             .expect("write should succeed");
 
@@ -334,7 +334,7 @@ mod tests {
             place_id: "987654321".to_string(),
         };
 
-        write_remote_context(&reqwest::Client::new(), &url, &context, false)
+        write_remote_context(&crate::utils::get_http_client(), &url, &context, false)
             .await
             .expect("third write should succeed");
 
@@ -349,7 +349,7 @@ mod tests {
             place_id: "987654321".to_string(),
         };
 
-        let error = write_remote_context(&reqwest::Client::new(), &url, &context, false)
+        let error = write_remote_context(&crate::utils::get_http_client(), &url, &context, false)
             .await
             .expect_err("client error should fail");
 

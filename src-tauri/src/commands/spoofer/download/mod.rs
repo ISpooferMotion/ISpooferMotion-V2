@@ -388,14 +388,24 @@ pub async fn download_animation_asset_with_progress(
                     });
                 } else if status == reqwest::StatusCode::FORBIDDEN {
                     status_reason =
-                        "Permission Denied: Asset is private or copylocked.".to_string();
+                        "Permission Denied: Asset is private, copylocked, or from a deleted place."
+                            .to_string();
                 } else if status == reqwest::StatusCode::NOT_FOUND {
-                    status_reason = "Not Found: Asset is invalid or missing.".to_string();
+                    status_reason = "Not Found: Asset or place is deleted or invalid.".to_string();
                 } else if status == reqwest::StatusCode::CONFLICT {
                     status_reason = "Conflict: Asset delivery blocked.".to_string();
                 }
 
-                last_error = format!("Download failed: {status_reason} from {download_url}");
+                let _ = crate::commands::ipc::append_log_entry(
+                    &app,
+                    "debug",
+                    "spoofer",
+                    &format!("Download failed for asset {asset_id} ({status_reason}) from {download_url}"),
+                );
+                log::debug!(
+                    "Download failed for asset {asset_id} ({status_reason}) from {download_url}"
+                );
+                last_error = format!("Download failed: {status_reason}");
                 crate::commands::spoofer::remote_cache::invalidate_context(&asset_id);
 
                 if should_attempt_claim(status) && !attempted_claim {

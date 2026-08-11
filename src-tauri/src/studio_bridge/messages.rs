@@ -69,6 +69,8 @@ pub struct AssetServerStateData {
     pub keyframe_warning_count: usize,
     pub scan_records_truncated: bool,
     pub notify: std::sync::Arc<tokio::sync::Notify>,
+    pub scan_types: Vec<String>,
+    pub script_scan_mode: String,
 }
 
 impl Default for AssetServerStateData {
@@ -96,6 +98,14 @@ impl Default for AssetServerStateData {
             keyframe_warning_count: 0,
             scan_records_truncated: false,
             notify: std::sync::Arc::new(tokio::sync::Notify::new()),
+            scan_types: vec![
+                "sounds".into(),
+                "animations".into(),
+                "images".into(),
+                "meshes".into(),
+                "scripts".into(),
+            ],
+            script_scan_mode: "assetIds".into(),
         }
     }
 }
@@ -586,6 +596,30 @@ pub fn analyze_records(
             continue;
         }
 
+        // Plugin-side extraction (asset-IDs scan mode): the plugin found asset IDs
+        // in the script locally and sent them as a JSON array instead of shipping
+        // the full source. Build script_refs directly from them. Less context than
+        // the full-source AST path, but a fraction of the payload for large scripts.
+        if record.property == "SourceIds"
+            && matches!(record.class_name.as_str(), "Script" | "LocalScript" | "ModuleScript")
+        {
+            if let Ok(ids) = serde_json::from_str::<Vec<String>>(&record.value) {
+                for asset_id in ids {
+                    if seen.insert(("script".to_string(), record.token.clone(), asset_id.clone())) {
+                        script_refs.assets.push(json!({
+                            "kind": "ScriptReference",
+                            "script": record.full_name,
+                            "scriptType": record.class_name,
+                            "assetId": asset_id,
+                            "rawUrl": format!("rbxassetid://{asset_id}"),
+                            "resolvedType": "unknown"
+                        }));
+                    }
+                }
+            }
+            continue;
+        }
+
         let is_script =
             matches!(record.class_name.as_str(), "Script" | "LocalScript" | "ModuleScript")
                 && record.property == "Source";
@@ -987,6 +1021,32 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
         .collect();
 
     for record in records {
+        // asset-IDs scan mode: the record carries a JSON array of IDs, not a
+        // source. Send back an old->new mapping (a JSON object); the plugin re-reads
+        // the source and applies it locally. This avoids shipping the full source
+        // both ways for large scripts.
+        if record.property == "SourceIds"
+            && matches!(record.class_name.as_str(), "Script" | "LocalScript" | "ModuleScript")
+        {
+            if let Ok(ids) = serde_json::from_str::<Vec<String>>(&record.value) {
+                let mut mapping = serde_json::Map::new();
+                for id in ids {
+                    if let Some(new_id) = mapping_map.get(id.as_str()) {
+                        mapping.insert(id, json!(*new_id));
+                    }
+                }
+                if !mapping.is_empty() {
+                    patches.push(json!({
+                        "action": "replaceScriptSource",
+                        "token": record.token,
+                        "fullName": record.full_name,
+                        "value": mapping
+                    }));
+                }
+            }
+            continue;
+        }
+
         if matches!(
             record.property.as_str(),
             "Source" | "__Tags__" | "__Emotes__" | "__Accessories__"

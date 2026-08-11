@@ -38,11 +38,15 @@ pub async fn get_scraped_asset_cdn_url(client: &reqwest::Client, asset_id: &str)
         "https://assetdelivery.roblox.com/v1/asset/?id={}&expectedAssetType=Audio",
         asset_id
     );
-    if let Ok(no_redirect_client) = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(10))
-        .build()
-    {
+    if let Ok(no_redirect_client) = {
+        let mut builder = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(10));
+        if let Some(proxy) = crate::utils::effective_reqwest_proxy() {
+            builder = builder.proxy(proxy);
+        }
+        builder.build()
+    } {
         if let Ok(resp) =
             no_redirect_client.get(&redirect_url).header(USER_AGENT, "Roblox/WinInet").send().await
         {

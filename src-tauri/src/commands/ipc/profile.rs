@@ -39,7 +39,7 @@ pub async fn get_roblox_profile(
     }
 
     let cookie_header = build_roblox_cookie_header(&cookie);
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build()?;
+    let client = crate::utils::get_http_client();
 
     let user_resp = client
         .get("https://users.roblox.com/v1/users/authenticated")
@@ -173,7 +173,7 @@ pub async fn fetch_audio_quota(
         return Ok(AnyValue(serde_json::json!({"error": "Invalid ROBLOSECURITY cookie format"})));
     }
 
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build()?;
+    let client = crate::utils::get_http_client();
 
     let resp = client.get("https://publish.roblox.com/v1/asset-quotas?resourceType=RateLimitUpload&assetType=Audio")
         .header(COOKIE, &cookie_header)

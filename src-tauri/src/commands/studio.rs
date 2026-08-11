@@ -58,7 +58,7 @@ pub async fn push_to_studio(
     log::warn!("push_to_studio: internal bridge unavailable, trying direct HTTP fallback");
     let port = plugin_port.and_then(|value| value.parse::<u16>().ok()).unwrap_or(14285);
     let url = format!("http://127.0.0.1:{port}/replace-ids");
-    let send_result = crate::utils::get_http_client()
+    let send_result = crate::utils::get_local_http_client()
         .post(&url)
         .json(&serde_json::json!({ "mappings": mappings }))
         .send()

@@ -37,6 +37,7 @@ use server::{
     handle_scan_abort, handle_scan_complete, handle_scan_progress, handle_scan_records,
     handle_scan_start, handle_script_refs_complete, handle_sounds_complete, handle_studio_health,
     request_animations, request_images, request_meshes, request_script_refs, request_sounds,
+    set_scan_options,
 };
 
 const PLUGIN_PORT_START: u16 = 14285;
@@ -261,6 +262,7 @@ pub async fn start_server(app_handle: AppHandle) {
         .route("/request-images", post(request_images))
         .route("/request-meshes", post(request_meshes))
         .route("/request-script-refs", post(request_script_refs))
+        .route("/scan-options", post(set_scan_options))
         .layer(axum_middleware::from_fn(require_json_for_post))
         .layer(RequestBodyLimitLayer::new(64 * 1024 * 1024))
         .layer(DefaultBodyLimit::disable())

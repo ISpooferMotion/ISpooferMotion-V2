@@ -924,15 +924,11 @@ pub async fn process_spoofer_action(
                         let is_upstream_inaccessible = err_msg.contains("Permission Denied") || err_msg.contains("Asset is private") || err_msg.contains("copylocked") || err_msg.contains("Conflict: Asset delivery blocked") || err_msg.contains("Not Found: Asset");
                         let (level, msg) = if is_upstream_inaccessible {
                             let reason = if err_msg.contains("Not Found") {
-                                "asset id doesn't exist"
+                                "asset or place is deleted or invalid"
                             } else if err_msg.contains("Conflict") {
-                                // Asset delivery 409: the asset exists but the
-                                // signed-in user + selected Place don't have
-                                // permission to fetch it. Different from 403,
-                                // which means the asset itself is locked.
                                 "your account or forced Place ID doesn't have access"
                             } else {
-                                "private or copylocked"
+                                "private, copylocked, or from a deleted place"
                             };
                             ("warn", format!("Skipped {asset_id} ({reason})."))
                         } else {

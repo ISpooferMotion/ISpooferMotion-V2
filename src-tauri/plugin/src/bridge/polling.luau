@@ -306,6 +306,13 @@ function startPolling(): ()
 						elseif patchRunning then
 							logToPlugin("[Warning] Patch already running, ignoring poll request")
 						else
+							-- Pick up scan options pushed from the desktop app.
+							if type(decoded.scanTypes) == "table" then
+								activeScanTypes = decoded.scanTypes
+							end
+							if type(decoded.scriptScanMode) == "string" then
+								activeScriptScanMode = decoded.scriptScanMode
+							end
 							logToPlugin("Scan requested by Desktop App")
 							autoReplaceEnabled = true
 							setPluginGuiStatus("Scanning Assets...")

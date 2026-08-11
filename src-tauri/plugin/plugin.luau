@@ -57,7 +57,26 @@ local function runManualReplacements(text: string)
 	end
 
 	print(string.format("[ISpooferMotion] Starting manual replacement with %d mappings...", count))
+	-- Record the whole run as ONE undo step (the daemon patcher already does
+	-- this). If a replacement ever misbehaves, the user can Ctrl+Z the entire
+	-- batch instead of losing objects permanently.
+	local recording = nil
+	pcall(function()
+		recording = ChangeHistoryService:TryBeginRecording("ISpooferMotion Manual Replace")
+	end)
 	local replacedCount = 0
+	--- Coerces a raw numeric id into a rbxassetid:// URI; leaves URIs untouched.
+	local function toAssetUriString(v)
+		if
+			v
+			and type(v) == "string"
+			and not string.match(v, "^%a+://")
+			and string.match(v, "^%d+$")
+		then
+			return "rbxassetid://" .. v
+		end
+		return v
+	end
 
 	local function checkAndReplaceProperty(obj: Instance, prop: string)
 		local ok, val = pcall(function()
@@ -86,28 +105,71 @@ local function runManualReplacements(text: string)
 		end
 
 		for oldId, newId in pairs(mappings) do
-			if string.find(strVal, oldId, 1, true) then
-				local newVal = string.gsub(strVal, oldId, newId)
+			-- Digit-boundary match: a plain substring find() also matched oldId
+			-- INSIDE a longer id (e.g. "123" inside "51236"), corrupting unrelated
+			-- assets and triggering spurious MeshPart rebuilds. %f frontiers pin
+			-- the match to whole digit runs.
+			local idPattern = "%f[%d]" .. oldId .. "%f[%D]"
+			if string.find(strVal, idPattern) then
+				local newVal = string.gsub(strVal, idPattern, newId)
 
 				if obj:IsA("MeshPart") and (prop == "MeshId" or prop == "TextureID") then
-					-- We must use copyMeshPartInto to safely clone the MeshPart because MeshId cannot be assigned
-					local targetMeshUri = if prop == "MeshId" then newVal else nil
-					local targetTextureUri = if prop == "TextureID" then newVal else nil
-
-					-- Only pass the overrideTextureId if TextureID is actually changing, otherwise nil allows copyMeshPartInto to copy original
-					local createOk, createdPart = pcall(function()
-						-- If MeshId hasn't been changed yet, use the original
-						local mId = targetMeshUri or obj.MeshId
-						-- Coerce number to rbxassetid:// if it isn't already
-						if not string.match(mId, "^%a+://") and string.match(mId, "^%d+$") then
-							mId = "rbxassetid://" .. mId
+					if prop == "TextureID" then
+						-- TextureID is writable at edit time, so change it in place.
+						-- Rebuilding the entire MeshPart even for a pure texture swap
+						-- destroys the instance for nothing.
+						local assignOk = pcall(function()
+							(obj :: any).TextureID = toAssetUriString(newVal)
+						end)
+						if assignOk then
+							replacedCount += 1
+							print(
+								string.format(
+									"[ISpooferMotion] Manual Swap: %s.TextureID (%s -> %s)",
+									obj.Name,
+									oldId,
+									newId
+								)
+							)
 						end
-						return AssetService:CreateMeshPartAsync(mId, {
+						break
+					end
+					-- prop == "MeshId": MeshId cannot be assigned directly, so the
+					-- part must be rebuilt via CreateMeshPartAsync and swapped in.
+					local targetMeshUri = toAssetUriString(newVal)
+					-- Run the current texture through the mappings as well: the
+					-- original part is destroyed by this swap, so a TextureID
+					-- replacement queued for the same part would otherwise be lost.
+					local targetTextureUri = nil
+					pcall(function()
+						local tex = (obj :: any).TextureID
+						if tex and tex ~= "" then
+							for texOld, texNew in pairs(mappings) do
+								local texPattern = "%f[%d]" .. texOld .. "%f[%D]"
+								if string.find(tex, texPattern) then
+									targetTextureUri =
+										toAssetUriString(string.gsub(tex, texPattern, texNew))
+									break
+								end
+							end
+						end
+					end)
+					-- Capture the parent BEFORE any move logic runs.
+					-- copyMeshPartInto -> moveMeshPartContentsInto sets obj.Parent =
+					-- nil as its first step, and reading obj.Parent only AFTER that
+					-- call parents the replacement to nil (never enters the place),
+					-- then the original is destroyed and the object plus all its
+					-- children vanish from the game.
+					local oldParent = obj.Parent
+					if not oldParent then
+						break -- already deparented/destroyed; nothing to swap
+					end
+					local createOk, createdPart = pcall(function()
+						return AssetService:CreateMeshPartAsync(targetMeshUri, {
 							CollisionFidelity = obj.CollisionFidelity,
 							RenderFidelity = obj.RenderFidelity,
 						})
 					end)
-
 					local objStillValid = pcall(function()
 						return obj.Parent
 					end)
@@ -119,7 +181,8 @@ local function runManualReplacements(text: string)
 						end
 						break -- object was deleted during async yield, abort this property
 					end
-
+					-- Re-read after the async yield in case the object was moved.
+					oldParent = obj.Parent
 					local newPart: BasePart
 					if createOk and createdPart and createdPart:IsA("BasePart") then
 						newPart = createdPart
@@ -129,58 +192,83 @@ local function runManualReplacements(text: string)
 						)
 						local fallbackPart = Instance.new("Part")
 						local specialMesh = Instance.new("SpecialMesh")
-
-						local mId = targetMeshUri or obj.MeshId
-						if not string.match(mId, "^%a+://") and string.match(mId, "^%d+$") then
-							mId = "rbxassetid://" .. mId
-						end
-						specialMesh.MeshId = mId
+						specialMesh.MeshId = targetMeshUri
 						specialMesh.Scale = Vector3.new(1, 1, 1)
-
-						local tId = targetTextureUri or obj.TextureID
+						local tId = targetTextureUri or toAssetUriString((obj :: any).TextureID)
 						if tId and tId ~= "" then
-							if not string.match(tId, "^%a+://") and string.match(tId, "^%d+$") then
-								tId = "rbxassetid://" .. tId
-							end
 							specialMesh.TextureId = tId
 						end
-
 						specialMesh.Parent = fallbackPart
 						newPart = fallbackPart
 					end
-
-					-- Safely copy properties and children
+					-- Safe order (matches the daemon patcher): 1) copy properties
+					-- only, 2) parent the replacement and VERIFY it took, 3) move
+					-- children/joints, 4) only then destroy the original.
 					local copyOk, copyErr = pcall(function()
-						-- Ensure TextureID is formatted if it's changing
-						local formatTex = targetTextureUri
-						if
-							formatTex
-							and not string.match(formatTex, "^%a+://")
-							and string.match(formatTex, "^%d+$")
-						then
-							formatTex = "rbxassetid://" .. formatTex
-						end
-						copyMeshPartInto(obj, newPart, formatTex)
-					end)
-
-					if copyOk then
-						-- Swap parent
-						local parentOk = pcall(function()
-							newPart.Parent = obj.Parent
+						copyMeshPartPropertiesInto(obj, newPart, targetTextureUri)
+						-- Re-apply appearance defensively: the engine can reset
+						-- these during async mesh creation.
+						pcall(function()
+							newPart.Color = obj.Color
+							newPart.Material = obj.Material
+							newPart.Transparency = obj.Transparency
+							newPart.Reflectance = obj.Reflectance
 						end)
-						if parentOk then
-							pcall(function()
-								obj:Destroy()
-							end)
-							replacedCount += 1
-							print(
-								string.format(
-									"[ISpooferMotion] Manual Swap: Recreated MeshPart %s",
-									newPart.Name
-								)
-							)
-						end
+					end)
+					if not copyOk then
+						pcall(function()
+							newPart:Destroy()
+						end)
+						warn(
+							"[ISpooferMotion] Manual Swap: property copy failed for "
+								.. obj.Name
+								.. ": "
+								.. tostring(copyErr)
+						)
+						break
 					end
+					local parentOk = pcall(function()
+						newPart.Parent = oldParent
+					end)
+					if not parentOk or newPart.Parent ~= oldParent then
+						-- Never destroy the original unless the replacement made it
+						-- into the tree.
+						pcall(function()
+							newPart:Destroy()
+						end)
+						warn(
+							"[ISpooferMotion] Manual Swap: could not parent replacement for "
+								.. obj.Name
+						)
+						break
+					end
+					local moveOk, moveErr = pcall(function()
+						moveMeshPartContentsInto(obj, newPart)
+					end)
+					if not moveOk then
+						-- Keep the original rather than risk losing children that did
+						-- not get moved; put it back where it was.
+						pcall(function()
+							obj.Parent = oldParent
+						end)
+						warn(
+							"[ISpooferMotion] Manual Swap: content move failed for "
+								.. obj.Name
+								.. ": "
+								.. tostring(moveErr)
+						)
+						break
+					end
+					pcall(function()
+						obj:Destroy()
+					end)
+					replacedCount += 1
+					print(
+						string.format(
+							"[ISpooferMotion] Manual Swap: Recreated MeshPart %s",
+							newPart.Name
+						)
+					)
 					break
 				else
 					local assignOk, err = pcall(function()
@@ -281,10 +369,22 @@ local function runManualReplacements(text: string)
 		game:GetService("Lighting"),
 	}
 
-	for _, root in ipairs(roots) do
-		for _, descendant in ipairs(root:GetDescendants()) do
-			processInstance(descendant)
+	-- pcall so an unexpected error can never leave the ChangeHistory recording
+	-- open (an open recording breaks Studio undo until restart).
+	local runOk, runErr = pcall(function()
+		for _, root in ipairs(roots) do
+			for _, descendant in ipairs(root:GetDescendants()) do
+				processInstance(descendant)
+			end
 		end
+	end)
+	if recording then
+		pcall(function()
+			ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit)
+		end)
+	end
+	if not runOk then
+		warn("[ISpooferMotion] Manual replacement stopped early: " .. tostring(runErr))
 	end
 
 	print(

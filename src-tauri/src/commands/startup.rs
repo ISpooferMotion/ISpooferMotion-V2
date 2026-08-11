@@ -70,20 +70,57 @@ fn roblox_plugins_dir() -> Option<PathBuf> {
 pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
     log::info!("Starting Roblox plugin sync...");
 
-    // Resolve bundled resource path (Tauri preserves relative '../' structure via '_up_').
-    let resource_path = app
-        .path()
-        .resolve("_up_/dist-plugin/ISpooferMotion.rbxmx", tauri::path::BaseDirectory::Resource)
-        .or_else(|_| {
-            // Fallback for flat resource bundling if it ever changes
-            app.path()
-                .resolve("dist-plugin/ISpooferMotion.rbxmx", tauri::path::BaseDirectory::Resource)
-        })?;
+    // The bundled resource path varies between installed (NSIS) and standalone
+    // (--no-bundle) builds. Try every candidate and use the first that exists.
+    let resource_path: Option<PathBuf> = {
+        let mut candidates: Vec<PathBuf> = Vec::new();
 
-    if !resource_path.exists() {
-        log::warn!("Bundled plugin resource not found at {:?}", resource_path);
+        // Tauri resource paths (installed builds).
+        if let Ok(p) = app
+            .path()
+            .resolve("_up_/dist-plugin/ISpooferMotion.rbxmx", tauri::path::BaseDirectory::Resource)
+        {
+            candidates.push(p);
+        }
+        if let Ok(p) = app
+            .path()
+            .resolve("dist-plugin/ISpooferMotion.rbxmx", tauri::path::BaseDirectory::Resource)
+        {
+            candidates.push(p);
+        }
+
+        // Standalone exe: walk up from the executable looking for dist-plugin/.
+        // Covers target/release/, target/, src-tauri/, tmp_clone/, and project root.
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                for depth in 0..5u32 {
+                    let mut base = dir.to_path_buf();
+                    for _ in 0..depth {
+                        base.push("..");
+                    }
+                    let mut p_tmp = base.clone();
+                    p_tmp.push("tmp_clone");
+                    p_tmp.push("dist-plugin");
+                    p_tmp.push("ISpooferMotion.rbxmx");
+                    candidates.push(p_tmp);
+
+                    let mut p_root = base.clone();
+                    p_root.push("dist-plugin");
+                    p_root.push("ISpooferMotion.rbxmx");
+                    candidates.push(p_root);
+                }
+            }
+        }
+
+        candidates.into_iter().find(|p| p.exists())
+    };
+
+    let Some(resource_path) = resource_path else {
+        log::warn!("Bundled plugin resource not found in any location");
         return Ok(false);
-    }
+    };
+
+    log::info!("Found plugin resource at {:?}", resource_path);
 
     let Some(dest_dir) = roblox_plugins_dir() else {
         log::warn!("Could not determine Roblox plugins directory for this OS.");
@@ -95,7 +132,9 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
         tokio::fs::create_dir_all(&dest_dir).await?;
     }
 
-    // Delete any existing plugins with "ISpooferMotion" in the name to prevent duplicates/conflicts.
+    // Always overwrite: delete any existing ISpooferMotion plugin files so the
+    // fresh copy replaces them. If Studio is holding a read handle the delete
+    // may fail, but tokio::fs::copy can overwrite in-place on Windows anyway.
     if let Ok(mut entries) = tokio::fs::read_dir(&dest_dir).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             if let Some(file_name) = entry.file_name().to_str() {
@@ -109,8 +148,8 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
     let dest_path = dest_dir.join("ISpooferMotion.rbxmx");
 
     match tokio::fs::copy(&resource_path, &dest_path).await {
-        Ok(_) => {
-            log::info!("Successfully copied plugin to {:?}", dest_path);
+        Ok(n) => {
+            log::info!("Copied plugin ({} bytes) to {:?}", n, dest_path);
             Ok(true)
         }
         Err(e) => {

@@ -51,6 +51,8 @@ import { triggerStudioScan } from '../../utils/studioScan';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 import PasteIdsModal from '../modals/PasteIdsModal';
 import ResultsModal from '../modals/ResultsModal';
+import ScanOptionsModal from '../modals/ScanOptionsModal';
+import type { ScanOptions } from '../../utils/studioScan';
 
 import CredentialsSection from './config/CredentialsSection';
 import ExclusionsSection from './config/ExclusionsSection';
@@ -158,6 +160,7 @@ export default function SpoofingView() {
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [resultsModalOpen, setResultsModalOpen] = useState(false);
   const [pasteIdsOpen, setPasteIdsOpen] = useState(false);
+  const [scanOptionsOpen, setScanOptionsOpen] = useState(false);
   const [advancedTab, setAdvancedTab] = useState('upload');
   const initialMount = useRef(true);
   const [audioQuota, setAudioQuota] = useState<AudioQuotaDisplay>({
@@ -429,11 +432,11 @@ export default function SpoofingView() {
     };
   };
 
-  const handleScanStudio = async () => {
+  const handleScanStudio = async (options?: ScanOptions) => {
     setIsScanningStudio(true);
     try {
       setLogs((prev) => appendSpoofingLog(prev, '[INFO] Scanning Roblox Studio for assets...\n'));
-      await triggerStudioScan();
+      await triggerStudioScan(options);
       const { invoke } = await import('@tauri-apps/api/core');
       const snapshots = await invoke<{
         anims: { assets: PluginAsset[] };
@@ -456,10 +459,10 @@ export default function SpoofingView() {
         setLogs((prev) =>
           appendSpoofingLog(
             prev,
-            '[WARN] Studio scan finished, but no assets were found. Are you sure you have the plugin installed and enabled in your place?\n',
+            '[INFO] Studio scan finished. No spoofable assets found in this place.\n',
           ),
         );
-        logIsm('warn', 'Scan finished but no assets found', true);
+        logIsm('info', 'Studio scan finished. No assets found.', true);
       } else {
         setLogs((prev) =>
           appendSpoofingLog(prev, `[SUCCESS] Studio Scan Complete! Found ${totalAssets} assets.\n`),
@@ -1136,7 +1139,7 @@ export default function SpoofingView() {
             itemVariants={itemVariants}
             handleRetryFailedAssets={handleRetryFailedAssets}
 
-            handleScanStudio={handleScanStudio}
+            handleScanStudio={() => setScanOptionsOpen(true)}
             setIsJobPaused={setIsJobPaused}
             handleRetryReplacement={handleRetryReplacement}
             handleRunSpoofer={handleRunSpoofer}
@@ -1151,6 +1154,11 @@ export default function SpoofingView() {
         onRetryFailed={() => void handleRetryFailedAssets()}
       />
       <PasteIdsModal open={pasteIdsOpen} onOpenChange={setPasteIdsOpen} />
+      <ScanOptionsModal
+        open={scanOptionsOpen}
+        onOpenChange={setScanOptionsOpen}
+        onScanStart={(opts) => handleScanStudio(opts)}
+      />
 
       <Dialog
         open={Boolean(pendingQuotaRun)}

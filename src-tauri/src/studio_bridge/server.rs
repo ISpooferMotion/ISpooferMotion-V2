@@ -265,7 +265,13 @@ pub async fn handle_poll(State(state): State<AppState>) -> Json<Value> {
                 guard.request_images = false;
                 guard.request_meshes = false;
                 guard.request_script_refs = false;
-                return Json(serde_json::json!({ "requestAssets": true }));
+                let scan_types = guard.scan_types.clone();
+                let script_scan_mode = guard.script_scan_mode.clone();
+                return Json(serde_json::json!({
+                    "requestAssets": true,
+                    "scanTypes": scan_types,
+                    "scriptScanMode": script_scan_mode,
+                }));
             }
         }
         if start.elapsed() > timeout {
@@ -439,6 +445,23 @@ request_handler!(request_animations, request_animations, last_animations);
 request_handler!(request_images, request_images, last_images);
 request_handler!(request_meshes, request_meshes, last_meshes);
 request_handler!(request_script_refs, request_script_refs, last_script_refs);
+
+/// Receives scan options from the desktop app before a scan starts so the
+/// plugin can pick them up via the /poll response (which types to scan and
+/// the script scan mode).
+pub async fn set_scan_options(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    let mut guard = state.data.write().await;
+    if let Some(types) = body.get("scanTypes").and_then(|v| v.as_array()) {
+        guard.scan_types = types.iter().filter_map(|v| v.as_str().map(String::from)).collect();
+    }
+    if let Some(mode) = body.get("scriptScanMode").and_then(|v| v.as_str()) {
+        guard.script_scan_mode = mode.to_string();
+    }
+    Json(serde_json::json!({"success": true}))
+}
 
 async fn legacy_poll(State(state): State<AppState>, kind: &'static str) -> Json<Value> {
     let timeout = tokio::time::Duration::from_secs(8);
