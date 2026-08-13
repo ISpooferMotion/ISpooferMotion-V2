@@ -8,6 +8,10 @@ export interface TutorialStep {
   title: string;
   body: string;
   /**
+   * Optional hook called when this step becomes active.
+   */
+  onEnter?: () => void;
+  /**
    * When set, the Next button is disabled until this returns true. Lets the
    * tutorial gate progress on real user actions (account added, API key set,
    * place loaded, etc.) rather than just clicking Next.

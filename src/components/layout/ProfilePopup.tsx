@@ -181,7 +181,7 @@ export default function ProfilePopup({ collapsed = false }: { collapsed?: boolea
               })),
               ...discovered.map((u) => ({
                 id: String(u.id),
-                name: u.displayName || u.username || String(u.id),
+                name: u.displayName || u.name || String(u.id),
                 avatarUrl: u.avatarUrl,
               })),
             ];

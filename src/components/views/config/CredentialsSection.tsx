@@ -225,10 +225,7 @@ export default function CredentialsSection() {
                   : t('explorer.disabled')}
             </SelectValue>
           </SelectTrigger>
-          <SelectContent
-            position="popper"
-            className="z-50 bg-bg-surface border border-border shadow-xl rounded-md p-1"
-          >
+          <SelectContent className="z-50 bg-bg-surface border border-border shadow-xl rounded-md p-1">
             <SelectItem value="none" className="text-xs">
               {t('explorer.disabled')}
             </SelectItem>

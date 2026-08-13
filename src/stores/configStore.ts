@@ -16,6 +16,7 @@ export const AppConfigSchema = z.object({
     enablePluginSpoofing: z.boolean().default(false),
     memoryInjectionEnabled: z.boolean().default(false),
     clipboardMonitoring: z.boolean().default(false),
+    forcePlaceIds: z.string().default(''),
     excludedUserIds: z.string().default(''),
     excludedGroupIds: z.string().default(''),
     concurrentSpoofing: z.boolean().default(true),

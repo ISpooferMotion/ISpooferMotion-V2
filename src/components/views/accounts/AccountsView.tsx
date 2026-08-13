@@ -347,7 +347,7 @@ export default function AccountsView() {
                   )}
                   <div className="flex-1 min-w-0">
                     <span className="text-sm font-semibold text-foreground block truncate">
-                      {user.displayName || user.username}
+                      {user.displayName || user.name}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       ID: {user.id} · Auto-detected

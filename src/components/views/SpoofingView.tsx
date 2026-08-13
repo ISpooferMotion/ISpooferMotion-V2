@@ -165,7 +165,6 @@ export default function SpoofingView() {
   const [pasteIdsOpen, setPasteIdsOpen] = useState(false);
   const [scanOptionsOpen, setScanOptionsOpen] = useState(false);
   const [advancedTab, setAdvancedTab] = useState('upload');
-  const initialMount = useRef(true);
   const [audioQuota, setAudioQuota] = useState<AudioQuotaDisplay>({
     status: 'idle',
   });
@@ -1332,7 +1331,11 @@ export default function SpoofingView() {
           />
         </div>
       </div>
-      {/* ResultsModal removed */}
+      <ResultsModal
+        isOpen={resultsModalOpen}
+        onClose={() => setResultsModalOpen(false)}
+        onRetryFailed={() => void handleRetryFailedAssets()}
+      />
       <PasteIdsModal open={pasteIdsOpen} onOpenChange={setPasteIdsOpen} />
       <ScanOptionsModal
         open={scanOptionsOpen}

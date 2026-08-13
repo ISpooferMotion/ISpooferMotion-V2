@@ -12,12 +12,9 @@ import {
 import { memo, useMemo, useState } from 'react';
 
 import type { AppConfig } from '../../../contexts/ConfigContext';
-import { useLanguage } from '../../../contexts/LanguageContext';
 import { useSpooferStore } from '../../../stores/spooferStore';
 import { cn } from '../../../utils/cn';
-import { playRobloxAudio, stopRobloxAudio } from '../../../utils/robloxAudio';
 import type { ParsedAssetRef, RbxInstance } from '../../../utils/robloxPlaceParser/types';
-import { logIsm } from '../../../utils/robloxProfiles';
 import { Button } from '../../ui/button';
 import { Checkbox } from '../../ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
@@ -84,7 +81,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   onInspectAsset?: (asset: ParsedAssetRef) => void;
   activeInspectAssetId?: string | null;
 }) {
-  const { t } = useLanguage();
   const [userExpanded, setExpanded] = useState(initialExpanded);
   // Force-expand while a search is active so matches are visible without the
   // user having to click every folder open.
@@ -137,30 +133,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   const selectedCount = allIds.filter((id) => selectedAssetIds.has(id)).length;
   const isChecked = selectedCount === allIds.length;
 
-  const copyAssetId = async (asset: ParsedAssetRef) => {
-    // Copy to clipboard for manual pasting.
-    const assetId = getAssetId(asset);
-    if (!assetId) return;
-    await navigator.clipboard.writeText(assetId);
-    logIsm('success', `Copied asset id ${assetId}.`);
-  };
-
-  const playAsset = async (asset: ParsedAssetRef) => {
-    // Attempt to play the audio file using Tauri media APIs.
-    const assetId = getAssetId(asset);
-    if (!assetId) {
-      logIsm('warn', 'Cannot play Roblox audio without an asset id.');
-      return;
-    }
-    if (playingAudioId === assetId) {
-      stopRobloxAudio();
-      return;
-    }
-    await playRobloxAudio(assetId, config).catch((error) => {
-      logIsm('error', `Failed to play Roblox audio ${assetId}: ${String(error)}`);
-    });
-  };
-
   const getTypeIconSrc = (asset: ParsedAssetRef) => {
     if (asset.type === 'animation' || asset.type === 'raw_keyframe_sequence')
       return '/icons/Animation.png';
@@ -185,21 +157,12 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
     // Compact single-line row item: [Icon] + [Asset Name] + optional [Lock]
     const assetId = getAssetId(asset);
     const pinnedPlaceId = assetId ? assetForcePlaceIds[assetId] : undefined;
-    const isSound = asset.type === 'audio';
-    const isAnimation = asset.type === 'animation';
-    const isMesh = asset.type === 'mesh';
-    const isImage = asset.type === 'image';
     const instanceCount = (asset as ParsedAssetRef & { instanceCount?: number }).instanceCount;
     const isInspected = activeInspectAssetId === assetId;
 
     const handleRowClick = () => {
       setActiveInspectAsset(asset);
       setIsInspectorOpen(true);
-    };
-
-    const handleCheckboxClick = (event: React.MouseEvent) => {
-      event.stopPropagation();
-      toggleAsset(assetId, !selectedAssetIds.has(assetId));
     };
 
     return (

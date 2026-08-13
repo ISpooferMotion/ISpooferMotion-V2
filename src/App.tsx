@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense } from 'react';
 
 import Sidebar from './components/layout/Sidebar';
 import Titlebar from './components/layout/Titlebar';
@@ -10,9 +10,6 @@ import { TutorialGate } from './components/tutorial/TutorialGate';
 import { useConfig } from './contexts/ConfigContext';
 import { useLanguage } from './contexts/LanguageContext';
 import { useAppInitialization } from './hooks/useAppInitialization';
-import { useSpooferStore } from './stores/spooferStore';
-import { isBrowserPreview } from './utils/browserTauriMock';
-import { buildMockRootInstances, MOCK_PLACE_FILE_NAME } from './utils/mockSeed';
 
 const ActivityView = lazy(() => import('./components/views/ActivityView'));
 const AssetExplorer = lazy(() => import('./components/views/AssetExplorer'));

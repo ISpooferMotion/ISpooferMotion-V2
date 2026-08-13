@@ -62,7 +62,6 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setSpoofCurrentCount,
         setSpoofTotalCount,
         setSpoofStartTime,
-        clearAssetStatuses,
         setAssetStatus,
       } = useSpooferStore.getState();
 
