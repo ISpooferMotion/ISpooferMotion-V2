@@ -65,11 +65,17 @@ describe('DebugConsole', () => {
 
     expect(screen.getByText('debug.title')).toBeInTheDocument();
 
-    // Check if messages render
+    // Check if first-line messages render in collapsed rows
     expect(screen.getByText('Test message')).toBeInTheDocument();
     expect(screen.getByText('Error message')).toBeInTheDocument();
 
-    // Check if JsonViewer is rendered for payload
+    // Click the error log row to expand it (payload is hidden when collapsed)
+    const errorRow = screen
+      .getByText('Error message')
+      .closest('div[onclick], div[class*="rounded border"]');
+    fireEvent.click(errorRow!);
+
+    // Check if JsonViewer is rendered for payload after expanding
     expect(screen.getByTestId('json-viewer')).toBeInTheDocument();
     expect(screen.getByText('{"foo":"bar"}')).toBeInTheDocument();
   });

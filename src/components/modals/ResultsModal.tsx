@@ -55,7 +55,7 @@ export default function ResultsModal({
   const { skipped, failed } = useMemo(() => {
     const skipped: typeof lastAssetResults = [];
     const failed: typeof lastAssetResults = [];
-    for (const r of lastAssetResults) {
+    for (const r of lastAssetResults || []) {
       if (r.success === false) failed.push(r);
       else if (r.skipped) skipped.push(r);
     }

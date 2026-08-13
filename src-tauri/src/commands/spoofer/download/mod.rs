@@ -44,8 +44,24 @@ async fn run_discovery_and_extend_urls(
     asset_id: &str,
     asset_type: Option<&str>,
     cookie_header: &str,
+    transfer_id: &str,
+    name: &str,
     candidate_urls: &mut Vec<String>,
 ) {
+    emit_transfer_update(
+        app,
+        TransferUpdate {
+            id: transfer_id.to_string(),
+            name: Some(name.to_string()),
+            status: Some("discovering_usage".into()),
+            direction: Some("download".into()),
+            progress: Some(0),
+            error: None,
+            original_asset_id: Some(asset_id.to_string()),
+            size: None,
+            new_asset_id: None,
+        },
+    );
     let usage_place_ids = attempt_asset_usage_place_id_discovery(asset_id, cookie_header).await;
     if !usage_place_ids.is_empty() {
         emit_spoofer_log(
@@ -65,6 +81,20 @@ async fn run_discovery_and_extend_urls(
         }
     }
 
+    emit_transfer_update(
+        app,
+        TransferUpdate {
+            id: transfer_id.to_string(),
+            name: Some(name.to_string()),
+            status: Some("discovering_graph".into()),
+            direction: Some("download".into()),
+            progress: Some(0),
+            error: None,
+            original_asset_id: Some(asset_id.to_string()),
+            size: None,
+            new_asset_id: None,
+        },
+    );
     let creator_place_ids = attempt_social_graph_place_id_discovery(asset_id, cookie_header).await;
     if !creator_place_ids.is_empty() {
         emit_spoofer_log(
@@ -124,7 +154,7 @@ pub async fn download_animation_asset_with_progress(
         TransferUpdate {
             id: transfer_id.clone(),
             name: Some(name.clone()),
-            status: Some("processing".into()),
+            status: Some("resolving_location".into()),
             direction: Some("download".into()),
             progress: Some(0),
             error: None,
@@ -151,6 +181,12 @@ pub async fn download_animation_asset_with_progress(
         push_unique_url(&mut candidate_urls, url);
     }
 
+    // 1. Direct URLs with place IDs (fastest path: succeeds on request #1 in ~100ms)
+    for url in build_direct_asset_download_urls(&asset_id, asset_type.as_deref(), &place_ids) {
+        push_unique_url(&mut candidate_urls, url);
+    }
+
+    // 2. Fall back to location API resolution if direct URL didn't hit
     for place_id in place_ids.iter().map(String::as_str).map(Some).chain(std::iter::once(None)) {
         if let Some(resolved_url) =
             resolve_asset_id_location(&app, &client, &asset_id, &cookie_header, place_id).await?
@@ -159,8 +195,22 @@ pub async fn download_animation_asset_with_progress(
         }
     }
 
-    for url in build_direct_asset_download_urls(&asset_id, asset_type.as_deref(), &place_ids) {
-        push_unique_url(&mut candidate_urls, url);
+    // Discovery strategy:
+    // If no forced place ID was provided, run discovery upfront to populate candidate place URLs.
+    // If place_ids is provided, use direct candidate URLs first and only run discovery if direct URLs fail.
+    let mut discovery_attempted = false;
+    if place_ids.is_empty() {
+        run_discovery_and_extend_urls(
+            &app,
+            &asset_id,
+            asset_type.as_deref(),
+            &cookie_header,
+            &transfer_id,
+            &name,
+            &mut candidate_urls,
+        )
+        .await;
+        discovery_attempted = true;
     }
 
     for cdn_url in build_cdn_fallback_urls(&asset_id).await {
@@ -184,26 +234,6 @@ pub async fn download_animation_asset_with_progress(
             );
             push_unique_url(&mut candidate_urls, cdn_url);
         }
-    }
-
-    // Discovery strategy:
-    // - place_ids empty: run discovery upfront (there's no other source of URLs).
-    // - place_ids supplied: try the direct URLs first for the fast path; only
-    //   fall back to discovery below if every direct URL fails. That preserves
-    //   the "supplied place_id works? finish in ~1s" perf win while still
-    //   recovering when the caller's place_id doesn't have permission to
-    //   serve a given asset.
-    let mut discovery_attempted = false;
-    if place_ids.is_empty() {
-        run_discovery_and_extend_urls(
-            &app,
-            &asset_id,
-            asset_type.as_deref(),
-            &cookie_header,
-            &mut candidate_urls,
-        )
-        .await;
-        discovery_attempted = true;
     }
 
     let universe_id = if let Some(pid) = place_ids.first() {
@@ -247,6 +277,25 @@ pub async fn download_animation_asset_with_progress(
             let candidate_url_count = candidate_urls.len();
             i += 1;
             let download_url = &candidate_urls[candidate_idx];
+
+            emit_transfer_update(
+                &app,
+                TransferUpdate {
+                    id: transfer_id.clone(),
+                    name: Some(name.clone()),
+                    status: Some(format!(
+                        "downloading:{}/{}",
+                        candidate_idx + 1,
+                        candidate_url_count
+                    )),
+                    direction: Some("download".into()),
+                    progress: Some(0),
+                    error: None,
+                    original_asset_id: Some(asset_id.clone()),
+                    size: None,
+                    new_asset_id: None,
+                },
+            );
 
             // Periodic heartbeat so users don't think a slow asset has hung. Only
             // fires past the first handful so short jobs stay quiet.
@@ -341,6 +390,20 @@ pub async fn download_animation_asset_with_progress(
                     {
                         Ok(mut res) => {
                             res.resolved_place_id = request_place_id.clone();
+                            emit_transfer_update(
+                                &app,
+                                TransferUpdate {
+                                    id: transfer_id.clone(),
+                                    name: Some(name.clone()),
+                                    status: Some("done".into()),
+                                    direction: Some("download".into()),
+                                    progress: Some(100),
+                                    error: None,
+                                    original_asset_id: Some(asset_id.clone()),
+                                    size: None,
+                                    new_asset_id: None,
+                                },
+                            );
                             return Ok(res);
                         }
                         Err(e) => {
@@ -520,6 +583,8 @@ pub async fn download_animation_asset_with_progress(
                 &asset_id,
                 asset_type.as_deref(),
                 &cookie_header,
+                &transfer_id,
+                &name,
                 &mut candidate_urls,
             )
             .await;
@@ -601,16 +666,18 @@ pub async fn download_animation_asset_with_progress(
             " No Place ID was available for place-scoped asset delivery; set Force Place ID(s) or scan a published Studio place.",
         );
     }
+    let failure_stage =
+        if candidate_urls.is_empty() { "failed_discovery" } else { "failed_download" };
     emit_transfer_update(
         &app,
         TransferUpdate {
             id: transfer_id.clone(),
-            status: Some("error".into()),
+            status: Some(failure_stage.into()),
             error: Some(last_error.clone()),
             progress: Some(0),
-            name: None,
-            original_asset_id: None,
-            direction: None,
+            name: Some(name),
+            original_asset_id: Some(asset_id),
+            direction: Some("download".into()),
             size: None,
             new_asset_id: None,
         },

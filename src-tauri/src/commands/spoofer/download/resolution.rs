@@ -196,60 +196,14 @@ pub fn build_direct_asset_download_urls(
         );
         push_unique_url(
             &mut urls,
-            build_asset_download_url(asset_id, true, Some(pid), None, expected, false),
-        );
-        push_unique_url(
-            &mut urls,
-            build_asset_download_url(asset_id, false, Some(pid), None, expected, true),
-        );
-        push_unique_url(
-            &mut urls,
             build_asset_download_url(asset_id, false, Some(pid), Some(pid), expected, true),
         );
     }
 
-    push_unique_url(
-        &mut urls,
-        build_asset_download_url(asset_id, false, None, None, expected, false),
-    );
-    push_unique_url(
-        &mut urls,
-        build_asset_download_url(asset_id, true, None, None, expected, false),
-    );
-    push_unique_url(
-        &mut urls,
-        build_asset_download_url(asset_id, false, None, None, expected, true),
-    );
-    if expected.is_some() {
-        for pid in place_ids {
-            push_unique_url(
-                &mut urls,
-                build_asset_download_url(asset_id, false, Some(pid), None, None, false),
-            );
-            push_unique_url(
-                &mut urls,
-                build_asset_download_url(asset_id, true, Some(pid), None, None, false),
-            );
-            push_unique_url(
-                &mut urls,
-                build_asset_download_url(asset_id, false, Some(pid), None, None, true),
-            );
-            push_unique_url(
-                &mut urls,
-                build_asset_download_url(asset_id, false, Some(pid), Some(pid), None, true),
-            );
-        }
+    if place_ids.is_empty() {
         push_unique_url(
             &mut urls,
-            build_asset_download_url(asset_id, false, None, None, None, false),
-        );
-        push_unique_url(
-            &mut urls,
-            build_asset_download_url(asset_id, true, None, None, None, false),
-        );
-        push_unique_url(
-            &mut urls,
-            build_asset_download_url(asset_id, false, None, None, None, true),
+            build_asset_download_url(asset_id, false, None, None, expected, false),
         );
     }
 
@@ -529,7 +483,7 @@ pub async fn get_games_for_creator(
     let mut results: Vec<String> = Vec::new();
 
     let build_url = |filter: u8| -> String {
-        if creator_type == "User" {
+        if creator_type.eq_ignore_ascii_case("user") {
             format!("https://games.roblox.com/v2/users/{creator_id}/games?accessFilter={filter}&limit=50")
         } else {
             format!("https://games.roblox.com/v2/groups/{creator_id}/games?accessFilter={filter}&limit=50")
@@ -596,7 +550,6 @@ pub async fn attempt_social_graph_place_id_discovery(
             return cached.clone();
         }
     }
-    let mut discovered_place_ids = HashSet::new();
     let client = crate::utils::get_http_client();
 
     // Auth user is stable for the whole session — resolve once per cookie.
@@ -640,12 +593,21 @@ pub async fn attempt_social_graph_place_id_discovery(
             if resp.status().is_success() {
                 if let Ok(data) = resp.json::<serde_json::Value>().await {
                     if let Some(creator) = data.get("Creator") {
-                        if let (Some(t), Some(id)) = (
-                            creator.get("CreatorType").and_then(|t| t.as_str()),
-                            creator.get("CreatorTargetId").and_then(serde_json::Value::as_u64),
-                        ) {
-                            c_type = t.to_string();
-                            c_id = id;
+                        let extracted_type = creator
+                            .get("CreatorType")
+                            .or_else(|| creator.get("Type"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("User");
+                        let extracted_id = creator
+                            .get("CreatorTargetId")
+                            .or_else(|| creator.get("TargetId"))
+                            .or_else(|| creator.get("Id"))
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0);
+
+                        if extracted_id != 0 {
+                            c_type = extracted_type.to_string();
+                            c_id = extracted_id;
                         }
                     }
                 }
@@ -682,7 +644,7 @@ pub async fn attempt_social_graph_place_id_discovery(
         }
     }
 
-    if creator_type == "User" && creator_id != 1 {
+    if creator_type.eq_ignore_ascii_case("user") && creator_id != 1 {
         let groups = get_groups_for_user(creator_id, cookie_header).await;
         let mut seen_owners = HashSet::new();
         if let Some(uid) = auth_user_id {
@@ -706,7 +668,7 @@ pub async fn attempt_social_graph_place_id_discovery(
                 queue_games_fetch("User", fid);
             }
         }
-    } else if creator_type == "Group" {
+    } else if creator_type.eq_ignore_ascii_case("group") {
         // Walk from the group back to the human behind it. Assets owned by a
         // group often live in the group owner's personal places (or in other
         // groups they also run), so adding the owner's User + Group games to
@@ -741,11 +703,18 @@ pub async fn attempt_social_graph_place_id_discovery(
         }
     }
 
-    // Spawn every graph query fully in parallel. Bounding this with
-    // buffer_unordered(3) turned a ~1s wall time into ~10s for the first
-    // asset per creator, since typical crawls issue ~30 queries against
-    // independent Roblox endpoints that don't share a rate-limit bucket.
-    // Matches V1's join_all approach.
+    // First: get the asset creator's own games directly so they are always prioritized first.
+    let mut ordered_places: Vec<String> = Vec::new();
+    let mut seen_places = HashSet::new();
+
+    let creator_places = get_games_for_creator(&creator_type, creator_id, cookie_header).await;
+    for place in creator_places {
+        if seen_places.insert(place.clone()) {
+            ordered_places.push(place);
+        }
+    }
+
+    // Spawn social graph queries for remaining candidates (groups, friends, auth user).
     let cookie_header_str = cookie_header.to_string();
     let mut futures = Vec::with_capacity(tasks.len());
     for (ct, cid) in tasks {
@@ -755,19 +724,20 @@ pub async fn attempt_social_graph_place_id_discovery(
     let results = futures::future::join_all(futures).await;
     for places in results.into_iter().flatten() {
         for place in places {
-            discovered_place_ids.insert(place);
-
-            if discovered_place_ids.len() >= 50 {
-                let out: Vec<String> = discovered_place_ids.into_iter().collect();
-                social_graph_cache().insert(creator_id, out.clone());
-                return out;
+            if seen_places.insert(place.clone()) {
+                ordered_places.push(place);
             }
+            if ordered_places.len() >= 50 {
+                break;
+            }
+        }
+        if ordered_places.len() >= 50 {
+            break;
         }
     }
 
-    let out: Vec<String> = discovered_place_ids.into_iter().collect();
-    social_graph_cache().insert(creator_id, out.clone());
-    out
+    social_graph_cache().insert(creator_id, ordered_places.clone());
+    ordered_places
 }
 
 // Query the Internet Archive Wayback Machine for historical download URLs.

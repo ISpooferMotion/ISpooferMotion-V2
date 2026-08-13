@@ -171,29 +171,20 @@ local function coercePropertyValue(obj: Instance, property: string, value: any):
 		if type(currentValue) == "number" then
 			local assetId = normalizeAssetId(value)
 			return if assetId then tonumber(assetId) else tonumber(value) or value
+		elseif typeof(currentValue) == "ContentId" or typeof(currentValue) == "string" then
+			return toAssetUri(value) or tostring(value)
 		elseif typeof(currentValue) == "Content" then
 			local contentObj = buildContentValue(value)
 			if contentObj ~= nil then
 				return contentObj
 			end
-			-- Content constructors missing -- fall through so the property-
-			-- name path can try a raw URI string as a last resort.
-		elseif typeof(currentValue) == "ContentId" then
-			-- ContentId properties (e.g. Animation.AnimationId on modern Roblox)
-			-- accept a plain rbxassetid:// string but reject a Content object,
-			-- which is what the Content branch above would have produced.
 			return toAssetUri(value) or tostring(value)
 		end
 	end
 
-	-- Read failed OR the type didn't match a known encoder. Guess from the
-	-- property name so we don't silently no-op an assignment to a Content
-	-- property that reads back as `nil` or errors in this Studio context.
+	-- Read failed OR the type didn't match a known encoder. Return URI string
+	-- for content properties so Roblox Studio never throws ContentId vs Content errors.
 	if CONTENT_PROPERTIES[property] then
-		local contentObj = buildContentValue(value)
-		if contentObj ~= nil then
-			return contentObj
-		end
 		return toAssetUri(value) or tostring(value)
 	end
 

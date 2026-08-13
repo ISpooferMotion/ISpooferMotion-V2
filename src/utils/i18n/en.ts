@@ -58,6 +58,8 @@ export const en: TranslationTree = {
     account: 'Account',
     advanced: 'Advanced',
     activity: 'Activity',
+    accounts: 'Accounts',
+    console: 'Console',
   },
 
   spoof: {
@@ -76,6 +78,8 @@ export const en: TranslationTree = {
     downloadPath: 'Download Path',
     enableSpoofing: 'Enable Spoofing',
     runSpoofer: 'Run Spoofer',
+    spoofSelected: 'Spoof Selected',
+    spoofAllAssets: 'Spoof All Assets ({count})',
     retryReplacing: 'Retry Replacing',
     output: 'Output',
     outputPlaceholder: 'Output will appear here...',
@@ -266,6 +270,8 @@ export const en: TranslationTree = {
     save: 'Save',
     and: 'and',
     apply: 'Apply',
+    clear: 'Clear',
+    areYouSure: 'Are you sure?',
     close: 'Close',
     browse: 'Browse',
     hex: 'HEX',

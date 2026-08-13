@@ -328,18 +328,6 @@ pub async fn get_place_ids_for_asset_creator(
         fast_ids
     };
 
-    if let Some(studio_place_id) = crate::studio_bridge::bridge_data()
-        .and_then(|d| d.try_read().ok().and_then(|g| g.studio_place_id.clone()))
-    {
-        if !studio_place_id.is_empty()
-            && studio_place_id != "0"
-            && studio_place_id.chars().all(|c| c.is_ascii_digit())
-            && !place_ids.contains(&studio_place_id)
-        {
-            place_ids.insert(0, studio_place_id);
-        }
-    }
-
     if place_ids.is_empty() {
         place_ids.push("1818".to_string());
     }
@@ -744,7 +732,7 @@ pub async fn get_place_id_from_creator(
         });
     }
 
-    let mut place_ids: Vec<String> = root_places.into_iter().map(|(id, _)| id).collect();
+    let place_ids: Vec<String> = root_places.into_iter().map(|(id, _)| id).collect();
 
     if !place_ids.is_empty() {
         if let Some(ref path) = cache_path {
@@ -760,18 +748,6 @@ pub async fn get_place_id_from_creator(
                     let _ = tokio::fs::write(path, new_data).await;
                 }
             }
-        }
-    }
-
-    if let Some(studio_place_id) = crate::studio_bridge::bridge_data()
-        .and_then(|d| d.try_read().ok().and_then(|g| g.studio_place_id.clone()))
-    {
-        if !studio_place_id.is_empty()
-            && studio_place_id != "0"
-            && studio_place_id.chars().all(|c| c.is_ascii_digit())
-            && !place_ids.contains(&studio_place_id)
-        {
-            place_ids.insert(0, studio_place_id);
         }
     }
 
@@ -1015,4 +991,128 @@ pub async fn search_global_places(
 
     let data: GlobalPlacesResponse = resp.json().await?;
     Ok(data)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn discover_asset_place_id(
+    app: AppHandle,
+    asset_id: String,
+    cookie: String,
+    forced_place_id: Option<String>,
+) -> crate::error::Result<Option<String>> {
+    let cookie_header = build_roblox_cookie_header(&cookie);
+    if cookie_header.is_empty() {
+        return Err("Missing ROBLOSECURITY cookie".into());
+    }
+
+    let client = crate::utils::get_http_client();
+
+    // 0. If a pinned forced_place_id is provided, test it first
+    if let Some(ref pid) = forced_place_id {
+        if !pid.is_empty() && pid != "1818" {
+            let loc = crate::commands::spoofer::download::resolve_asset_id_location(
+                &app,
+                &client,
+                &asset_id,
+                &cookie_header,
+                Some(pid),
+            )
+            .await
+            .unwrap_or(None);
+
+            if loc.is_some() {
+                return Ok(Some(pid.clone()));
+            }
+        }
+    }
+
+    // 1. Try creator places & asset-to-universe
+    let candidates = get_place_ids_for_asset_creator(
+        app.clone(),
+        asset_id.clone(),
+        cookie.clone(),
+        Some(20),
+        None,
+    )
+    .await
+    .unwrap_or_default();
+
+    let client = crate::utils::get_http_client();
+    for pid in &candidates {
+        if pid.is_empty() || pid == "1818" {
+            continue;
+        }
+        let loc = crate::commands::spoofer::download::resolve_asset_id_location(
+            &app,
+            &client,
+            &asset_id,
+            &cookie_header,
+            Some(pid),
+        )
+        .await
+        .unwrap_or(None);
+
+        if loc.is_some() {
+            return Ok(Some(pid.clone()));
+        }
+    }
+
+    // 2. Try Asset Usage discovery
+    let usage_pids = crate::commands::spoofer::download::attempt_asset_usage_place_id_discovery(
+        &asset_id,
+        &cookie_header,
+    )
+    .await;
+
+    for pid in &usage_pids {
+        if pid.is_empty() || pid == "1818" {
+            continue;
+        }
+        let loc = crate::commands::spoofer::download::resolve_asset_id_location(
+            &app,
+            &client,
+            &asset_id,
+            &cookie_header,
+            Some(pid),
+        )
+        .await
+        .unwrap_or(None);
+
+        if loc.is_some() {
+            return Ok(Some(pid.clone()));
+        }
+    }
+
+    // 3. Try Social Graph discovery
+    let social_pids = crate::commands::spoofer::download::attempt_social_graph_place_id_discovery(
+        &asset_id,
+        &cookie_header,
+    )
+    .await;
+
+    for pid in &social_pids {
+        if pid.is_empty() || pid == "1818" {
+            continue;
+        }
+        let loc = crate::commands::spoofer::download::resolve_asset_id_location(
+            &app,
+            &client,
+            &asset_id,
+            &cookie_header,
+            Some(pid),
+        )
+        .await
+        .unwrap_or(None);
+
+        if loc.is_some() {
+            return Ok(Some(pid.clone()));
+        }
+    }
+
+    if let Some(first) = candidates.into_iter().find(|p| !p.is_empty() && p != "1818") {
+        return Ok(Some(first));
+    }
+
+    Ok(None)
 }

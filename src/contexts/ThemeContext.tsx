@@ -15,14 +15,21 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const hasStorage =
+    typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function';
+
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    const saved = localStorage.getItem('theme');
+    const saved = hasStorage ? localStorage.getItem('theme') : null;
     if (saved === 'light' || saved === 'dark') return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
   });
 
   const [accentColor, setAccentColor] = useState<string>(() => {
-    return localStorage.getItem('accentColor') || '#10b981';
+    return (hasStorage ? localStorage.getItem('accentColor') : null) || '#10b981';
   });
 
   // Sync theme mode to DOM
@@ -35,14 +42,18 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.classList.remove('light');
       root.classList.add('dark');
     }
-    localStorage.setItem('theme', themeMode);
+    if (hasStorage && typeof localStorage.setItem === 'function') {
+      localStorage.setItem('theme', themeMode);
+    }
   }, [themeMode]);
 
   // Sync accent color to DOM
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty('--primary', accentColor);
-    localStorage.setItem('accentColor', accentColor);
+    if (hasStorage && typeof localStorage.setItem === 'function') {
+      localStorage.setItem('accentColor', accentColor);
+    }
     invoke('set_plugin_theme_accent', { color: accentColor }).catch(console.error);
   }, [accentColor]);
 

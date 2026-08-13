@@ -35,6 +35,11 @@ input[type='number'] {
   }
 }
 
+.animate-spin {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
 .theme-range {
   width: 100%;
   height: 18px;

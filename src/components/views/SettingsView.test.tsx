@@ -18,9 +18,25 @@ vi.mock('../../contexts/ConfigContext', () => ({
   useConfig: vi.fn(() => ({
     config: {
       ui: { theme: 'dark', language: 'en' },
-      advanced: { autoCookieStudio: false, autoCookieBrowser: false },
+      advanced: {
+        autoCookieStudio: false,
+        autoCookieBrowser: false,
+        maxConcurrency: 10,
+        maxDownloadConcurrency: 5,
+        excludedUserIds: '',
+        excludedGroupIds: '',
+        concurrentSpoofing: true,
+        concurrentDownloading: true,
+        enableArchiveRecovery: false,
+        proxyUrl: '',
+      },
       general: { desktopNotifications: false },
-      debug: { debugMode: false },
+      debug: { debugMode: false, enableCache: true },
+      spoofing: {
+        preserveMetadata: true,
+        downloadOnly: false,
+        uploadTypes: ['animation', 'audio', 'image', 'mesh', 'script_ref'],
+      },
     },
     updateConfig: vi.fn(),
   })),
@@ -30,12 +46,19 @@ vi.mock('../../stores/configStore', () => ({
   useConfigStore: vi.fn(() => ({})),
 }));
 
-// Mock ResizeObserver for Lenis
+// Mock ResizeObserver and IntersectionObserver for Lenis/Scrollspy
 globalThis.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}
   disconnect() {}
 };
+
+globalThis.IntersectionObserver = class IntersectionObserver {
+  constructor() {}
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as any;
 
 describe('SettingsView', () => {
   const mockT = vi.fn((key) => key);
@@ -47,6 +70,6 @@ describe('SettingsView', () => {
 
   it('renders settings sections correctly', () => {
     render(<SettingsView />);
-    expect(screen.getByText('settings.appearance')).toBeInTheDocument();
+    expect(screen.getAllByText('settings.appearance')[0]).toBeInTheDocument();
   });
 });

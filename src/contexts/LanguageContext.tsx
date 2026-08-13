@@ -10,14 +10,18 @@ interface LanguageState {
 
 const getInitialLang = () => {
   // Use previously saved language if available.
-  const savedLang = localStorage.getItem('language');
+  const hasStorage =
+    typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function';
+  const savedLang = hasStorage ? localStorage.getItem('language') : null;
   if (savedLang) return savedLang;
 
   // Guess language from browser, fallback to English if unsupported.
-  const systemLang = navigator.language.split('-')[0];
+  const systemLang = navigator.language ? navigator.language.split('-')[0] : 'en';
   const supported = ['en', 'es', 'ru', 'fr'];
   if (supported.includes(systemLang)) {
-    localStorage.setItem('language', systemLang);
+    if (hasStorage && typeof localStorage.setItem === 'function') {
+      localStorage.setItem('language', systemLang);
+    }
     return systemLang;
   }
   return 'en';
@@ -32,7 +36,9 @@ const getInitialLang = () => {
 export const useLanguage = create<LanguageState>((set, get) => ({
   lang: getInitialLang(),
   setLang: (newLang: string) => {
-    localStorage.setItem('language', newLang);
+    if (typeof localStorage !== 'undefined' && typeof localStorage.setItem === 'function') {
+      localStorage.setItem('language', newLang);
+    }
     set({ lang: newLang });
   },
   t: (keyPath: string) => getTranslation(get().lang, keyPath),

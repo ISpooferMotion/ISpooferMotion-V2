@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Globe } from 'lucide-react';
+import { Palette } from 'lucide-react';
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { HexAlphaColorPicker } from 'react-colorful';
 import { createPortal } from 'react-dom';
@@ -8,6 +8,7 @@ import { useLanguage } from '../../../contexts/LanguageContext';
 import { useThemeAccent } from '../../../contexts/ThemeContext';
 import { cn } from '../../../utils/cn';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 
 export default function AppearanceCard() {
@@ -62,23 +63,23 @@ export default function AppearanceCard() {
   );
 
   return (
-    <Card>
-      <CardHeader className="pb-4">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Globe size={18} className="text-primary" />
+    <Card className="bg-bg-surface/50 border border-border-subtle shadow-sm overflow-hidden">
+      <CardHeader className="pb-3 border-b border-border-subtle/40 bg-bg-base/20">
+        <CardTitle className="text-base font-bold flex items-center gap-2 text-text-primary">
+          <Palette size={16} className="text-primary" />
           {t('settings.appearance')}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="flex items-center justify-between w-full">
-          <span className="text-sm font-medium text-foreground">{t('settings.theme')}</span>
+      <CardContent className="space-y-3 p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
+          <Label className="text-sm font-semibold text-text-primary">{t('settings.theme')}</Label>
           <div className="flex bg-card border border-border rounded-md p-1 overflow-hidden w-40 shrink-0 shadow-sm">
             {(['light', 'dark'] as const).map((tMode) => (
               <button
                 key={tMode}
                 onClick={() => setThemeMode(tMode)}
                 className={cn(
-                  'flex-1 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center justify-center gap-2',
+                  'flex-1 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center justify-center gap-1.5',
                   themeMode === tMode
                     ? 'bg-foreground text-background shadow-sm'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted',
@@ -92,10 +93,12 @@ export default function AppearanceCard() {
         </div>
 
         <div className="relative">
-          <div className="flex items-center justify-between w-full">
-            <span className="text-sm font-medium text-foreground">{t('settings.accentColor')}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
+            <Label className="text-sm font-semibold text-text-primary">
+              {t('settings.accentColor')}
+            </Label>
             <div
-              className="w-8 h-8 rounded-full border border-border cursor-pointer shadow-sm transition-transform hover:scale-105"
+              className="w-7 h-7 rounded-full border border-border cursor-pointer shadow-sm transition-transform hover:scale-105 shrink-0"
               style={{ backgroundColor: accentColor }}
               onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
@@ -155,15 +158,20 @@ export default function AppearanceCard() {
           )}
         </div>
 
-        <div className="flex items-center justify-between w-full">
-          <span className="text-sm font-medium text-foreground">{t('settings.language')}</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
+          <Label className="text-sm font-semibold text-text-primary">
+            {t('settings.language')}
+          </Label>
           <Select value={lang} onValueChange={(val) => setLang(val as any)}>
-            <SelectTrigger className="w-35">
+            <SelectTrigger className="w-40 h-8 text-xs">
               <SelectValue placeholder="Language" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              position="popper"
+              className="z-50 bg-bg-surface border border-border shadow-xl rounded-md p-1"
+            >
               {Object.entries(langOptions).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
+                <SelectItem key={value} value={value} className="text-xs">
                   {label}
                 </SelectItem>
               ))}

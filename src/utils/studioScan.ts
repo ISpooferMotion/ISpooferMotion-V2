@@ -52,8 +52,22 @@ export interface ScanOptions {
 }
 
 export async function triggerStudioScan(options?: ScanOptions): Promise<void> {
-  const { findPluginBridgePort, DEFAULT_PLUGIN_PORT } = await import('./pluginBridge');
-  const port = (await findPluginBridgePort()) || DEFAULT_PLUGIN_PORT;
+  const { findPluginBridgePort } = await import('./pluginBridge');
+  const activePort = await findPluginBridgePort();
+
+  if (!activePort) {
+    // Immediate process & plugin check before attempting scan or polling
+    const pid = await invoke<number | null>('find_studio_process').catch(() => null);
+    if (!pid) {
+      throw new Error('Please open Roblox Studio to connect the plugin.');
+    } else {
+      throw new Error(
+        'Roblox Studio is open, but the ISpooferMotion plugin is not connected. Please enable the plugin in Studio.',
+      );
+    }
+  }
+
+  const port = activePort;
 
   // Push scan options to the backend so the plugin picks them up via /poll.
   if (options) {

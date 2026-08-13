@@ -1,34 +1,65 @@
-import { Check, Filter, FolderOpen, Search, X } from 'lucide-react';
+import {
+  Box,
+  Check,
+  Film,
+  Filter,
+  FolderOpen,
+  Image as ImageIcon,
+  Info,
+  Search,
+  Volume2,
+  X,
+} from 'lucide-react';
 import { useLanguage } from '../../../contexts/LanguageContext';
+import { useSpooferStore } from '../../../stores/spooferStore';
 import { cn } from '../../../utils/cn';
 import { Button } from '../../ui/button';
-import { Command, CommandGroup, CommandItem, CommandList } from '../../ui/command';
 import { Input } from '../../ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover';
 
 export const ASSET_TYPE_OPTIONS = [
-  { value: 'audio', label: 'Audio' },
-  { value: 'image', label: 'Images' },
-  { value: 'animation', label: 'Animations' },
-  { value: 'mesh', label: 'Meshes' },
+  { value: 'audio', label: 'Audio', icon: Volume2 },
+  { value: 'image', label: 'Images', icon: ImageIcon },
+  { value: 'animation', label: 'Animations', icon: Film },
+  { value: 'mesh', label: 'Meshes', icon: Box },
 ];
 
 export interface ExplorerToolbarProps {
   loadedFileName: string | null;
-  activeAssetFilters: string[];
-  setActiveAssetFilters: (filters: string[]) => void;
+  activeAssetFilters?: string[];
+  setActiveAssetFilters?: (filters: string[]) => void;
   searchQuery?: string;
   setSearchQuery?: (query: string) => void;
+  isInspectorOpen?: boolean;
+  setIsInspectorOpen?: (open: boolean) => void;
 }
 
+/**
+ * De-cluttered Middle Panel Explorer Toolbar.
+ *
+ * Provides file information, a flexible search field, compact filter dropdown,
+ * and inspector toggle button. Lock and Clipboard buttons are consolidated into
+ * the Right Inspector Panel header.
+ */
 export function ExplorerToolbar({
   loadedFileName,
-  activeAssetFilters,
-  setActiveAssetFilters,
-  searchQuery,
-  setSearchQuery,
+  activeAssetFilters: propsActiveAssetFilters,
+  setActiveAssetFilters: propsSetActiveAssetFilters,
+  searchQuery: propsSearchQuery,
+  setSearchQuery: propsSetSearchQuery,
+  isInspectorOpen = true,
+  setIsInspectorOpen,
 }: ExplorerToolbarProps) {
   const { t } = useLanguage();
+  const storeSearchQuery = useSpooferStore((s) => s.searchQuery);
+  const storeSetSearchQuery = useSpooferStore((s) => s.setSearchQuery);
+  const storeActiveAssetFilters = useSpooferStore((s) => s.activeAssetFilters);
+  const storeSetActiveAssetFilters = useSpooferStore((s) => s.setActiveAssetFilters);
+
+  const searchQuery = propsSearchQuery ?? storeSearchQuery;
+  const setSearchQuery = propsSetSearchQuery ?? storeSetSearchQuery;
+  const activeAssetFilters = propsActiveAssetFilters ?? storeActiveAssetFilters;
+  const setActiveAssetFilters = propsSetActiveAssetFilters ?? storeSetActiveAssetFilters;
 
   if (!loadedFileName) return null;
 
@@ -41,94 +72,132 @@ export function ExplorerToolbar({
   };
 
   return (
-    <div className="px-3 pt-3 pb-2 flex flex-col gap-2 border-b border-border">
-      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-        <FolderOpen size={11} />
-        <span className="truncate font-medium">{loadedFileName}</span>
+    <div className="px-3 py-2 flex items-center gap-2 border-b border-border bg-bg-surface/30">
+      {/* Place name */}
+      <div className="flex items-center gap-1.5 text-xs text-text-primary shrink-0 min-w-0 max-w-[200px]">
+        <FolderOpen size={13} className="shrink-0 text-primary" />
+        <span className="truncate font-semibold">{loadedFileName}</span>
       </div>
-      {setSearchQuery && (
-        <div className="flex min-w-0 items-center gap-2">
-          <Search size={13} className="shrink-0 text-muted-foreground" />
-          <div className="min-w-0 flex-1 relative">
-            <Input
-              value={searchQuery ?? ''}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-              placeholder="Search assets by name or ID..."
-              className="h-8 text-xs pr-7"
+
+      {/* Flexible Search Field (flex-grow: 1) */}
+      <div className="min-w-0 flex-1 relative">
+        <Search
+          size={12}
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+        />
+        <Input
+          value={searchQuery}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+          placeholder="Search assets by name or ID..."
+          className="h-8 text-xs pl-8 pr-7 bg-bg-base/40 border-border-subtle focus:border-primary"
+        />
+        {searchQuery.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear search"
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+
+      {/* Compact Filter icon dropdown */}
+      <Popover>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="outline"
+              size="icon"
+              className={cn(
+                'h-8 w-8 shrink-0 relative transition-colors',
+                activeAssetFilters.length > 0
+                  ? 'border-primary/40 text-primary bg-primary/10'
+                  : 'text-muted-foreground',
+              )}
+              title={t('explorer.allAssetTypes') ?? 'Filter asset types'}
             />
-            {(searchQuery ?? '').length > 0 && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="Clear search"
-              >
-                <X size={12} />
-              </button>
+          }
+        >
+          <Filter size={13} />
+          {activeAssetFilters.length > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center">
+              {activeAssetFilters.length}
+            </span>
+          )}
+        </PopoverTrigger>
+        <PopoverContent
+          className="w-44 p-1 bg-bg-surface border border-border shadow-xl"
+          align="end"
+        >
+          <div className="flex flex-col">
+            {ASSET_TYPE_OPTIONS.map((opt) => {
+              const label =
+                t(
+                  'explorer.' +
+                    (opt.value === 'image'
+                      ? 'images'
+                      : opt.value === 'animation'
+                        ? 'animations'
+                        : opt.value === 'mesh'
+                          ? 'meshes'
+                          : opt.value),
+                ) || opt.label;
+              const active = activeAssetFilters.includes(opt.value);
+              const Icon = opt.icon;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => toggleFilter(opt.value)}
+                  className={cn(
+                    'flex items-center gap-2 h-8 px-2 rounded-md text-xs text-left transition-colors',
+                    active
+                      ? 'text-primary bg-primary/10 font-semibold'
+                      : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
+                  )}
+                >
+                  <Icon size={13} className={active ? 'text-primary' : 'text-muted-foreground'} />
+                  <span className="flex-1">{label}</span>
+                  {active && <Check size={13} className="text-primary" />}
+                </button>
+              );
+            })}
+            {activeAssetFilters.length > 0 && (
+              <>
+                <div className="h-px bg-border my-1" />
+                <button
+                  type="button"
+                  onClick={() => setActiveAssetFilters([])}
+                  className="flex items-center gap-2 h-8 px-2 rounded-md text-xs text-left text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors"
+                >
+                  <X size={13} className="text-muted-foreground" />
+                  <span>{t('explorer.allAssetTypes') ?? 'Clear filters'}</span>
+                </button>
+              </>
             )}
           </div>
-        </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Inspector Panel Toggle Button */}
+      {setIsInspectorOpen && (
+        <Button
+          variant="outline"
+          size="icon"
+          className={cn(
+            'h-8 w-8 shrink-0 transition-colors',
+            isInspectorOpen
+              ? 'text-primary border-primary/30 bg-primary/10'
+              : 'text-muted-foreground',
+          )}
+          onClick={() => setIsInspectorOpen(!isInspectorOpen)}
+          title={isInspectorOpen ? 'Hide Inspector Panel' : 'Show Inspector Panel'}
+        >
+          <Info size={13} />
+        </Button>
       )}
-      <div className="flex min-w-0 items-center gap-2">
-        <Filter size={13} className="shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <Popover>
-            <PopoverTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-between h-8 text-xs px-3 font-normal"
-                />
-              }
-            >
-              {activeAssetFilters.length === 0 ||
-              activeAssetFilters.length === ASSET_TYPE_OPTIONS.length
-                ? t('explorer.allAssetTypes')
-                : `${activeAssetFilters.length} selected`}
-            </PopoverTrigger>
-            <PopoverContent className="w-48 p-0" align="start">
-              <Command>
-                <CommandList>
-                  <CommandGroup>
-                    {ASSET_TYPE_OPTIONS.map((opt) => {
-                      const label = t(
-                        'explorer.' +
-                          (opt.value === 'image'
-                            ? 'images'
-                            : opt.value === 'animation'
-                              ? 'animations'
-                              : opt.value === 'mesh'
-                                ? 'meshes'
-                                : opt.value),
-                      );
-                      return (
-                        <CommandItem
-                          key={opt.value}
-                          onSelect={() => toggleFilter(opt.value)}
-                          className="text-xs"
-                        >
-                          <div
-                            className={cn(
-                              'mr-2 flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-primary',
-                              activeAssetFilters.includes(opt.value)
-                                ? 'bg-primary text-primary-foreground'
-                                : 'opacity-50 [&_svg]:invisible',
-                            )}
-                          >
-                            <Check className="h-3 w-3" />
-                          </div>
-                          {label}
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </div>
     </div>
   );
 }

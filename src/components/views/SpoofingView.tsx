@@ -124,6 +124,8 @@ export default function SpoofingView() {
     setIsJobPaused,
     showAdvanced,
     setShowAdvanced,
+    isScanningStudio,
+    setIsScanningStudio,
   } = useSpooferStore(
     useShallow((s) => ({
       rootInstances: s.rootInstances,
@@ -150,9 +152,10 @@ export default function SpoofingView() {
       setIsJobPaused: s.setIsJobPaused,
       showAdvanced: s.showAdvanced,
       setShowAdvanced: s.setShowAdvanced,
+      isScanningStudio: s.isScanningStudio,
+      setIsScanningStudio: s.setIsScanningStudio,
     })),
   );
-  const [isScanningStudio, setIsScanningStudio] = useState(false);
   const [users, setUsers] = useState<RobloxUserInfo[]>(loadCachedUsers);
   const [groups, setGroups] = useState<RobloxGroup[]>(() =>
     loadCachedGroups(config.spoofing.selectedUser),
@@ -189,15 +192,7 @@ export default function SpoofingView() {
     ),
   );
 
-  useEffect(() => {
-    if (initialMount.current) {
-      initialMount.current = false;
-      return;
-    }
-    if (Object.keys(lastReplacements).length > 0) {
-      setResultsModalOpen(true);
-    }
-  }, [spoofCompletionVersion, lastReplacements]);
+  // Results modal removed entirely since Explorer view shows the same data live.
 
   useEffect(() => {
     const cookie = config.spoofing.cookie.trim();
@@ -473,7 +468,7 @@ export default function SpoofingView() {
       logIsm('error', `Studio scan failed: ${String(error)}`, true);
       setLogs((prev) => appendSpoofingLog(prev, `[ERROR] Studio scan failed: ${String(error)}\n`));
     } finally {
-      setIsScanningStudio(false);
+      setTimeout(() => setIsScanningStudio(false), 600);
     }
   };
 
@@ -733,7 +728,19 @@ export default function SpoofingView() {
     const apiKeyReady = await validateApiKeyForRun(apiKey, selectedUser);
     if (!apiKeyReady) return;
 
-    const finalAssetsPayload = Array.from(finalAssetIds).map((id) => {
+    // Filter out assets that have already been spoofed unless forced via runContext override
+    const activeReplacements = useSpooferStore.getState().lastReplacements;
+    const idsToSpoof = Array.from(finalAssetIds).filter((id) => {
+      if (runContext?.assetTypes?.[id]) return true; // Explicit retry
+      return !activeReplacements[id];
+    });
+
+    if (idsToSpoof.length === 0) {
+      logIsm('info', 'All selected assets have already been spoofed.', true);
+      return;
+    }
+
+    const finalAssetsPayload = idsToSpoof.map((id) => {
       const info = assetInfoMap.get(id);
       const overrideType = runContext?.assetTypes?.[id];
       const normalizedOverrideType =
@@ -778,10 +785,7 @@ export default function SpoofingView() {
                   iconUrl: '',
                 })
           : null;
-      const configuredPlaceIds = config.advanced.forcePlaceIds.trim();
-      const studioPlaceIdFallback = configuredPlaceIds
-        ? ''
-        : studioPlaceId || (await getStudioPlaceIdFallback());
+      const studioPlaceIdFallback = studioPlaceId || (await getStudioPlaceIdFallback());
 
       const allAccounts = config.accounts || [];
       const accountSecrets = useConfigStore.getState().accountSecrets;
@@ -790,35 +794,58 @@ export default function SpoofingView() {
         .map((a) => accountSecrets[a.id]?.cookie)
         .filter(Boolean) as string[];
 
-      await invoke('run_spoofer_action', {
-        data: {
-          assets: JSON.stringify(finalAssetsPayload),
-          cookie,
-          fallbackCookies: fallbackCookies.length > 0 ? fallbackCookies : null,
-          apiKey,
-          groupId: selectedGroup !== 'none' ? selectedGroup : null,
-          spoofSounds,
-          uploadTypes: config.spoofing.downloadOnly ? ['download'] : uploadTypes,
-          downloadPath: config.spoofing.downloadPath,
-          forcePlaceIds: configuredPlaceIds || studioPlaceIdFallback,
+      // Per-asset forced place IDs: partition the asset payload by each asset's
+      // pinned place id (if any) and submit one job per group. The backend
+      // accepts a single forcePlaceIds string per job, so per-asset scoping is
+      // achieved by splitting into multiple jobs.
+      const assetForcePlaceIds = useSpooferStore.getState().assetForcePlaceIds;
+      const fallbackPlaceIds = studioPlaceIdFallback;
+      const groupsByPlaceId = new Map<string, typeof finalAssetsPayload>();
+      for (const asset of finalAssetsPayload) {
+        const pinned = assetForcePlaceIds[asset.id];
+        const key = pinned && pinned.trim() ? pinned.trim() : fallbackPlaceIds;
+        const bucket = groupsByPlaceId.get(key);
+        if (bucket) bucket.push(asset);
+        else groupsByPlaceId.set(key, [asset]);
+      }
 
-          placeName: runContext?.placeName || loadedFileName,
-          concurrent: config.advanced.concurrentSpoofing,
-          concurrentDownloading: config.advanced.concurrentDownloading,
-          maxConcurrency: config.advanced.maxConcurrency,
-          maxDownloadConcurrency: config.advanced.maxDownloadConcurrency,
-          skipOwned: config.advanced.skipOwned,
-          excludedUserIds: config.advanced.excludedUserIds,
-          excludedGroupIds: config.advanced.excludedGroupIds,
-          skipExistingReplacements: true,
-          existingReplacements: lastReplacements,
-          account: accountPayload,
-          group: groupPayload,
-          preserveMetadata: config.spoofing.preserveMetadata,
-          enableArchiveRecovery: config.advanced.enableArchiveRecovery,
-          proxyUrl: config.advanced.proxyUrl,
-        },
-      });
+      const baseData = {
+        cookie,
+        fallbackCookies: fallbackCookies.length > 0 ? fallbackCookies : null,
+        apiKey,
+        groupId: selectedGroup !== 'none' ? selectedGroup : null,
+        spoofSounds,
+        uploadTypes: config.spoofing.downloadOnly ? ['download'] : uploadTypes,
+        downloadPath: config.spoofing.downloadPath,
+        placeName: runContext?.placeName || loadedFileName,
+        concurrent: config.advanced.concurrentSpoofing,
+        concurrentDownloading: config.advanced.concurrentDownloading,
+        maxConcurrency: config.advanced.maxConcurrency,
+        maxDownloadConcurrency: config.advanced.maxDownloadConcurrency,
+        skipOwned: config.advanced.skipOwned,
+        excludedUserIds: config.advanced.excludedUserIds,
+        excludedGroupIds: config.advanced.excludedGroupIds,
+        skipExistingReplacements: true,
+        existingReplacements: lastReplacements,
+        account: accountPayload,
+        group: groupPayload,
+        preserveMetadata: config.spoofing.preserveMetadata,
+        enableArchiveRecovery: config.advanced.enableArchiveRecovery,
+        proxyUrl: config.advanced.proxyUrl,
+      };
+
+      // Submit groups sequentially to avoid overloading the backend. If only
+      // the unpinned group exists this is a single invoke, as before.
+      const groupEntries = Array.from(groupsByPlaceId.entries());
+      for (const [placeIds, groupAssets] of groupEntries) {
+        await invoke('run_spoofer_action', {
+          data: {
+            ...baseData,
+            assets: JSON.stringify(groupAssets),
+            forcePlaceIds: placeIds,
+          },
+        });
+      }
     } catch (err) {
       logIsm('error', 'Failed to start spoofer: ' + err, true);
       setIsSpoofing(false);
@@ -826,6 +853,153 @@ export default function SpoofingView() {
   };
 
   handleRunSpooferRef.current = handleRunSpoofer;
+
+  // Bridge for the explorer-first action bar / toolbar, which dispatch window
+  // CustomEvents instead of calling these handlers directly (the explorer is
+  // the visible main view; SpoofingView runs hidden as the logic host).
+  useEffect(() => {
+    const onOpenScan = () => setScanOptionsOpen(true);
+    const onRun = () => void handleRunSpooferRef.current();
+    const onOpenPaste = () => setPasteIdsOpen(true);
+    const onStartScan = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      void handleScanStudio(detail);
+    };
+    const onDiscoverPlaceIds = async (e?: Event) => {
+      const store = useSpooferStore.getState();
+      const cookie = config.spoofing.cookie;
+      const detail = (e as CustomEvent)?.detail;
+      const timeoutSecs = detail?.timeoutSecs ?? store.discoveryTimeoutSecs ?? 60;
+
+      if (!cookie || cookie.length < 50) {
+        logIsm('warn', 'Select a user account with a valid cookie to discover place IDs.', false);
+        return;
+      }
+
+      // Target assets: selected assets, or all scanned assets if none explicitly selected
+      const selectedSet = store.selectedAssetIds;
+      const targetAssetIds: string[] = [];
+      if (selectedSet.size > 0) {
+        targetAssetIds.push(...Array.from(selectedSet));
+      } else {
+        const collectIds = (nodes: typeof store.rootInstances) => {
+          for (const node of nodes) {
+            for (const asset of node.assets) {
+              const id = asset.assetId || (asset as any).id;
+              if (id) targetAssetIds.push(id);
+            }
+            collectIds(node.children);
+          }
+        };
+        collectIds(store.rootInstances);
+      }
+
+      if (targetAssetIds.length === 0) {
+        logIsm('warn', 'No assets found in explorer to discover place IDs for.', false);
+        return;
+      }
+
+      store.setIsDiscoveringPlaceIds(true);
+      logIsm(
+        'info',
+        `Discovering place IDs in parallel for ${targetAssetIds.length} asset(s) (${timeoutSecs}s limit/asset)...`,
+        false,
+      );
+
+      let discoveredCount = 0;
+      const CONCURRENCY_LIMIT = 10;
+
+      const discoverSingleAsset = async (assetId: string) => {
+        store.setAssetStatus(assetId, {
+          stage: 'discovering_graph',
+          message: 'Discovering Place ID...',
+        });
+
+        try {
+          const existingPinned = store.assetForcePlaceIds[assetId] || null;
+          const discoveryPromise = invoke<string | null>('discover_asset_place_id', {
+            assetId,
+            cookie,
+            forcedPlaceId: existingPinned,
+          });
+
+          const timeoutPromise = new Promise<null>((resolve) =>
+            setTimeout(() => resolve(null), timeoutSecs * 1000),
+          );
+
+          const discoveredPid = await Promise.race([discoveryPromise, timeoutPromise]);
+
+          if (discoveredPid) {
+            discoveredCount++;
+            store.setAssetForcePlaceIds((prev) => ({
+              ...prev,
+              [assetId]: discoveredPid,
+            }));
+            store.setAssetStatus(assetId, {
+              stage: 'done',
+              message: `Discovered Place ID: ${discoveredPid}`,
+            });
+          } else {
+            store.setAssetStatus(assetId, {
+              stage: 'error',
+              message: 'Discovery failed — no working Place ID found',
+            });
+          }
+        } catch {
+          store.setAssetStatus(assetId, {
+            stage: 'error',
+            message: 'Discovery failed — place lookup error',
+          });
+        }
+      };
+
+      try {
+        const queue = [...targetAssetIds];
+        const workers = Array.from(
+          { length: Math.min(CONCURRENCY_LIMIT, queue.length) },
+          async () => {
+            while (queue.length > 0) {
+              const nextAssetId = queue.shift();
+              if (nextAssetId) {
+                await discoverSingleAsset(nextAssetId);
+              }
+            }
+          },
+        );
+        await Promise.all(workers);
+
+        if (discoveredCount > 0) {
+          logIsm(
+            'success',
+            `Discovered and assigned working place IDs for ${discoveredCount} asset(s).`,
+            false,
+          );
+        } else {
+          logIsm(
+            'warn',
+            'No working place IDs could be discovered for the selected asset(s).',
+            false,
+          );
+        }
+      } catch (err) {
+        logIsm('error', `Place ID discovery failed: ${String(err)}`, false);
+      } finally {
+        store.setIsDiscoveringPlaceIds(false);
+      }
+    };
+    document.addEventListener('ism-open-scan-options', onOpenScan);
+    document.addEventListener('ism-run-spoofer', onRun);
+    document.addEventListener('ism-open-paste-ids', onOpenPaste);
+    document.addEventListener('ism-start-scan', onStartScan);
+    document.addEventListener('ism-discover-place-ids', onDiscoverPlaceIds);
+    return () => {
+      document.removeEventListener('ism-open-scan-options', onOpenScan);
+      document.removeEventListener('ism-run-spoofer', onRun);
+      document.removeEventListener('ism-open-paste-ids', onOpenPaste);
+      document.removeEventListener('ism-start-scan', onStartScan);
+      document.removeEventListener('ism-discover-place-ids', onDiscoverPlaceIds);
+    };
+  }, []);
 
   const handleRetryFailedAssets = async () => {
     if (failedAssetIds.length === 0 && failedReplacements.size === 0) return;
@@ -1078,9 +1252,19 @@ export default function SpoofingView() {
                   </span>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label className="text-sm font-medium text-text-primary">
-                    {t('settings.forcePlaceIds')}
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium text-text-primary">
+                      {t('settings.forcePlaceIds')}
+                    </Label>
+                    {config.advanced.forcePlaceIds && (
+                      <button
+                        onClick={() => updateConfig('advanced', 'forcePlaceIds', '')}
+                        className="text-[11px] text-text-muted hover:text-primary transition-colors underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={config.advanced.forcePlaceIds}
@@ -1148,11 +1332,7 @@ export default function SpoofingView() {
           />
         </div>
       </div>
-      <ResultsModal
-        isOpen={resultsModalOpen}
-        onClose={() => setResultsModalOpen(false)}
-        onRetryFailed={() => void handleRetryFailedAssets()}
-      />
+      {/* ResultsModal removed */}
       <PasteIdsModal open={pasteIdsOpen} onOpenChange={setPasteIdsOpen} />
       <ScanOptionsModal
         open={scanOptionsOpen}

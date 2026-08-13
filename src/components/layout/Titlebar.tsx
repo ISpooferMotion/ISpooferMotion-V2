@@ -1,45 +1,65 @@
-import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
-import { Minus, Settings2, Terminal, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import {
+  Activity,
+  Box,
+  Check,
+  Eye,
+  EyeOff,
+  Film,
+  Filter,
+  FolderOpen,
+  Image as ImageIcon,
+  Minus,
+  Search,
+  Settings,
+  Terminal,
+  Users,
+  Volume2,
+  X,
+} from 'lucide-react';
 
-import AppIconDark from '../../assets/app_icon.png';
-import AppIconLight from '../../assets/app_icon_light.png';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSpooferStore } from '../../stores/spooferStore';
-import { isTauriRuntime } from '../../utils/tauriRuntime';
+import { cn } from '../../utils/cn';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
+export const ASSET_TYPE_OPTIONS = [
+  { value: 'audio', label: 'Audio', icon: Volume2 },
+  { value: 'image', label: 'Images', icon: ImageIcon },
+  { value: 'animation', label: 'Animations', icon: Film },
+  { value: 'mesh', label: 'Meshes', icon: Box },
+];
+
 /**
- * Custom window titlebar replacing the native OS frame.
+ * Context-aware 48px Header & Custom Window Controls bar.
  *
- * Provides window dragging, minimize/close controls, and a quick-access toolbar
- * for toggling advanced settings and the debug console. Ensures visual consistency
- * across Windows, macOS, and Linux.
+ * Renders tab-specific search, filters, place info, and inspector controls
+ * depending on whether the user is on Spoofer, Activity, Settings, Accounts, or Console.
  */
 export default function Titlebar() {
   const { t } = useLanguage();
-  const { config, updateConfig } = useConfig();
-  const showAdvanced = useSpooferStore((s) => s.showAdvanced);
-  const setShowAdvanced = useSpooferStore((s) => s.setShowAdvanced);
-  const [appVersion, setAppVersion] = useState<string>('');
+  const { config } = useConfig();
+  const activeTab = config.ui.activeTab;
 
-  useEffect(() => {
-    // Display the current Tauri version under the app name.
-    invoke<string>('get_app_version')
-      .then((v) => setAppVersion(v))
-      .catch(() => setAppVersion(''));
-  }, []);
+  const loadedFileName = useSpooferStore((s) => s.loadedFileName);
+  const searchQuery = useSpooferStore((s) => s.searchQuery) ?? '';
+  const setSearchQuery = useSpooferStore((s) => s.setSearchQuery) ?? (() => {});
+  const activeAssetFilters = useSpooferStore((s) => s.activeAssetFilters) ?? [];
+  const setActiveAssetFilters = useSpooferStore((s) => s.setActiveAssetFilters) ?? (() => {});
+  const isInspectorOpen = useSpooferStore((s) => s.isInspectorOpen) ?? true;
+  const setIsInspectorOpen = useSpooferStore((s) => s.setIsInspectorOpen) ?? (() => {});
 
   const handleMinimize = () => {
     getCurrentWindow().minimize();
   };
 
   const handleClose = async () => {
-    // Hide the window instead of closing the process if hide-to-tray is enabled.
     if (config.general.hideToTrayOnClose) {
       await getCurrentWindow().hide();
       return;
@@ -47,96 +67,259 @@ export default function Titlebar() {
     await invoke('quit_app');
   };
 
+  const toggleFilter = (val: string) => {
+    setActiveAssetFilters(
+      activeAssetFilters.includes(val)
+        ? activeAssetFilters.filter((v) => v !== val)
+        : [...activeAssetFilters, val],
+    );
+  };
+
+  const hasAssets = !!loadedFileName;
+
+  const renderContextContent = () => {
+    if (activeTab === 'spoofing') {
+      return (
+        <>
+          {/* Left: Place name / file info — hidden when no place loaded */}
+          {hasAssets && (
+            <div
+              className="flex items-center gap-2 text-xs font-semibold text-text-primary shrink-0 min-w-0 max-w-[200px]"
+              data-tauri-drag-region
+            >
+              <FolderOpen size={14} className="text-primary shrink-0" />
+              <span className="truncate">{loadedFileName}</span>
+            </div>
+          )}
+
+          {/* Center: Flex-grow search bar — only when assets loaded */}
+          {hasAssets && (
+            <div className="flex-1 min-w-0 mx-4 relative" data-tauri-drag-region>
+              <Search
+                size={13}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+              />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search assets by name or ID..."
+                className="h-8 w-full text-xs pl-8 pr-7 bg-bg-base/50 border-border-subtle focus:border-primary"
+              />
+              {searchQuery.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Spacer when no assets to push window controls right */}
+          {!hasAssets && <div className="flex-1" data-tauri-drag-region />}
+
+          {/* Right: Filter + Eye toggle — only when assets loaded */}
+          {hasAssets && (
+            <div className="flex items-center gap-2 shrink-0" data-tauri-drag-region>
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className={cn(
+                        'h-8 w-8 shrink-0 relative transition-colors',
+                        activeAssetFilters.length > 0
+                          ? 'border-primary/40 text-primary bg-primary/10'
+                          : 'text-muted-foreground',
+                      )}
+                      title={t('explorer.allAssetTypes') ?? 'Filter asset types'}
+                    />
+                  }
+                >
+                  <Filter size={14} />
+                  {activeAssetFilters.length > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center">
+                      {activeAssetFilters.length}
+                    </span>
+                  )}
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-44 p-1 bg-bg-surface border border-border shadow-xl"
+                  align="end"
+                >
+                  <div className="flex flex-col">
+                    {ASSET_TYPE_OPTIONS.map((opt) => {
+                      const label =
+                        t(
+                          'explorer.' +
+                            (opt.value === 'image'
+                              ? 'images'
+                              : opt.value === 'animation'
+                                ? 'animations'
+                                : opt.value === 'mesh'
+                                  ? 'meshes'
+                                  : opt.value),
+                        ) || opt.label;
+                      const active = activeAssetFilters.includes(opt.value);
+                      const Icon = opt.icon;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => toggleFilter(opt.value)}
+                          className={cn(
+                            'flex items-center gap-2 h-8 px-2 rounded-md text-xs text-left transition-colors',
+                            active
+                              ? 'text-primary bg-primary/10 font-semibold'
+                              : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
+                          )}
+                        >
+                          <Icon
+                            size={13}
+                            className={active ? 'text-primary' : 'text-muted-foreground'}
+                          />
+                          <span className="flex-1">{label}</span>
+                          {active && <Check size={13} className="text-primary" />}
+                        </button>
+                      );
+                    })}
+                    {activeAssetFilters.length > 0 && (
+                      <>
+                        <div className="h-px bg-border my-1" />
+                        <button
+                          type="button"
+                          onClick={() => setActiveAssetFilters([])}
+                          className="flex items-center gap-2 h-8 px-2 rounded-md text-xs text-left text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors"
+                        >
+                          <X size={13} className="text-muted-foreground" />
+                          <span>{t('explorer.allAssetTypes') ?? 'Clear filters'}</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Toggle Inspector Panel button (Eye Icon) */}
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className={cn(
+                        'h-8 w-8 shrink-0 transition-colors',
+                        isInspectorOpen
+                          ? 'text-primary border-primary/30 bg-primary/10'
+                          : 'text-muted-foreground border-border-subtle',
+                      )}
+                      onClick={() => setIsInspectorOpen(!isInspectorOpen)}
+                    >
+                      {isInspectorOpen ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </Button>
+                  }
+                />
+                <TooltipContent>
+                  {isInspectorOpen ? 'Hide Inspector Panel' : 'Show Inspector Panel'}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+        </>
+      );
+    }
+
+    if (activeTab === 'activity') {
+      return (
+        <>
+          <div className="flex items-center gap-2 text-xs font-semibold text-text-primary shrink-0">
+            <Activity size={14} className="text-primary" />
+            <span>{t('nav.activity') ?? 'Activity Logs'}</span>
+          </div>
+
+          <div className="flex-1 min-w-0 mx-4 relative" data-tauri-drag-region={false}>
+            <Search
+              size={13}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+            />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search logs by ID, status, or asset..."
+              className="h-8 w-full text-xs pl-8 pr-7 bg-bg-base/50 border-border-subtle focus:border-primary"
+            />
+            {searchQuery.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </>
+      );
+    }
+
+    if (activeTab === 'settings') {
+      return (
+        <>
+          <div className="flex items-center gap-2 text-xs font-semibold text-text-primary shrink-0">
+            <Settings size={14} className="text-primary" />
+            <span>{t('nav.settings') ?? 'Settings'}</span>
+          </div>
+          <div className="flex-1" data-tauri-drag-region />
+        </>
+      );
+    }
+
+    if (activeTab === 'accounts') {
+      return (
+        <>
+          <div className="flex items-center gap-2 text-xs font-semibold text-text-primary shrink-0">
+            <Users size={14} className="text-primary" />
+            <span>{t('nav.accounts') ?? 'Accounts'}</span>
+          </div>
+          <div className="flex-1" data-tauri-drag-region />
+        </>
+      );
+    }
+
+    if (activeTab === 'console') {
+      return (
+        <>
+          <div className="flex items-center gap-2 text-xs font-semibold text-text-primary shrink-0">
+            <Terminal size={14} className="text-primary" />
+            <span>{t('nav.console') ?? 'Console'}</span>
+          </div>
+          <div className="flex-1" data-tauri-drag-region />
+        </>
+      );
+    }
+
+    return <div className="flex-1" data-tauri-drag-region />;
+  };
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: -20 }}
+      initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: 'easeOut' }}
-      // Allow users to drag the window by clicking the titlebar.
+      transition={{ duration: 0.3, ease: 'easeOut' }}
       data-tauri-drag-region
-      className="h-14 w-full flex items-center justify-between px-5 bg-transparent border-b border-border select-none shrink-0 z-50 relative"
+      className="h-12 w-full flex items-center justify-between px-3 bg-bg-surface/90 border-b border-border select-none shrink-0 z-50 relative"
     >
-      {/* App Logo & Name */}
-      <div className="flex items-center pointer-events-none gap-3">
-        <div className="w-8 h-8 flex items-center justify-center">
-          {isTauriRuntime() ? (
-            <>
-              <img
-                src={AppIconLight}
-                className="w-full h-full object-contain block dark:hidden"
-                alt="Logo Light"
-              />
+      {renderContextContent()}
 
-              <img
-                src={AppIconDark}
-                className="w-full h-full object-contain hidden dark:block"
-                alt="Logo Dark"
-              />
-            </>
-          ) : (
-            <img
-              src="/ispoofermotion-logo-dark.png"
-              className="w-full h-full object-contain"
-              alt="Logo"
-            />
-          )}
-        </div>
-        <div className="flex flex-col justify-center">
-          <span className="text-[13px] font-semibold tracking-tight text-foreground leading-tight">
-            ISpooferMotion
-          </span>
-          <span className="text-[9px] font-mono text-muted-foreground mt-0.5 opacity-80">
-            {appVersion ? `v${appVersion}` : 'v?'}
-          </span>
-        </div>
-      </div>
+      <div className="flex items-center gap-2 shrink-0 ml-2" data-tauri-drag-region={false}>
+        <div className="h-4 w-px bg-border mx-0.5" />
 
-      <div className="flex items-center gap-1.5" data-tauri-drag-region={false}>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon"
-                className={
-                  showAdvanced ? 'text-primary hover:text-primary' : 'text-muted-foreground'
-                }
-                onClick={() => {
-                  if (!showAdvanced) {
-                    updateConfig('ui', 'activeTab', 'spoofing');
-                  }
-                  setShowAdvanced(!showAdvanced);
-                }}
-              />
-            }
-          >
-            <Settings2 size={16} />
-          </TooltipTrigger>
-          <TooltipContent>{t('settings.advanced')}</TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon"
-                className={
-                  config.debug?.debugMode
-                    ? 'text-primary hover:text-primary'
-                    : 'text-muted-foreground'
-                }
-                onClick={() => updateConfig('debug', 'debugMode', !config.debug?.debugMode)}
-              />
-            }
-          >
-            <Terminal size={16} />
-          </TooltipTrigger>
-          <TooltipContent>{t('debug.toggleDebugConsole')}</TooltipContent>
-        </Tooltip>
-
-        <div className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
-
+        {/* Window controls */}
         <Tooltip>
           <TooltipTrigger
             render={
@@ -144,11 +327,11 @@ export default function Titlebar() {
                 variant="ghost"
                 size="icon"
                 onClick={handleMinimize}
-                className="text-muted-foreground"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
               />
             }
           >
-            <Minus size={16} />
+            <Minus size={14} />
           </TooltipTrigger>
           <TooltipContent>{t('debug.minimize')}</TooltipContent>
         </Tooltip>
@@ -160,11 +343,11 @@ export default function Titlebar() {
                 variant="ghost"
                 size="icon"
                 onClick={handleClose}
-                className="text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
+                className="h-8 w-8 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
               />
             }
           >
-            <X size={16} />
+            <X size={14} />
           </TooltipTrigger>
           <TooltipContent>{t('common.close')}</TooltipContent>
         </Tooltip>

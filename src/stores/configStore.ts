@@ -16,7 +16,6 @@ export const AppConfigSchema = z.object({
     enablePluginSpoofing: z.boolean().default(false),
     memoryInjectionEnabled: z.boolean().default(false),
     clipboardMonitoring: z.boolean().default(false),
-    forcePlaceIds: z.string().default(''),
     excludedUserIds: z.string().default(''),
     excludedGroupIds: z.string().default(''),
     concurrentSpoofing: z.boolean().default(true),
@@ -60,6 +59,7 @@ export const AppConfigSchema = z.object({
       .array(z.string())
       .default(['credentials', 'assetProcessing', 'routing', 'exclusions']),
     spoofingSections: z.array(z.string()).default(['targets', 'execution']),
+    tutorialCompleted: z.boolean().default(false),
   }),
   accounts: z
     .array(
@@ -130,6 +130,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     settingsSections: ['account', 'general', 'quickSettings', 'debug'],
     configSections: ['credentials', 'assetProcessing', 'routing', 'exclusions'],
     spoofingSections: ['targets', 'execution'],
+    tutorialCompleted: false,
   },
   accounts: [],
 };
@@ -195,7 +196,10 @@ interface ConfigState {
  */
 export const useConfigStore = create<ConfigState>((set, get) => {
   // Load config from localstorage or fallback to defaults.
-  const saved = localStorage.getItem('ISpooferMotion_Config');
+  const saved =
+    typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function'
+      ? localStorage.getItem('ISpooferMotion_Config')
+      : null;
   let initConfig = DEFAULT_APP_CONFIG;
   if (saved) {
     try {
@@ -240,13 +244,15 @@ export const useConfigStore = create<ConfigState>((set, get) => {
 
   const saveToStorage = (c: AppConfig) => {
     // Cookies and API keys must be saved in the Rust keyring, not standard config storage.
-    localStorage.setItem(
-      'ISpooferMotion_Config',
-      JSON.stringify({
-        ...c,
-        spoofing: { ...c.spoofing, cookie: '', apiKey: '' },
-      }),
-    );
+    if (typeof localStorage !== 'undefined' && typeof localStorage.setItem === 'function') {
+      localStorage.setItem(
+        'ISpooferMotion_Config',
+        JSON.stringify({
+          ...c,
+          spoofing: { ...c.spoofing, cookie: '', apiKey: '' },
+        }),
+      );
+    }
   };
 
   return {

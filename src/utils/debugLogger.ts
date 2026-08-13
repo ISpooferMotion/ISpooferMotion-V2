@@ -124,7 +124,11 @@ export function addDebugLog(
     }
   }
 
-  if (notify && (level === 'success' || level === 'error') && isTauriRuntime()) {
+  if (
+    notify &&
+    (level === 'success' || level === 'error' || level === 'warn') &&
+    isTauriRuntime()
+  ) {
     try {
       if (!cachedConfigStore) {
         import('../stores/configStore').then((mod) => {
@@ -135,11 +139,14 @@ export function addDebugLog(
       if (cachedConfigStore) {
         const config = cachedConfigStore.useConfigStore.getState().config;
         if (config?.general?.desktopNotifications) {
+          const title =
+            level === 'success'
+              ? 'ISpooferMotion - Success'
+              : level === 'error'
+                ? 'ISpooferMotion - Error'
+                : 'ISpooferMotion - Warning';
           invoke('show_notification', {
-            options: {
-              title: level === 'success' ? `ISpooferMotion - Success` : `ISpooferMotion - Error`,
-              body: entry.message,
-            },
+            options: { title, body: entry.message },
           }).catch((err) => {
             console.error('Failed to emit batch active debug logs update:', err);
           });

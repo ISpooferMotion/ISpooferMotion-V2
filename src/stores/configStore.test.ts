@@ -7,7 +7,19 @@ vi.mock('../utils/tauriRuntime', () => ({
 }));
 
 describe('configStore', () => {
+  const storeData: Record<string, string> = {};
+  const mockLocalStorage = {
+    getItem: vi.fn((key: string) => storeData[key] || null),
+    setItem: vi.fn((key: string, val: string) => {
+      storeData[key] = val;
+    }),
+    clear: vi.fn(() => {
+      for (const k of Object.keys(storeData)) delete storeData[k];
+    }),
+  };
+
   beforeEach(() => {
+    vi.stubGlobal('localStorage', mockLocalStorage);
     localStorage.clear();
     useConfigStore.getState().resetConfig();
     vi.clearAllMocks();
