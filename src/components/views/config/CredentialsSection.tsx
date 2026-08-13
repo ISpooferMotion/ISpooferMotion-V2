@@ -31,12 +31,16 @@ export default function CredentialsSection() {
   const [apiKeyStatus, setApiKeyStatus] = useState<AuthStatus>('idle');
   const { saveSecrets } = useConfigStore();
 
-  const autoDetectEnabled = config.advanced.autoCookieStudio || config.advanced.autoCookieBrowser;
+  const autoDetectEnabled = Boolean(
+    config.advanced?.autoCookieStudio || config.advanced?.autoCookieBrowser,
+  );
   const cookieReadOnly = autoDetectEnabled && !manualCookieEdit;
+  const cookieVal = config.spoofing?.cookie ?? '';
+  const apiKeyVal = config.spoofing?.apiKey ?? '';
 
   const getCookieDetectionMode = () => {
-    if (config.advanced.autoCookieStudio) return 'studio';
-    if (config.advanced.autoCookieBrowser) return 'browser';
+    if (config.advanced?.autoCookieStudio) return 'studio';
+    if (config.advanced?.autoCookieBrowser) return 'browser';
     return 'none';
   };
 
@@ -49,8 +53,6 @@ export default function CredentialsSection() {
     });
     setAuthStatus('success');
     logIsm('info', 'Cookie validated for the selected profile.');
-
-    // Save the validated profile to the OS keyring.
     void saveSecrets();
   };
 
@@ -62,7 +64,7 @@ export default function CredentialsSection() {
     try {
       const detected = await detectCookie(
         mode as 'studio' | 'browser',
-        config.spoofing.selectedUser === 'none' ? null : config.spoofing.selectedUser,
+        config.spoofing?.selectedUser === 'none' ? null : config.spoofing?.selectedUser,
       );
       if (!detected) {
         setAuthStatus('idle');
@@ -82,9 +84,6 @@ export default function CredentialsSection() {
       applyValidatedCookie(result);
     } catch (e: unknown) {
       const errStr = String(e);
-      // Only treat explicit Roblox auth rejections (HTTP 401/403) as "cookie invalid".
-      // Network timeouts, transient 429 rate-limits, and other connectivity issues should
-      // NOT cause the cookie to be discarded - the token itself may still be valid.
       const isAuthFailure =
         errStr.includes('401') ||
         errStr.includes('403') ||
@@ -105,7 +104,6 @@ export default function CredentialsSection() {
           true,
         );
       } else {
-        // Transient error - keep auto-detect enabled, leave the existing cookie in place.
         setAuthStatus('idle');
         logIsm(
           'warn',
@@ -126,7 +124,6 @@ export default function CredentialsSection() {
     }
   };
 
-  // Auto-detect on mount if already configured.
   useEffect(() => {
     const mode = getCookieDetectionMode();
     if (mode !== 'none') {
@@ -135,7 +132,7 @@ export default function CredentialsSection() {
   }, []);
 
   useEffect(() => {
-    const cookie = config.spoofing.cookie.trim();
+    const cookie = cookieVal.trim();
     if (cookieReadOnly) return;
     if (!cookie || cookie.length < 50) return;
 
@@ -149,10 +146,10 @@ export default function CredentialsSection() {
       }
     }, 900);
     return () => window.clearTimeout(timer);
-  }, [config.spoofing.cookie, cookieReadOnly]);
+  }, [cookieVal, cookieReadOnly]);
 
   const handleValidateApiKey = async () => {
-    const key = config.spoofing.apiKey.trim();
+    const key = apiKeyVal.trim();
     if (key.length < 20) {
       setApiKeyStatus('error');
       logIsm('warn', 'Paste an Open Cloud API key before validating.', true);
@@ -168,7 +165,7 @@ export default function CredentialsSection() {
       if (result.ok) {
         setApiKeyStatus('success');
         logIsm('success', message, true);
-        void saveSecrets(); // Save API key on successful validation
+        void saveSecrets();
       } else if (/invalid|unauthorized/i.test(message)) {
         setApiKeyStatus('error');
         logIsm('warn', message, true);
@@ -189,67 +186,101 @@ export default function CredentialsSection() {
   };
 
   return (
-    <div className="flex flex-col gap-4 w-full h-full">
-      <div className="flex flex-col gap-1.5 w-full">
-        <Label className="flex items-center gap-2">
-          {t('config.autoDetectCookie')}
-          <AnimatePresence>
-            {authStatus === 'loading' && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-              >
-                <Loader2 size={14} className="animate-spin text-primary" />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </Label>
+    <div className="flex flex-col gap-3 w-full">
+      {/* Auto Detect Cookie Row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
+        <div className="space-y-0.5 min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <Label className="text-sm font-semibold text-text-primary">
+              {t('config.autoDetectCookie')}
+            </Label>
+            <AnimatePresence>
+              {authStatus === 'loading' && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                >
+                  <Loader2 size={14} className="animate-spin text-primary" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <p className="text-xs text-text-secondary leading-relaxed">
+            Automatically detect Roblox session cookie from running Studio or local browser.
+          </p>
+        </div>
         <Select
           value={getCookieDetectionMode()}
           onValueChange={(val) => {
             if (val) handleCookieDetectionChange(val);
           }}
         >
-          <SelectTrigger className="w-48 h-9">
-            <SelectValue />
+          <SelectTrigger className="w-44 h-8 text-xs shrink-0">
+            <SelectValue>
+              {getCookieDetectionMode() === 'studio'
+                ? t('explorer.robloxStudio')
+                : getCookieDetectionMode() === 'browser'
+                  ? t('explorer.webBrowser')
+                  : t('explorer.disabled')}
+            </SelectValue>
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">{t('explorer.disabled')}</SelectItem>
-            <SelectItem value="studio">{t('explorer.robloxStudio')}</SelectItem>
-            <SelectItem value="browser">{t('explorer.webBrowser')}</SelectItem>
+          <SelectContent className="z-50 bg-bg-surface border border-border shadow-xl rounded-md p-1">
+            <SelectItem value="none" className="text-xs">
+              {t('explorer.disabled')}
+            </SelectItem>
+            <SelectItem value="studio" className="text-xs">
+              {t('explorer.robloxStudio')}
+            </SelectItem>
+            <SelectItem value="browser" className="text-xs">
+              {t('explorer.webBrowser')}
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <div className="w-full flex flex-col gap-1.5 mt-2">
-        <Label>{t('spoof.cookie')}</Label>
+      {/* Roblox Cookie Row */}
+      <div className="flex flex-col gap-2 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
+        <div className="space-y-0.5">
+          <Label className="text-sm font-semibold text-text-primary">{t('spoof.cookie')}</Label>
+          <p className="text-xs text-text-secondary leading-relaxed">
+            Manual .ROBLOSECURITY authentication token override for downloading assets.
+          </p>
+        </div>
         <Input
           type="password"
           placeholder={
             cookieReadOnly ? t('config.autoDetectCookieReadonly') : t('config.pasteCookieManually')
           }
           readOnly={cookieReadOnly}
-          value={cookieReadOnly ? '' : config.spoofing.cookie}
+          value={cookieReadOnly ? '' : cookieVal}
           onChange={(e) => updateConfig('spoofing', 'cookie', e.target.value)}
-          className={cookieReadOnly ? 'opacity-60 h-9' : 'h-9'}
+          className={
+            cookieReadOnly ? 'opacity-60 h-8 text-xs bg-bg-base' : 'h-8 text-xs bg-bg-base'
+          }
         />
       </div>
 
-      <div className="flex flex-col gap-1.5 w-full relative">
-        <Label>{t('spoof.apiKey')}</Label>
+      {/* Open Cloud API Key Row */}
+      <div className="flex flex-col gap-2 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
+        <div className="space-y-0.5">
+          <Label className="text-sm font-semibold text-text-primary">{t('spoof.apiKey')}</Label>
+          <p className="text-xs text-text-secondary leading-relaxed">
+            Open Cloud API Key with Asset Permissions for uploading animations and audio.
+          </p>
+        </div>
         <div className="relative">
           <Input
             type="password"
             placeholder={t('spoof.apiKeyPlaceholder')}
-            value={config.spoofing.apiKey}
+            value={apiKeyVal}
             onChange={(e) => {
               setApiKeyStatus('idle');
               updateConfig('spoofing', 'apiKey', e.target.value);
             }}
-            className="pr-20 h-9"
+            className="pr-20 h-8 text-xs bg-bg-base"
           />
-          <div className="absolute right-0 top-0 h-full flex items-center px-1">
+          <div className="absolute right-1 top-0 h-full flex items-center gap-0.5">
             <button
               type="button"
               onClick={handleValidateApiKey}
@@ -259,10 +290,10 @@ export default function CredentialsSection() {
               disabled={apiKeyStatus === 'loading'}
             >
               {apiKeyStatus === 'loading' ? (
-                <Loader2 size={16} className="animate-spin" />
+                <Loader2 size={15} className="animate-spin" />
               ) : (
                 <ShieldCheck
-                  size={16}
+                  size={15}
                   className={
                     apiKeyStatus === 'success'
                       ? 'text-green-500'
@@ -280,7 +311,7 @@ export default function CredentialsSection() {
               aria-label={t('spoof.openApiDashboard')}
               title={t('spoof.openApiDashboard')}
             >
-              <ExternalLink size={16} />
+              <ExternalLink size={15} />
             </button>
           </div>
         </div>

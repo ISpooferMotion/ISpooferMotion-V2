@@ -5,13 +5,22 @@ import {
   sendNotification,
 } from '@tauri-apps/plugin-notification';
 import { motion } from 'framer-motion';
-import { Plus, RefreshCw, Trash2, Key, Cookie, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import {
+  Plus,
+  RefreshCw,
+  Trash2,
+  Key,
+  Cookie,
+  ShieldAlert,
+  CheckCircle2,
+  User2,
+} from 'lucide-react';
 import { useState } from 'react';
 
 import { useConfig } from '../../../contexts/ConfigContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { useConfigStore } from '../../../stores/configStore';
-import { validateCookieProfile, logIsm } from '../../../utils/robloxProfiles';
+import { validateCookieProfile, logIsm, loadCachedUsers } from '../../../utils/robloxProfiles';
 import { itemVariants, pageVariants } from '../../../utils/animations';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
@@ -38,6 +47,7 @@ export default function AccountsView() {
   const [isDownloader, setIsDownloader] = useState(true);
   const [isUploader, setIsUploader] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
+  const discoveredUsers = loadCachedUsers();
 
   const [isValidatingAll, setIsValidatingAll] = useState(false);
 
@@ -244,226 +254,401 @@ export default function AccountsView() {
       className="w-full h-full overflow-y-auto overflow-x-hidden"
     >
       <div className="w-full h-full p-4 lg:p-8">
-        <motion.div
-          variants={itemVariants}
-          className="w-full max-w-4xl mx-auto flex flex-col gap-6 pb-12"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">{t('accounts.title')}</h1>
-              <p className="text-muted-foreground mt-1">{t('accounts.description')}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={isValidatingAll || config.accounts.length === 0}
-                onClick={() => void handleValidateAll()}
-              >
-                <RefreshCw size={16} className={`mr-2 ${isValidatingAll ? 'animate-spin' : ''}`} />
-                {t('accounts.validateAll')}
-              </Button>
-
-              <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                <DialogTrigger render={<Button />}>
-                  <Plus size={16} className="mr-2" />
-                  {t('accounts.addAccount')}
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>{t('accounts.addAccountTitle')}</DialogTitle>
-                  </DialogHeader>
-                  <div className="flex flex-col gap-4 py-4">
-                    <div className="flex flex-col gap-2">
-                      <Label>{t('accounts.cookieLabel')}</Label>
-                      <Input
-                        type="password"
-                        value={newCookie}
-                        onChange={(e) => setNewCookie(e.target.value)}
-                        placeholder={t('accounts.cookiePlaceholder')}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label>{t('accounts.apiKeyLabel')}</Label>
-                      <Input
-                        type="password"
-                        value={newApiKey}
-                        onChange={(e) => setNewApiKey(e.target.value)}
-                        placeholder={t('accounts.apiKeyPlaceholder')}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 border rounded-md">
-                      <div className="space-y-0.5">
-                        <Label>{t('accounts.useForDownloading')}</Label>
-                        <p className="text-xs text-muted-foreground">
-                          {t('accounts.useForDownloadingDesc')}
-                        </p>
-                      </div>
-                      <Switch checked={isDownloader} onCheckedChange={setIsDownloader} />
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 border rounded-md">
-                      <div className="space-y-0.5">
-                        <Label>{t('accounts.useForUploading')}</Label>
-                        <p className="text-xs text-muted-foreground">
-                          {t('accounts.useForUploadingDesc')}
-                        </p>
-                      </div>
-                      <Switch checked={isUploader} onCheckedChange={setIsUploader} />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setIsAddOpen(false)}>
-                      {t('accounts.cancel')}
-                    </Button>
-                    <Button
-                      onClick={() => void handleAddAccount()}
-                      disabled={isAdding || (!newCookie && !newApiKey)}
-                    >
-                      {isAdding ? <RefreshCw className="animate-spin mr-2" size={16} /> : null}
-                      {t('accounts.add')}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {config.accounts?.map((acc) => {
-              const secrets = accountSecrets[acc.id];
-              const isSelected = config.spoofing.selectedUser === acc.id;
-              return (
-                <Card
-                  key={acc.id}
-                  className={`p-4 flex flex-col gap-4 transition-colors ${isSelected ? 'border-primary/60 bg-primary/5' : ''}`}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="relative">
-                      {acc.avatarUrl ? (
-                        <img
-                          src={acc.avatarUrl}
-                          alt="Avatar"
-                          className="w-12 h-12 rounded-full bg-secondary object-cover"
+        {config.accounts.length === 0 && discoveredUsers.length > 0 ? (
+          <motion.div
+            variants={itemVariants}
+            className="w-full max-w-4xl mx-auto flex flex-col gap-6 pb-12"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">{t('accounts.description')}</p>
+              <div className="flex gap-2">
+                <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+                  <DialogTrigger render={<Button />}>
+                    <Plus size={16} className="mr-2" />
+                    {t('accounts.addAccount')}
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>{t('accounts.addAccountTitle')}</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-4 py-4">
+                      <div className="flex flex-col gap-2">
+                        <Label>{t('accounts.cookieLabel')}</Label>
+                        <Input
+                          type="password"
+                          value={newCookie}
+                          onChange={(e) => setNewCookie(e.target.value)}
+                          placeholder={t('accounts.cookiePlaceholder')}
                         />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center text-lg font-bold">
-                          {acc.name.charAt(0)}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>{t('accounts.apiKeyLabel')}</Label>
+                        <Input
+                          type="password"
+                          value={newApiKey}
+                          onChange={(e) => setNewApiKey(e.target.value)}
+                          placeholder={t('accounts.apiKeyPlaceholder')}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                        <div className="space-y-0.5">
+                          <Label>{t('accounts.useForDownloading')}</Label>
+                          <p className="text-xs text-muted-foreground">
+                            {t('accounts.useForDownloadingDesc')}
+                          </p>
                         </div>
-                      )}
+                        <Switch checked={isDownloader} onCheckedChange={setIsDownloader} />
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                        <div className="space-y-0.5">
+                          <Label>{t('accounts.useForUploading')}</Label>
+                          <p className="text-xs text-muted-foreground">
+                            {t('accounts.useForUploadingDesc')}
+                          </p>
+                        </div>
+                        <Switch checked={isUploader} onCheckedChange={setIsUploader} />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsAddOpen(false)}>
+                          {t('accounts.cancel')}
+                        </Button>
+                        <Button
+                          onClick={() => void handleAddAccount()}
+                          disabled={isAdding || (!newCookie && !newApiKey)}
+                        >
+                          {isAdding ? <RefreshCw className="animate-spin mr-2" size={16} /> : null}
+                          {t('accounts.add')}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3
-                        className="font-semibold truncate flex items-center gap-1.5"
-                        title={acc.name}
-                      >
-                        {acc.name}
-                        {(acc.cookieValidated === true || acc.apiKeyValidated === true) && (
-                          <span title={t('accounts.validated') || 'Validated Account'}>
-                            <CheckCircle2 size={14} className="text-green-500" />
-                          </span>
-                        )}
-                      </h3>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted px-1">
+                Discovered Accounts
+              </p>
+              {discoveredUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center gap-3 rounded-lg border border-border-subtle bg-bg-base p-3"
+                >
+                  {user.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt=""
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-bg-surface flex items-center justify-center">
+                      <User2 size={20} className="text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-foreground block truncate">
+                      {user.displayName || user.name}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      ID: {user.id} · Auto-detected
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-primary bg-primary/10 px-2 py-1 rounded-full font-semibold shrink-0">
+                    Discovered
+                  </span>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        ) : config.accounts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-[calc(100vh-140px)] text-center text-muted-foreground space-y-4">
+            <User2 size={48} className="opacity-20 text-primary" />
+            <div className="space-y-1">
+              <p className="text-base font-semibold text-foreground">
+                {t('accounts.noAccounts') ?? 'No Accounts Configured'}
+              </p>
+              <p className="text-xs text-muted-foreground max-w-sm">{t('accounts.description')}</p>
+            </div>
+            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+              <DialogTrigger render={<Button size="sm" className="font-semibold" />}>
+                <Plus size={16} className="mr-2" />
+                {t('accounts.addAccount')}
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t('accounts.addAccountTitle')}</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 py-4">
+                  <div className="flex flex-col gap-2">
+                    <Label>{t('accounts.cookieLabel')}</Label>
+                    <Input
+                      type="password"
+                      value={newCookie}
+                      onChange={(e) => setNewCookie(e.target.value)}
+                      placeholder={t('accounts.cookiePlaceholder')}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>{t('accounts.apiKeyLabel')}</Label>
+                    <Input
+                      type="password"
+                      value={newApiKey}
+                      onChange={(e) => setNewApiKey(e.target.value)}
+                      placeholder={t('accounts.apiKeyPlaceholder')}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 border rounded-md">
+                    <div className="space-y-0.5">
+                      <Label>{t('accounts.useForDownloading')}</Label>
                       <p className="text-xs text-muted-foreground">
-                        {t('accounts.id')}: {acc.id}
+                        {t('accounts.useForDownloadingDesc')}
                       </p>
                     </div>
-                    <Button
-                      variant={isSelected ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => handleSelectAccount(acc)}
-                    >
-                      {isSelected ? t('accounts.selected') : t('accounts.select')}
-                    </Button>
-                    <Button
-                      title={t('accounts.deleteAccount')}
-                      variant="ghost"
-                      size="icon"
-                      className="text-red-500 hover:bg-red-500/10 hover:text-red-600"
-                      onClick={() => handleRemoveAccount(acc.id)}
-                    >
-                      <Trash2 size={16} />
-                    </Button>
+                    <Switch checked={isDownloader} onCheckedChange={setIsDownloader} />
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    {acc.isDownloader && (
-                      <div className="flex items-center gap-1.5 text-sm px-2 py-1 rounded-md w-fit bg-green-500/10">
-                        <Cookie size={13} className="text-green-500" />
-                        <span className="text-green-500">{t('accounts.downloader')}</span>
-                        {secrets?.cookie && acc.cookieValidated === true && (
-                          <span title={t('accounts.cookieValid')}>
-                            <CheckCircle2 size={13} className="text-green-400" />
-                          </span>
+                  <div className="flex items-center justify-between p-3 border rounded-md">
+                    <div className="space-y-0.5">
+                      <Label>{t('accounts.useForUploading')}</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {t('accounts.useForUploadingDesc')}
+                      </p>
+                    </div>
+                    <Switch checked={isUploader} onCheckedChange={setIsUploader} />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setIsAddOpen(false)}>
+                    {t('accounts.cancel')}
+                  </Button>
+                  <Button
+                    onClick={() => void handleAddAccount()}
+                    disabled={isAdding || (!newCookie && !newApiKey)}
+                  >
+                    {isAdding ? <RefreshCw className="animate-spin mr-2" size={16} /> : null}
+                    {t('accounts.add')}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        ) : (
+          <motion.div
+            variants={itemVariants}
+            className="w-full max-w-4xl mx-auto flex flex-col gap-6 pb-12"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">{t('accounts.description')}</p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  disabled={isValidatingAll || config.accounts.length === 0}
+                  onClick={() => void handleValidateAll()}
+                >
+                  <RefreshCw
+                    size={16}
+                    className={`mr-2 ${isValidatingAll ? 'animate-spin' : ''}`}
+                  />
+                  {t('accounts.validateAll')}
+                </Button>
+
+                <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+                  <DialogTrigger render={<Button />}>
+                    <Plus size={16} className="mr-2" />
+                    {t('accounts.addAccount')}
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>{t('accounts.addAccountTitle')}</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-4 py-4">
+                      <div className="flex flex-col gap-2">
+                        <Label>{t('accounts.cookieLabel')}</Label>
+                        <Input
+                          type="password"
+                          value={newCookie}
+                          onChange={(e) => setNewCookie(e.target.value)}
+                          placeholder={t('accounts.cookiePlaceholder')}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>{t('accounts.apiKeyLabel')}</Label>
+                        <Input
+                          type="password"
+                          value={newApiKey}
+                          onChange={(e) => setNewApiKey(e.target.value)}
+                          placeholder={t('accounts.apiKeyPlaceholder')}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 border rounded-md">
+                        <div className="space-y-0.5">
+                          <Label>{t('accounts.useForDownloading')}</Label>
+                          <p className="text-xs text-muted-foreground">
+                            {t('accounts.useForDownloadingDesc')}
+                          </p>
+                        </div>
+                        <Switch checked={isDownloader} onCheckedChange={setIsDownloader} />
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 border rounded-md">
+                        <div className="space-y-0.5">
+                          <Label>{t('accounts.useForUploading')}</Label>
+                          <p className="text-xs text-muted-foreground">
+                            {t('accounts.useForUploadingDesc')}
+                          </p>
+                        </div>
+                        <Switch checked={isUploader} onCheckedChange={setIsUploader} />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" onClick={() => setIsAddOpen(false)}>
+                        {t('accounts.cancel')}
+                      </Button>
+                      <Button
+                        onClick={() => void handleAddAccount()}
+                        disabled={isAdding || (!newCookie && !newApiKey)}
+                      >
+                        {isAdding ? <RefreshCw className="animate-spin mr-2" size={16} /> : null}
+                        {t('accounts.add')}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {config.accounts?.map((acc) => {
+                const secrets = accountSecrets[acc.id];
+                const isSelected = config.spoofing.selectedUser === acc.id;
+                return (
+                  <Card
+                    key={acc.id}
+                    className={`p-4 flex flex-col gap-4 transition-colors ${isSelected ? 'border-primary/60 bg-primary/5' : ''}`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="relative">
+                        {acc.avatarUrl ? (
+                          <img
+                            src={acc.avatarUrl}
+                            alt="Avatar"
+                            className="w-12 h-12 rounded-full bg-secondary object-cover"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center text-lg font-bold">
+                            {acc.name.charAt(0)}
+                          </div>
                         )}
                       </div>
-                    )}
-                    {acc.isUploader && (
-                      <div className="flex items-center gap-1.5 text-sm px-2 py-1 rounded-md w-fit bg-blue-500/10">
-                        <Key size={13} className="text-blue-500" />
-                        <span className="text-blue-500">{t('accounts.uploader')}</span>
-                        {secrets?.apiKey && acc.apiKeyValidated === true && (
-                          <span title={t('accounts.apiKeyValid')}>
-                            <CheckCircle2 size={13} className="text-blue-400" />
-                          </span>
-                        )}
+                      <div className="flex-1 min-w-0">
+                        <h3
+                          className="font-semibold truncate flex items-center gap-1.5"
+                          title={acc.name}
+                        >
+                          {acc.name}
+                          {(acc.cookieValidated === true || acc.apiKeyValidated === true) && (
+                            <span title={t('accounts.validated') || 'Validated Account'}>
+                              <CheckCircle2 size={14} className="text-green-500" />
+                            </span>
+                          )}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {t('accounts.id')}: {acc.id}
+                        </p>
                       </div>
-                    )}
-                    {/* Only render 'missing' pills once secrets have finished loading
+                      <Button
+                        variant={isSelected ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handleSelectAccount(acc)}
+                      >
+                        {isSelected ? t('accounts.selected') : t('accounts.select')}
+                      </Button>
+                      <Button
+                        title={t('accounts.deleteAccount')}
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-500 hover:bg-red-500/10 hover:text-red-600"
+                        onClick={() => handleRemoveAccount(acc.id)}
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {acc.isDownloader && (
+                        <div className="flex items-center gap-1.5 text-sm px-2 py-1 rounded-md w-fit bg-green-500/10">
+                          <Cookie size={13} className="text-green-500" />
+                          <span className="text-green-500">{t('accounts.downloader')}</span>
+                          {secrets?.cookie && acc.cookieValidated === true && (
+                            <span title={t('accounts.cookieValid')}>
+                              <CheckCircle2 size={13} className="text-green-400" />
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {acc.isUploader && (
+                        <div className="flex items-center gap-1.5 text-sm px-2 py-1 rounded-md w-fit bg-blue-500/10">
+                          <Key size={13} className="text-blue-500" />
+                          <span className="text-blue-500">{t('accounts.uploader')}</span>
+                          {secrets?.apiKey && acc.apiKeyValidated === true && (
+                            <span title={t('accounts.apiKeyValid')}>
+                              <CheckCircle2 size={13} className="text-blue-400" />
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {/* Only render 'missing' pills once secrets have finished loading
                         from disk. Otherwise a stale render during the mount → load
                         window flashed 'Invalid cookie / Invalid API key' for every
                         account, which users read as the app invalidating their
                         credentials on reopen. */}
-                    {secretsLoaded && !secrets?.cookie && acc.isDownloader && (
-                      <div
-                        className="text-xs text-red-500 flex items-center gap-1"
-                        title="No cookie is saved for this account"
-                      >
-                        <ShieldAlert size={12} /> Missing cookie
-                      </div>
-                    )}
-                    {secretsLoaded && !secrets?.apiKey && acc.isUploader && (
-                      <div
-                        className="text-xs text-yellow-500 flex items-center gap-1"
-                        title="No Open Cloud API key is saved for this account"
-                      >
-                        <ShieldAlert size={12} /> Missing API key
-                      </div>
-                    )}
-                    {secretsLoaded &&
-                      acc.isDownloader &&
-                      secrets?.cookie &&
-                      acc.cookieValidated === false && (
+                      {secretsLoaded && !secrets?.cookie && acc.isDownloader && (
                         <div
                           className="text-xs text-red-500 flex items-center gap-1"
-                          title="The saved cookie failed validation — Roblox rejected it"
+                          title="No cookie is saved for this account"
                         >
-                          <ShieldAlert size={12} /> Cookie rejected by Roblox
+                          <ShieldAlert size={12} /> Missing cookie
                         </div>
                       )}
-                    {secretsLoaded &&
-                      acc.isUploader &&
-                      secrets?.apiKey &&
-                      acc.apiKeyValidated === false && (
+                      {secretsLoaded && !secrets?.apiKey && acc.isUploader && (
                         <div
                           className="text-xs text-yellow-500 flex items-center gap-1"
-                          title="The saved API key failed validation — Roblox rejected it"
+                          title="No Open Cloud API key is saved for this account"
                         >
-                          <ShieldAlert size={12} /> API key rejected by Roblox
+                          <ShieldAlert size={12} /> Missing API key
                         </div>
                       )}
-                  </div>
-                </Card>
-              );
-            })}
-
-            {(!config.accounts || config.accounts.length === 0) && (
-              <div className="col-span-full py-12 text-center border border-dashed rounded-lg text-muted-foreground">
-                {t('accounts.noAccounts')}
-              </div>
-            )}
-          </div>
-        </motion.div>
+                      {secretsLoaded &&
+                        acc.isDownloader &&
+                        secrets?.cookie &&
+                        acc.cookieValidated === false && (
+                          <div
+                            className="text-xs text-red-500 flex items-center gap-1"
+                            title="The saved cookie failed validation — Roblox rejected it"
+                          >
+                            <ShieldAlert size={12} /> Cookie rejected by Roblox
+                          </div>
+                        )}
+                      {secretsLoaded &&
+                        acc.isUploader &&
+                        secrets?.apiKey &&
+                        acc.apiKeyValidated === false && (
+                          <div
+                            className="text-xs text-yellow-500 flex items-center gap-1"
+                            title="The saved API key failed validation — Roblox rejected it"
+                          >
+                            <ShieldAlert size={12} /> API key rejected by Roblox
+                          </div>
+                        )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
       </div>
     </motion.div>
   );

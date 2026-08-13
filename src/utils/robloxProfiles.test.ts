@@ -12,9 +12,25 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 
 describe('robloxProfiles', () => {
+  const storeData: Record<string, string> = {};
+  const mockLocalStorage = {
+    getItem: vi.fn((key: string) => storeData[key] || null),
+    setItem: vi.fn((key: string, val: string) => {
+      storeData[key] = val;
+    }),
+    clear: vi.fn(() => {
+      for (const k of Object.keys(storeData)) delete storeData[k];
+    }),
+  };
+
   beforeEach(() => {
+    vi.stubGlobal('localStorage', mockLocalStorage);
     vi.clearAllMocks();
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('normalizes IDs correctly', () => {

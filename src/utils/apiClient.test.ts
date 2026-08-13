@@ -4,25 +4,37 @@ import * as pluginBridge from './pluginBridge';
 import * as tauriRuntime from './tauriRuntime';
 
 describe('apiClient', () => {
+  const mockLocalStorage = {
+    getItem: vi.fn().mockReturnValue(null),
+    setItem: vi.fn(),
+    clear: vi.fn(),
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
+    vi.stubGlobal('localStorage', mockLocalStorage);
 
     // Default mocks
-    vi.spyOn(window.localStorage.__proto__, 'getItem').mockReturnValue(null);
+    mockLocalStorage.getItem.mockReturnValue(null);
     vi.spyOn(pluginBridge, 'findPluginBridgePort').mockResolvedValue(null);
     vi.spyOn(tauriRuntime, 'isTauriRuntime').mockReturnValue(false);
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   describe('getStudioPlaceIdFallback', () => {
     it('returns cached valid place id if present', async () => {
-      vi.spyOn(window.localStorage.__proto__, 'getItem').mockReturnValue('123456');
+      mockLocalStorage.getItem.mockReturnValue('123456');
       const result = await getStudioPlaceIdFallback();
       expect(result).toBe('123456');
     });
 
     it('ignores invalid or zero cached place id', async () => {
-      vi.spyOn(window.localStorage.__proto__, 'getItem').mockReturnValue('0');
+      mockLocalStorage.getItem.mockReturnValue('0');
       const result = await getStudioPlaceIdFallback();
       expect(result).toBe('');
     });

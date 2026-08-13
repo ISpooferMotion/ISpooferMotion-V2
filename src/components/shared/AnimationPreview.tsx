@@ -10,6 +10,7 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useSpooferStore } from '../../stores/spooferStore';
 import { Button } from '../ui/button';
 import { cn } from '../../utils/cn';
 import {
@@ -22,7 +23,8 @@ import { detectRigType, getBones, type RigBone, type RigType } from '../../utils
 interface AnimationPreviewProps {
   assetId: string;
   assetName?: string;
-  onClose: () => void;
+  onClose?: () => void;
+  inline?: boolean;
 }
 
 function disposeMaterial(material: THREE.Material) {
@@ -126,7 +128,12 @@ const toMat4InPlace = (r: number[], target: THREE.Matrix4) =>
  * Reconstructs the R6 or R15 bone hierarchy, interpolates CFrames manually to match
  * Roblox's internal easing styles, and wraps it all in a React Portal.
  */
-export default function AnimationPreview({ assetId, assetName, onClose }: AnimationPreviewProps) {
+export default function AnimationPreview({
+  assetId,
+  assetName,
+  onClose,
+  inline = false,
+}: AnimationPreviewProps) {
   const { t } = useLanguage();
   const mountRef = useRef<HTMLDivElement>(null);
   const { config } = useConfig();
@@ -160,6 +167,9 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
     new WeakMap(),
   );
 
+  const statusStage = useSpooferStore((s) => s.assetStatuses[assetId]?.stage);
+  const replacementId = useSpooferStore((s) => s.lastReplacements[assetId]);
+
   useEffect(() => {
     playingRef.current = playing;
   }, [playing]);
@@ -189,9 +199,12 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
           }
         }
 
+        const pinnedPlaceId = useSpooferStore.getState().assetForcePlaceIds?.[assetId] ?? null;
+
         const xml = await invoke<string | null>('fetch_animation_xml', {
           assetId,
           cookie: activeCookie ?? null,
+          placeId: pinnedPlaceId,
         });
         if (cancelled) return;
 
@@ -247,7 +260,7 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
     return () => {
       cancelled = true;
     };
-  }, [assetId, cookie]);
+  }, [assetId, cookie, statusStage, replacementId]);
 
   const getFlattenedPoses = useCallback((poses: RobloxPose[]) => {
     const cached = flattenedPoseCacheRef.current.get(poses);
@@ -568,24 +581,22 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
 
   const speedOptions = [0.25, 0.5, 1, 2] as const;
 
-  return createPortal(
+  const content = (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.15 }}
-      onClick={onClose}
-      className="fixed inset-0 z-9999 bg-black/80 backdrop-blur-md flex items-center justify-center p-6 pointer-events-auto"
+      initial={inline ? { opacity: 0 } : { scale: 0.95, y: 12, opacity: 0 }}
+      animate={inline ? { opacity: 1 } : { scale: 1, y: 0, opacity: 1 }}
+      exit={inline ? { opacity: 0 } : { scale: 0.95, y: 12, opacity: 0 }}
+      transition={inline ? { duration: 0.15 } : { type: 'spring', damping: 30, stiffness: 350 }}
+      onClick={(e) => e.stopPropagation()}
+      className={cn(
+        'relative flex flex-col bg-bg-surface border border-border-subtle rounded-lg overflow-hidden',
+        inline
+          ? 'w-full h-full border-0'
+          : 'w-150 max-w-[calc(100vw-48px)] h-125 max-h-[calc(100vh-48px)] shadow-floating',
+      )}
     >
-      <motion.div
-        initial={{ scale: 0.95, y: 12, opacity: 0 }}
-        animate={{ scale: 1, y: 0, opacity: 1 }}
-        exit={{ scale: 0.95, y: 12, opacity: 0 }}
-        transition={{ type: 'spring', damping: 30, stiffness: 350 }}
-        onClick={(e) => e.stopPropagation()}
-        className="relative flex flex-col bg-bg-surface border border-border-subtle rounded-lg shadow-floating overflow-hidden w-150 max-w-[calc(100vw-48px)] h-125 max-h-[calc(100vh-48px)]"
-      >
-        {}
+      {}
+      {!inline && (
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle bg-bg-elevated shrink-0">
           <Clapperboard size={15} className="text-primary shrink-0" />
           <div className="flex-1 min-w-0">
@@ -613,151 +624,169 @@ export default function AnimationPreview({ assetId, assetName, onClose }: Animat
               </div>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-base rounded-md transition-colors shrink-0"
-          >
-            <X size={15} />
-          </button>
-        </div>
-
-        {}
-        <div className="relative flex-1 overflow-hidden bg-bg-base">
-          <div ref={mountRef} className="w-full h-full" />
-
-          <AnimatePresence>
-            {status === 'loading' && (
-              <motion.div
-                key="loading"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-base"
-              >
-                <Loader2 className="animate-spin text-primary" size={32} />
-                <p className="text-[13px] text-text-muted font-medium">
-                  {t('misc.fetchingAnimation')}
-                </p>
-              </motion.div>
-            )}
-
-            {status === 'error' && (
-              <motion.div
-                key="error"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 bg-bg-base"
-              >
-                <p className="text-[12px] text-text-muted text-center max-w-[320px] leading-relaxed">
-                  {errorMsg}
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {status === 'ready' && (
-            <>
-              <p className="absolute bottom-3 right-3 text-[10px] text-text-muted opacity-40 select-none pointer-events-none">
-                {t('misc.dragToOrbit')}
-              </p>
-            </>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-base rounded-md transition-colors shrink-0"
+            >
+              <X size={15} />
+            </button>
           )}
         </div>
+      )}
 
-        {}
+      {}
+      <div className="relative flex-1 overflow-hidden bg-bg-base">
+        <div ref={mountRef} className="w-full h-full" />
+
+        <AnimatePresence>
+          {status === 'loading' && (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-base"
+            >
+              <Loader2 className="animate-spin text-primary" size={32} />
+              <p className="text-[13px] text-text-muted font-medium">
+                {t('misc.fetchingAnimation')}
+              </p>
+            </motion.div>
+          )}
+
+          {status === 'error' && (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 bg-bg-base"
+            >
+              <p className="text-[12px] text-text-muted text-center max-w-[320px] leading-relaxed">
+                {errorMsg}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {status === 'ready' && (
-          <div className="shrink-0 px-4 py-3 bg-bg-elevated border-t border-border-subtle flex flex-col gap-2.5">
+          <>
+            <p className="absolute bottom-3 right-3 text-[10px] text-text-muted opacity-40 select-none pointer-events-none">
+              {t('misc.dragToOrbit')}
+            </p>
+          </>
+        )}
+      </div>
+
+      {}
+      {status === 'ready' && (
+        <div className="shrink-0 px-4 py-3 bg-bg-elevated border-t border-border-subtle flex flex-col gap-2.5">
+          {}
+          <div
+            className="relative w-full h-1.5 bg-bg-base rounded-full cursor-pointer select-none"
+            ref={scrubBarRef}
+            onPointerDown={(e) => {
+              // Scrub through animation manually via timeline drag.
+              isScrubbing.current = true;
+              e.currentTarget.setPointerCapture(e.pointerId);
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              currentTimeRef.current = pct * durationRef.current;
+            }}
+            onPointerMove={(e) => {
+              if (!isScrubbing.current) return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              currentTimeRef.current = pct * durationRef.current;
+            }}
+            onPointerUp={(e) => {
+              isScrubbing.current = false;
+              e.currentTarget.releasePointerCapture(e.pointerId);
+            }}
+          >
+            {}
+            {duration > 0 &&
+              keyframeTimes.map((t, i) => (
+                <div
+                  key={i}
+                  className="absolute top-0 bottom-0 w-px bg-border-subtle/40 z-0 pointer-events-none"
+                  style={{ left: `${(t / duration) * 100}%` }}
+                />
+              ))}
             {}
             <div
-              className="relative w-full h-1.5 bg-bg-base rounded-full cursor-pointer select-none"
-              ref={scrubBarRef}
-              onPointerDown={(e) => {
-                // Scrub through animation manually via timeline drag.
-                isScrubbing.current = true;
-                e.currentTarget.setPointerCapture(e.pointerId);
-                const rect = e.currentTarget.getBoundingClientRect();
-                const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                currentTimeRef.current = pct * durationRef.current;
-              }}
-              onPointerMove={(e) => {
-                if (!isScrubbing.current) return;
-                const rect = e.currentTarget.getBoundingClientRect();
-                const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                currentTimeRef.current = pct * durationRef.current;
-              }}
-              onPointerUp={(e) => {
-                isScrubbing.current = false;
-                e.currentTarget.releasePointerCapture(e.pointerId);
+              ref={progressBarRef}
+              className="absolute top-0 left-0 bottom-0 bg-primary rounded-full z-10 pointer-events-none"
+              style={{ width: '0%', transition: 'none' }}
+            />
+          </div>
+
+          {}
+          <div className="flex items-center gap-2">
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-7 w-7 min-w-7 shrink-0"
+              onClick={() => setPlaying((p) => !p)}
+            >
+              {playing ? <Pause size={13} /> : <Play size={13} fill="currentColor" />}
+            </Button>
+
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 min-w-7 shrink-0"
+              onClick={() => {
+                currentTimeRef.current = 0;
               }}
             >
-              {}
-              {duration > 0 &&
-                keyframeTimes.map((t, i) => (
-                  <div
-                    key={i}
-                    className="absolute top-0 bottom-0 w-px bg-border-subtle/40 z-0 pointer-events-none"
-                    style={{ left: `${(t / duration) * 100}%` }}
-                  />
-                ))}
-              {}
-              <div
-                ref={progressBarRef}
-                className="absolute top-0 left-0 bottom-0 bg-primary rounded-full z-10 pointer-events-none"
-                style={{ width: '0%', transition: 'none' }}
-              />
-            </div>
+              <RotateCcw size={12} />
+            </Button>
 
             {}
-            <div className="flex items-center gap-2">
-              <Button
-                size="icon"
-                variant="secondary"
-                className="h-7 w-7 min-w-7 shrink-0"
-                onClick={() => setPlaying((p) => !p)}
-              >
-                {playing ? <Pause size={13} /> : <Play size={13} fill="currentColor" />}
-              </Button>
+            <span ref={timeDisplayRef} className="text-[11px] font-mono text-text-muted ml-1">
+              0.00s / {duration.toFixed(2)}s
+            </span>
 
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 min-w-7 shrink-0"
-                onClick={() => {
-                  currentTimeRef.current = 0;
-                }}
-              >
-                <RotateCcw size={12} />
-              </Button>
-
-              {}
-              <span ref={timeDisplayRef} className="text-[11px] font-mono text-text-muted ml-1">
-                0.00s / {duration.toFixed(2)}s
+            <div className="ml-auto flex items-center gap-1.5 bg-bg-base/80 border border-border-subtle p-0.5 rounded-lg select-none">
+              <span className="text-[10px] font-bold text-text-muted px-1.5 uppercase tracking-wider">
+                {t('misc.speed')}
               </span>
-
-              <div className="ml-auto flex items-center gap-1">
-                <span className="text-[10px] text-text-muted mr-1 uppercase tracking-wide">
-                  {t('misc.speed')}
-                </span>
-                {speedOptions.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setSpeed(s)}
-                    className={cn(
-                      'px-2 py-0.5 rounded text-[11px] font-semibold transition-colors',
-                      speed === s
-                        ? 'bg-primary text-white'
-                        : 'text-text-muted hover:text-text-primary hover:bg-bg-base',
-                    )}
-                  >
-                    {s}×
-                  </button>
-                ))}
-              </div>
+              {speedOptions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSpeed(s)}
+                  className={cn(
+                    'px-2 py-0.5 rounded-md text-[10px] font-bold transition-all',
+                    speed === s
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-text-muted hover:text-text-primary hover:bg-bg-elevated/50',
+                  )}
+                >
+                  {s}×
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </motion.div>
+        </div>
+      )}
+    </motion.div>
+  );
+
+  if (inline) return content;
+
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      onClick={onClose}
+      className="fixed inset-0 z-9999 bg-black/80 backdrop-blur-md flex items-center justify-center p-6 pointer-events-auto"
+    >
+      {content}
     </motion.div>,
     document.body,
   );

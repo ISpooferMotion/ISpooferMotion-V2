@@ -106,6 +106,13 @@ export const commands = {
   uninstallApp: () => typedError<boolean, AppError>(__TAURI_INVOKE('uninstall_app')),
   clearPluginCache: () => typedError<boolean, AppError>(__TAURI_INVOKE('clear_plugin_cache')),
   openFrontendDevtools: () => __TAURI_INVOKE<void>('open_frontend_devtools'),
+  /**
+   *  Updates the proxy URL used for outbound Roblox/API calls. Pass an empty
+   *  string or `None` to fall back to the OS system proxy (Windows WinINET, which
+   *  VPN "proxy mode" apps like Happ set). Called from the frontend on startup and
+   *  whenever the Proxy URL setting changes.
+   */
+  setProxyUrl: (url: string | null) => __TAURI_INVOKE<boolean>('set_proxy_url', { url }),
   runSpooferAction: (data: SpooferActionRequest) =>
     typedError<null, AppError>(__TAURI_INVOKE('run_spoofer_action', { data })),
   spooferPause: (jobId: string) => __TAURI_INVOKE<boolean>('spoofer_pause', { jobId }),
@@ -191,6 +198,15 @@ export const commands = {
       __TAURI_INVOKE('scan_and_replace_multiple_strings', { pid, replacements }),
     ),
   clearAssetCache: () => __TAURI_INVOKE<void>('clear_asset_cache'),
+  /**
+   *  Configure the push URL for the community asset cache.
+   *
+   *  This sets the endpoint that newly discovered (asset_id, place_id) pairs are POSTed to.
+   *  Reading from the community cache is explicitly NOT supported - users resolve assets
+   *  from their own local session cache only.
+   */
+  initializeRemoteCache: (pushUrl: string | null) =>
+    typedError<null, string>(__TAURI_INVOKE('initialize_remote_cache', { pushUrl })),
   patchAssetPermissions: (assetId: string, universeId: string, cookie: string, csrfToken: string) =>
     typedError<boolean, AppError>(
       __TAURI_INVOKE('patch_asset_permissions', { assetId, universeId, cookie, csrfToken }),
@@ -266,6 +282,11 @@ export const commands = {
   getPluginBridgePort: () => __TAURI_INVOKE<number | null>('get_plugin_bridge_port'),
   /**  Checks if the Studio plugin has polled the daemon recently. */
   getStudioHealthStatus: () => __TAURI_INVOKE<string>('get_studio_health_status'),
+  /**
+   *  Reports whether the plugin HTTP server landed on its default ports or had to
+   *  move past them, and which processes are occupying the defaults.
+   */
+  getPortDiagnostic: () => __TAURI_INVOKE<string>('get_port_diagnostic'),
   /**  Returns the current state of asset discovery for the frontend UI. */
   getStudioAssetSnapshots: () => __TAURI_INVOKE<string>('get_studio_asset_snapshots'),
 };

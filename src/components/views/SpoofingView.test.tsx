@@ -183,7 +183,6 @@ const mockConfig = {
   },
   advanced: {
     clipboardMonitoring: false,
-    forcePlaceIds: '',
     spoofSounds: false,
   },
 };

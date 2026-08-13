@@ -1,8 +1,19 @@
 import { create } from 'zustand';
 
 import type { SpooferAssetResult } from '../types/tauriEvents';
+
+export type AssetStage =
+  | 'idle'
+  | 'resolving_location'
+  | 'discovering_usage'
+  | 'discovering_graph'
+  | 'downloading'
+  | 'uploading'
+  | 'done'
+  | 'error'
+  | 'skipped';
 import { notifyError } from '../utils/notifyError';
-import type { RbxInstance } from '../utils/robloxPlaceParser/types';
+import type { ParsedAssetRef, RbxInstance } from '../utils/robloxPlaceParser/types';
 import { appendSpoofingLog } from '../utils/spoofingLogs';
 import { queueStudioReplacements } from '../utils/studioBridge';
 import { isTauriRuntime } from '../utils/tauriRuntime';
@@ -77,12 +88,77 @@ interface SpooferState {
   showAdvanced: boolean;
   setShowAdvanced: (val: boolean | ((prev: boolean) => boolean)) => void;
 
+  // True while a Studio scan is in progress. Lives in the store (not local
+  // component state) so the explorer action bar can read it without prop
+  // drilling from the (now hidden) SpoofingView logic host.
+  isScanningStudio: boolean;
+  setIsScanningStudio: (val: boolean) => void;
+
   keyframeWarningCount: number;
   setKeyframeWarningCount: (val: number | ((prev: number) => number)) => void;
 
   assetMetadataMap: Record<string, { name: string; type: string }>;
   setAssetMetadataMap: (val: Record<string, { name: string; type: string }>) => void;
+
+  // Per-asset forced place IDs. Maps an asset id to a place id that should be
+  // used as the asset-delivery place hint when spoofing that asset. Absent key
+  // means "use the global forcePlaceIds / studio fallback" for that asset.
+  assetForcePlaceIds: Record<string, string>;
+  setAssetForcePlaceIds: (
+    val: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>),
+  ) => void;
+  clearAssetForcePlaceIds: (ids: string[]) => void;
+
+  // Per-asset status during spoofing
+  assetStatuses: Record<string, { stage: AssetStage; message?: string }>;
+  setAssetStatus: (assetId: string, status: { stage: AssetStage; message?: string }) => void;
+  clearAssetStatuses: () => void;
+
+  // Bottom-right toast for one-off notifications (job finished, etc).
+  toast: { id: number; level: 'success' | 'error' | 'info'; message: string } | null;
+  showToast: (level: 'success' | 'error' | 'info', message: string, ttlMs?: number) => void;
+  dismissToast: () => void;
+
+  // True while place ID discovery is running (pre-spoof step)
+  isDiscoveringPlaceIds: boolean;
+  setIsDiscoveringPlaceIds: (val: boolean) => void;
+
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+
+  activeAssetFilters: string[];
+  setActiveAssetFilters: (filters: string[] | ((prev: string[]) => string[])) => void;
+
+  isInspectorOpen: boolean;
+  setIsInspectorOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+
+  activeInspectAsset: ParsedAssetRef | null;
+  setActiveInspectAsset: (asset: ParsedAssetRef | null) => void;
+
+  forceSpoof: boolean;
+  setForceSpoof: (val: boolean) => void;
+
+  discoveryTimeoutSecs: number;
+  setDiscoveryTimeoutSecs: (val: number) => void;
 }
+
+const loadSavedReplacements = (): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem('ISpooferMotion_SavedReplacements');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const loadSavedPlaceIds = (): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem('ISpooferMotion_SavedPlaceIds');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
 
 /**
  * Ephemeral state manager for the active spoofing job, asset explorer, and Studio integration.
@@ -147,11 +223,15 @@ export const useSpooferStore = create<SpooferState>((set) => ({
   spoofStartTime: null,
   setSpoofStartTime: (val) => set({ spoofStartTime: val }),
 
-  lastReplacements: {},
+  lastReplacements: loadSavedReplacements(),
   setLastReplacements: (val) =>
-    set((state) => ({
-      lastReplacements: typeof val === 'function' ? val(state.lastReplacements) : val,
-    })),
+    set((state) => {
+      const next = typeof val === 'function' ? val(state.lastReplacements) : val;
+      try {
+        localStorage.setItem('ISpooferMotion_SavedReplacements', JSON.stringify(next));
+      } catch {}
+      return { lastReplacements: next };
+    }),
 
   isReplacing: false,
   setIsReplacing: (val) => set({ isReplacing: val }),
@@ -189,6 +269,9 @@ export const useSpooferStore = create<SpooferState>((set) => ({
       showAdvanced: typeof val === 'function' ? val(state.showAdvanced) : val,
     })),
 
+  isScanningStudio: false,
+  setIsScanningStudio: (val) => set({ isScanningStudio: val }),
+
   keyframeWarningCount: 0,
   setKeyframeWarningCount: (val) =>
     set((state) => ({
@@ -197,6 +280,71 @@ export const useSpooferStore = create<SpooferState>((set) => ({
 
   assetMetadataMap: {},
   setAssetMetadataMap: (val) => set({ assetMetadataMap: val }),
+
+  assetForcePlaceIds: loadSavedPlaceIds(),
+  setAssetForcePlaceIds: (val) =>
+    set((state) => {
+      const next = typeof val === 'function' ? val(state.assetForcePlaceIds) : val;
+      try {
+        localStorage.setItem('ISpooferMotion_SavedPlaceIds', JSON.stringify(next));
+      } catch {}
+      return { assetForcePlaceIds: next };
+    }),
+  clearAssetForcePlaceIds: (ids) =>
+    set((state) => {
+      if (ids.length === 0) return {};
+      const next = { ...state.assetForcePlaceIds };
+      for (const id of ids) delete next[id];
+      try {
+        localStorage.setItem('ISpooferMotion_SavedPlaceIds', JSON.stringify(next));
+      } catch {}
+      return { assetForcePlaceIds: next };
+    }),
+
+  assetStatuses: {},
+  setAssetStatus: (assetId, status) =>
+    set((state) => ({
+      assetStatuses: { ...state.assetStatuses, [assetId]: status },
+    })),
+  clearAssetStatuses: () => set({ assetStatuses: {} }),
+
+  toast: null,
+  showToast: (level, message, ttlMs = 4000) => {
+    const id = Date.now();
+    set({ toast: { id, level, message } });
+    setTimeout(() => {
+      const cur = useSpooferStore.getState().toast;
+      if (cur && cur.id === id) set({ toast: null });
+    }, ttlMs);
+  },
+  dismissToast: () => set({ toast: null }),
+
+  isDiscoveringPlaceIds: false,
+  setIsDiscoveringPlaceIds: (val) => set({ isDiscoveringPlaceIds: val }),
+
+  searchQuery: '',
+  setSearchQuery: (query) => set({ searchQuery: query }),
+
+  activeAssetFilters: [],
+  setActiveAssetFilters: (val) =>
+    set((state) => ({
+      activeAssetFilters: typeof val === 'function' ? val(state.activeAssetFilters) : val,
+    })),
+
+  isInspectorOpen: true,
+  setIsInspectorOpen: (val) =>
+    set((state) => ({
+      isInspectorOpen: typeof val === 'function' ? val(state.isInspectorOpen) : val,
+    })),
+
+  activeInspectAsset: null,
+  setActiveInspectAsset: (asset) => set({ activeInspectAsset: asset }),
+
+  forceSpoof: false,
+  setForceSpoof: (val) => set({ forceSpoof: val }),
+
+  discoveryTimeoutSecs: 60,
+  setDiscoveryTimeoutSecs: (val) => set({ discoveryTimeoutSecs: val }),
 }));
 
 /**

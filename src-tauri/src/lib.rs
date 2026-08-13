@@ -92,6 +92,7 @@ macro_rules! specta_commands {
             crate::commands::spoofer::permissions::set_asset_privacy,
             crate::commands::spoofer::place::get_place_id_from_creator,
             crate::commands::spoofer::place::get_multiple_place_ids,
+            crate::commands::spoofer::place::discover_asset_place_id,
             crate::commands::spoofer::place::get_universe_id_from_place_id,
             crate::commands::spoofer::place::search_global_places,
             crate::commands::spoofer::place::clear_downloads_directory_command,

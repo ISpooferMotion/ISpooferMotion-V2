@@ -4,6 +4,7 @@
 use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tauri::Manager;
 
 #[derive(Deserialize, specta::Type)]
 pub struct FetchAssetsRequest {
@@ -301,11 +302,32 @@ pub async fn fetch_animation_xml(
     app: tauri::AppHandle,
     asset_id: String,
     cookie: Option<String>,
+    place_id: Option<String>,
 ) -> crate::error::Result<Option<String>> {
+    // 1. Check local downloads cache first
+    let anim_cache_file = if let Ok(app_dir) = app.path().app_data_dir() {
+        let anim_dir = app_dir.join("downloads").join("animations");
+        let _ = tokio::fs::create_dir_all(&anim_dir).await;
+        let file_path = anim_dir.join(format!("{asset_id}.xml"));
+        if file_path.exists() {
+            if let Ok(cached_xml) = tokio::fs::read_to_string(&file_path).await {
+                if cached_xml.contains("<roblox") {
+                    return Ok(Some(cached_xml));
+                }
+            }
+        }
+        Some(file_path)
+    } else {
+        None
+    };
+
     let url = format!("https://assetdelivery.roblox.com/v1/asset/?id={asset_id}");
 
     let client = crate::utils::get_http_client();
     let mut req = client.get(&url).header(USER_AGENT, "ISpooferMotion/AnimPreview");
+    if let Some(pid) = &place_id {
+        req = crate::commands::spoofer::apply_roblox_game_context(req, Some(pid), None);
+    }
 
     let mut actual_cookie_header: Option<String> = None;
     if let Some(cookie_val) = &cookie {
@@ -326,8 +348,7 @@ pub async fn fetch_animation_xml(
 
     let bytes = resp.bytes().await?;
 
-    // Parse binary XML API responses and serialize to string format.
-    if bytes.starts_with(b"<roblox!") {
+    let parsed_xml = if bytes.starts_with(b"<roblox!") {
         let dom = match rbx_binary::from_reader(bytes.as_ref()) {
             Ok(d) => d,
             Err(e) => {
@@ -338,12 +359,18 @@ pub async fn fetch_animation_xml(
         if let Err(e) = rbx_xml::to_writer_default(&mut out, &dom, dom.root().children()) {
             return Err(crate::error::AppError::Custom(format!("XML serialize error: {e}")));
         }
-        let xml_str = String::from_utf8_lossy(&out).to_string();
-        Ok(Some(xml_str))
+        Some(String::from_utf8_lossy(&out).to_string())
     } else if bytes.starts_with(b"<roblox") {
-        let xml_str = String::from_utf8_lossy(&bytes).to_string();
-        Ok(Some(xml_str))
+        Some(String::from_utf8_lossy(&bytes).to_string())
     } else {
-        Ok(None)
+        None
+    };
+
+    if let Some(ref xml) = parsed_xml {
+        if let Some(file_path) = anim_cache_file {
+            let _ = tokio::fs::write(file_path, xml).await;
+        }
     }
+
+    Ok(parsed_xml)
 }

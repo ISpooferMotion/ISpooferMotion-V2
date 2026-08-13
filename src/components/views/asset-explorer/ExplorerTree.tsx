@@ -1,19 +1,52 @@
-import { ChevronRight, Copy, Image as ImageIcon, Play, Square, ZoomIn } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  ChevronRight,
+  Download,
+  Inbox,
+  Loader2,
+  Lock,
+  SkipForward,
+  Upload,
+} from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 
 import type { AppConfig } from '../../../contexts/ConfigContext';
-import { useLanguage } from '../../../contexts/LanguageContext';
+import { useSpooferStore } from '../../../stores/spooferStore';
 import { cn } from '../../../utils/cn';
-import { playRobloxAudio, stopRobloxAudio } from '../../../utils/robloxAudio';
 import type { ParsedAssetRef, RbxInstance } from '../../../utils/robloxPlaceParser/types';
-import { logIsm } from '../../../utils/robloxProfiles';
 import { Button } from '../../ui/button';
 import { Checkbox } from '../../ui/checkbox';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
+
+let isDragSelecting = false;
+let dragTargetChecked = true;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('mouseup', () => {
+    isDragSelecting = false;
+  });
+}
 
 export const getAssetId = (asset: ParsedAssetRef | { id: string; name: string }) => {
   if ('assetId' in asset) return asset.assetId;
   return asset.id ?? '';
 };
+
+export function getBrightPlaceIdColor(placeId: string): string {
+  let hash = 0;
+  for (let i = 0; i < placeId.length; i++) {
+    hash = (hash << 5) - hash + placeId.charCodeAt(i);
+    hash |= 0;
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 85%, 65%)`;
+}
+
+export function formatShortId(id: string): string {
+  if (!id || id.length <= 16) return id;
+  return `${id.slice(0, 8)}...${id.slice(-6)}`;
+}
 
 export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   node,
@@ -29,6 +62,8 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   searchQuery = '',
   playingAudioId,
   initialExpanded = false,
+  onInspectAsset,
+  activeInspectAssetId = null,
 }: {
   node: RbxInstance;
   level: number;
@@ -43,10 +78,10 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   searchQuery?: string;
   playingAudioId: string | null;
   initialExpanded?: boolean;
+  onInspectAsset?: (asset: ParsedAssetRef) => void;
+  activeInspectAssetId?: string | null;
 }) {
-  const { t } = useLanguage();
   const [userExpanded, setExpanded] = useState(initialExpanded);
-  const [expandedAssetKey, setExpandedAssetKey] = useState<string | null>(null);
   // Force-expand while a search is active so matches are visible without the
   // user having to click every folder open.
   const expanded = userExpanded || (searchQuery ?? '').trim().length > 0;
@@ -85,34 +120,18 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   const totalChildren = node.children.length;
   const allIds = getAllAssetIds(node);
 
-  if (allIds.length === 0) return null;
+  const hasMatchingDescendant = useMemo(() => {
+    const check = (n: RbxInstance): boolean => {
+      if (n.assets.some((a) => matchesFilter(a.type) && matchesSearch(a))) return true;
+      return n.children.some((child) => check(child));
+    };
+    return check(node);
+  }, [node, activeAssetFilters, normalizedSearch]);
+
+  if (!hasMatchingDescendant) return null;
 
   const selectedCount = allIds.filter((id) => selectedAssetIds.has(id)).length;
   const isChecked = selectedCount === allIds.length;
-
-  const copyAssetId = async (asset: ParsedAssetRef) => {
-    // Copy to clipboard for manual pasting.
-    const assetId = getAssetId(asset);
-    if (!assetId) return;
-    await navigator.clipboard.writeText(assetId);
-    logIsm('success', `Copied asset id ${assetId}.`);
-  };
-
-  const playAsset = async (asset: ParsedAssetRef) => {
-    // Attempt to play the audio file using Tauri media APIs.
-    const assetId = getAssetId(asset);
-    if (!assetId) {
-      logIsm('warn', 'Cannot play Roblox audio without an asset id.');
-      return;
-    }
-    if (playingAudioId === assetId) {
-      stopRobloxAudio();
-      return;
-    }
-    await playRobloxAudio(assetId, config).catch((error) => {
-      logIsm('error', `Failed to play Roblox audio ${assetId}: ${String(error)}`);
-    });
-  };
 
   const getTypeIconSrc = (asset: ParsedAssetRef) => {
     if (asset.type === 'animation' || asset.type === 'raw_keyframe_sequence')
@@ -128,149 +147,202 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
     return name || `${asset.type} ${asset.assetId}`;
   };
 
+  const setActiveInspectAsset = useSpooferStore((s) => s.setActiveInspectAsset);
+  const setIsInspectorOpen = useSpooferStore((s) => s.setIsInspectorOpen);
+  const assetForcePlaceIds = useSpooferStore((s) => s.assetForcePlaceIds) ?? {};
+  const assetStatuses = useSpooferStore((s) => s.assetStatuses) ?? {};
+  const lastReplacements = useSpooferStore((s) => s.lastReplacements) ?? {};
+
   const renderAssetRow = (asset: ParsedAssetRef) => {
-    // Render each asset in the tree structure.
+    // Compact single-line row item: [Icon] + [Asset Name] + optional [Lock]
     const assetId = getAssetId(asset);
-    const isSound = asset.type === 'audio';
-    const isAnimation = asset.type === 'animation';
-    const isMesh = asset.type === 'mesh';
-    const isImage = asset.type === 'image';
+    const pinnedPlaceId = assetId ? assetForcePlaceIds[assetId] : undefined;
     const instanceCount = (asset as ParsedAssetRef & { instanceCount?: number }).instanceCount;
-    const assetKey = `${asset.type}:${asset.path}:${asset.propertyName}:${assetId}`;
-    const isOpen = expandedAssetKey === assetKey;
+    const isInspected = activeInspectAssetId === assetId;
+
+    const handleRowClick = () => {
+      setActiveInspectAsset(asset);
+      setIsInspectorOpen(true);
+    };
 
     return (
       <div
-        className="rounded-sm hover:bg-accent/60 group"
+        className={cn(
+          'h-7 rounded-sm hover:bg-accent/60 group transition-colors flex items-center pr-2 cursor-pointer select-none',
+          isInspected && 'bg-primary/15 font-semibold',
+        )}
         style={{ marginLeft: `${(level + 1) * 16 + 18}px` }}
+        onClick={handleRowClick}
+        onMouseEnter={() => {
+          if (isDragSelecting) {
+            toggleAsset(assetId, dragTargetChecked);
+          }
+        }}
       >
         <div
-          className="min-h-9 flex items-center pr-2 cursor-pointer"
-          onClick={() => setExpandedAssetKey(isOpen ? null : assetKey)}
+          className="mr-2 cursor-pointer flex items-center justify-center shrink-0 checkbox-trigger"
+          onMouseDown={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            isDragSelecting = true;
+            dragTargetChecked = !selectedAssetIds.has(assetId);
+            toggleAsset(assetId, dragTargetChecked);
+          }}
+          onMouseEnter={() => {
+            if (isDragSelecting) {
+              toggleAsset(assetId, dragTargetChecked);
+            }
+          }}
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+          }}
         >
-          <div
-            className="mr-2 cursor-pointer flex items-center justify-center shrink-0"
-            onClick={(event: React.MouseEvent) => {
-              event.stopPropagation();
-              toggleAsset(assetId, !selectedAssetIds.has(assetId));
-            }}
-          >
-            <Checkbox checked={selectedAssetIds.has(assetId)} />
-          </div>
-          <ChevronRight
-            size={12}
-            className={cn(
-              'mr-1 shrink-0 text-muted-foreground transition-transform',
-              isOpen && 'rotate-90',
-            )}
-          />
-
-          <div className="w-4 h-4 shrink-0 mr-2 flex items-center justify-center">
-            <img
-              src={getTypeIconSrc(asset)}
-              alt=""
-              className="w-full h-full object-contain"
-              onError={(event: React.SyntheticEvent<HTMLImageElement, Event>) => {
-                event.currentTarget.style.display = 'none';
-              }}
-            />
-          </div>
-          <div className="flex-1 flex flex-col min-w-0">
-            <span className="text-[11px] text-foreground/80 truncate flex items-center gap-1">
-              {getAssetTitle(asset)}
-              {(instanceCount ?? 1) > 1 && (
-                <span className="text-[9px] text-muted-foreground bg-background px-1 rounded-sm border">
-                  {instanceCount}x
-                </span>
-              )}
-            </span>
-            <span className="text-[9px] text-muted-foreground truncate">
-              {asset.propertyName || asset.type} · {assetId}
-            </span>
-          </div>
-          <div className="flex items-center gap-1 pl-1 shrink-0">
-            {isSound && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 min-w-6"
-                title={
-                  playingAudioId === assetId ? t('explorer.stopAudio') : t('explorer.playAudio')
-                }
-                onClick={(event: React.MouseEvent) => {
-                  event.stopPropagation();
-                  void playAsset(asset);
-                }}
-              >
-                {playingAudioId === assetId ? (
-                  <Square size={10} fill="currentColor" />
-                ) : (
-                  <Play size={11} fill="currentColor" />
-                )}
-              </Button>
-            )}
-            {isAnimation && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 min-w-6 text-primary"
-                title={t('explorer.previewAnimation')}
-                onClick={(event: React.MouseEvent) => {
-                  event.stopPropagation();
-                  setPreviewingAnimation({
-                    id: assetId,
-                    name: asset.instanceName,
-                  });
-                }}
-              >
-                <Play size={11} fill="currentColor" />
-              </Button>
-            )}
-            {(isImage || isMesh) && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 min-w-6"
-                title={isMesh ? t('explorer.previewMeshThumbnail') : t('explorer.previewImage')}
-                onClick={(event: React.MouseEvent) => {
-                  event.stopPropagation();
-                  setEnlargedImage({ id: assetId, name: asset.instanceName });
-                }}
-              >
-                {isMesh ? <ZoomIn size={11} /> : <ImageIcon size={11} />}
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 min-w-6"
-              title={t('explorer.copyAssetId')}
-              onClick={(event: React.MouseEvent) => {
-                event.stopPropagation();
-                void copyAssetId(asset);
-              }}
-            >
-              <Copy size={11} />
-            </Button>
-          </div>
+          <Checkbox checked={selectedAssetIds.has(assetId)} />
         </div>
 
-        {isOpen && (
-          <div className="overflow-hidden">
-            <div className="mx-2 mb-2 rounded border bg-background/80 px-2.5 py-2 text-[9px] text-muted-foreground">
-              <DetailLine label={t('explorer.path')} value={asset.path} />
-              <DetailLine label={t('explorer.id')} value={assetId} />
-              <DetailLine
-                label={t('explorer.property')}
-                value={asset.propertyName || t('common.unknown')}
+        <div className="w-4 h-4 shrink-0 mr-2 flex items-center justify-center">
+          <img
+            src={getTypeIconSrc(asset)}
+            alt=""
+            className="w-full h-full object-contain"
+            onError={(event: React.SyntheticEvent<HTMLImageElement, Event>) => {
+              event.currentTarget.style.display = 'none';
+            }}
+          />
+        </div>
+
+        {/* Asset Name */}
+        <div className="flex-1 flex items-center gap-1.5 min-w-0 mr-2">
+          <span className="text-xs text-foreground/90 truncate">{getAssetTitle(asset)}</span>
+          {(instanceCount ?? 1) > 1 && (
+            <span className="text-[9px] text-muted-foreground bg-bg-surface px-1 rounded border border-border-subtle shrink-0">
+              {instanceCount}x
+            </span>
+          )}
+        </div>
+
+        {/* Per-asset status indicator during spoofing */}
+        {(() => {
+          const status = assetId ? assetStatuses[assetId] : undefined;
+          if (!status || status.stage === 'idle') return null;
+          const config: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
+            resolving_location: {
+              icon: <Loader2 size={10} className="animate-spin" />,
+              color: 'text-blue-400',
+              label: status.message || 'Checking direct Place IDs...',
+            },
+            discovering_usage: {
+              icon: <Loader2 size={10} className="animate-spin" />,
+              color: 'text-purple-400',
+              label: status.message || 'Discovering Place IDs (Asset Usage)...',
+            },
+            discovering_graph: {
+              icon: <Loader2 size={10} className="animate-spin" />,
+              color: 'text-indigo-400',
+              label: status.message || 'Discovering Place IDs (Creator Graph)...',
+            },
+            downloading: {
+              icon: <Download size={10} />,
+              color: 'text-cyan-400',
+              label: status.message || 'Downloading...',
+            },
+            uploading: {
+              icon: <Upload size={10} />,
+              color: 'text-amber-400',
+              label: status.message || 'Uploading...',
+            },
+            done: {
+              icon: <Check size={10} />,
+              color: 'text-green-400',
+              label: status.message || 'Completed',
+            },
+            error: {
+              icon: <AlertCircle size={10} />,
+              color: 'text-red-400',
+              label: status.message || 'Error',
+            },
+            skipped: {
+              icon: <SkipForward size={10} />,
+              color: 'text-muted-foreground',
+              label: status.message || 'Skipped',
+            },
+          };
+          const cfg = config[status.stage];
+          if (!cfg) return null;
+          const isError = status.stage === 'error';
+          const isDiscoveryError = isError && status.message?.toLowerCase().includes('no place id');
+          const badgeText = isError
+            ? isDiscoveryError
+              ? 'Discovery failed'
+              : 'Download failed'
+            : status.message || cfg.label;
+          const fullMessage = status.message || cfg.label;
+          return (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <div
+                    className={cn(
+                      'flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap mr-1',
+                      cfg.color,
+                    )}
+                  >
+                    {cfg.icon}
+                    <span>{badgeText}</span>
+                  </div>
+                }
               />
-              <DetailLine
-                label={t('explorer.class')}
-                value={asset.className || t('common.unknown')}
-              />
-            </div>
-          </div>
+              <TooltipContent className="text-xs max-w-xs break-words">
+                {fullMessage}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })()}
+
+        {/* Compact color-coded lock indicator when forced place ID is enabled for this asset */}
+        {pinnedPlaceId && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <div
+                  className="flex items-center justify-center h-5 w-6 rounded border shrink-0 transition-transform hover:scale-110 cursor-help"
+                  style={{
+                    color: getBrightPlaceIdColor(pinnedPlaceId),
+                    backgroundColor: `${getBrightPlaceIdColor(pinnedPlaceId)}18`,
+                    borderColor: `${getBrightPlaceIdColor(pinnedPlaceId)}50`,
+                  }}
+                >
+                  <Lock size={11} style={{ color: getBrightPlaceIdColor(pinnedPlaceId) }} />
+                </div>
+              }
+            />
+            <TooltipContent className="whitespace-nowrap font-mono text-xs">
+              Place ID: {formatShortId(pinnedPlaceId)}
+            </TooltipContent>
+          </Tooltip>
         )}
+
+        {/* Compact spoofed indicator when a replacement ID exists for this asset */}
+        {(() => {
+          const replacementId = assetId ? lastReplacements[assetId] : undefined;
+          if (!replacementId) return null;
+          return (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <div className="flex items-center justify-center h-5 w-6 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shrink-0 transition-transform hover:scale-110 cursor-help ml-1">
+                    <Inbox size={11} />
+                  </div>
+                }
+              />
+              <TooltipContent className="whitespace-nowrap font-mono text-xs">
+                Spoofed: rbxassetid://{replacementId}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })()}
+
+        {/* Quick actions removed — play/preview/copy are all available
+         * in the Inspector panel. Tree rows stay clean. */}
       </div>
     );
   };
@@ -284,9 +356,19 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
       >
         <div
           className="mr-2 cursor-pointer flex items-center justify-center shrink-0"
+          onMouseDown={(event: React.MouseEvent) => {
+            event.stopPropagation();
+            isDragSelecting = true;
+            dragTargetChecked = !isChecked;
+            toggleNode(node, dragTargetChecked);
+          }}
+          onMouseEnter={() => {
+            if (isDragSelecting) {
+              toggleNode(node, dragTargetChecked);
+            }
+          }}
           onClick={(event: React.MouseEvent) => {
             event.stopPropagation();
-            toggleNode(node, !isChecked);
           }}
         >
           <Checkbox checked={isChecked} />
@@ -301,7 +383,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
         </div>
         <div className="w-4 h-4 shrink-0 mr-2 flex items-center justify-center">
           <img
-            src={`/icons/${node.className}.png`}
+            src={`/icons/${node.className === 'StudioSession' ? 'Place' : node.className}.png`}
             alt=""
             className="w-full h-full object-contain"
             onError={(event: React.SyntheticEvent<HTMLImageElement, Event>) => {
@@ -374,6 +456,8 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
               activeAssetFilters={activeAssetFilters}
               searchQuery={searchQuery}
               playingAudioId={playingAudioId}
+              onInspectAsset={onInspectAsset}
+              activeInspectAssetId={activeInspectAssetId}
             />
           ))}
         </div>
@@ -381,16 +465,3 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
     </div>
   );
 });
-
-function DetailLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="py-1 first:pt-0 last:pb-0">
-      <div className="text-[8px] font-semibold uppercase tracking-normal text-muted-foreground/70">
-        {label}
-      </div>
-      <div className="mt-0.5 select-text whitespace-normal wrap-break-word text-[10px] leading-snug text-foreground/80">
-        {value}
-      </div>
-    </div>
-  );
-}

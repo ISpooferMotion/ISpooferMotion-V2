@@ -1,11 +1,17 @@
 import './index.css';
 import './utils/debugLogger';
+import { installBrowserTauriMock } from './utils/browserTauriMock';
+
+// Install a permissive Tauri IPC mock when running outside the desktop app so
+// unguarded `invoke()` calls don't crash the React tree in the Vite preview.
+installBrowserTauriMock();
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
 import App from './App.tsx';
 import { ErrorBoundary } from './components/core/ErrorBoundary';
+import { Toast } from './components/shared/Toast';
 import { TooltipProvider } from './components/ui/tooltip';
 import { ConfigProvider } from './contexts/ConfigContext';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -78,6 +84,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <main className="text-text-primary bg-bg-base min-h-screen h-full font-sans transition-colors duration-300">
                   <ErrorBoundary>
                     <App />
+                    <Toast />
                   </ErrorBoundary>
                 </main>
               </TooltipProvider>

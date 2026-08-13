@@ -286,7 +286,7 @@ fn roblox_game_context(place_id: Option<&str>) -> Option<RobloxGameContext> {
     Some(RobloxGameContext { place_id: place_id.to_string(), game_id, session_id })
 }
 
-fn apply_roblox_game_context(
+pub fn apply_roblox_game_context(
     mut builder: reqwest::RequestBuilder,
     place_id: Option<&str>,
     universe_id: Option<&str>,

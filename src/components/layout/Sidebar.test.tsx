@@ -7,6 +7,22 @@ vi.mock('../../contexts/LanguageContext', () => ({
   useLanguage: vi.fn(),
 }));
 
+vi.mock('../../contexts/StudioConnectionContext', () => ({
+  useStudioConnectionState: () => ({ studioConnected: true }),
+}));
+
+vi.mock('../../contexts/ConfigContext', () => ({
+  useConfig: () => ({
+    config: {
+      ui: { theme: 'dark', language: 'en' },
+      advanced: { forcePlaceIds: '' },
+      spoofing: { selectedUser: 'none', selectedGroup: 'none', cookie: '', apiKey: '' },
+      accounts: [],
+    },
+    updateConfig: vi.fn(),
+  }),
+}));
+
 describe('Sidebar', () => {
   const mockT = vi.fn((key) => {
     const map: Record<string, string> = {
@@ -40,8 +56,8 @@ describe('Sidebar', () => {
   it('applies active styling to the active tab', () => {
     render(<Sidebar activeTab="activity" onTabChange={() => {}} />);
 
-    const activityBtn = screen.getByText('Activity').closest('button');
-    const spoofingBtn = screen.getByText('Spoofing').closest('button');
+    const activityBtn = screen.getByText('Activity').closest('[role="button"]');
+    const spoofingBtn = screen.getByText('Spoofing').closest('[role="button"]');
 
     expect(activityBtn).toHaveClass('bg-bg-elevated');
     expect(spoofingBtn).not.toHaveClass('bg-bg-elevated');

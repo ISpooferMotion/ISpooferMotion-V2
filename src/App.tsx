@@ -1,13 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 
 import Sidebar from './components/layout/Sidebar';
-import StatusBar from './components/layout/StatusBar';
 import Titlebar from './components/layout/Titlebar';
 import { RobloxStatusBanner } from './components/shared/RobloxStatusBanner';
 import { PortDiagnosticBanner } from './components/shared/PortDiagnosticBanner';
-import WatermarkEngine from './components/layout/WatermarkEngine';
+import { TutorialGate } from './components/tutorial/TutorialGate';
 
 import { useConfig } from './contexts/ConfigContext';
 import { useLanguage } from './contexts/LanguageContext';
@@ -15,6 +13,7 @@ import { useAppInitialization } from './hooks/useAppInitialization';
 
 const ActivityView = lazy(() => import('./components/views/ActivityView'));
 const AssetExplorer = lazy(() => import('./components/views/AssetExplorer'));
+const ConsoleView = lazy(() => import('./components/views/ConsoleView'));
 const DebugConsole = lazy(() => import('./components/views/DebugConsole'));
 
 const SettingsView = lazy(() => import('./components/views/SettingsView'));
@@ -35,6 +34,16 @@ export default function App() {
   const isExplorerOpen = config.ui.assetExplorerOpen;
 
   const { maintenance, isRobloxApiDown } = useAppInitialization();
+
+  // Browser preview: mock place seed disabled to show the empty explorer state.
+  // Re-enable by uncommenting the block below.
+  // useEffect(() => {
+  //   if (!isBrowserPreview()) return;
+  //   const store = useSpooferStore.getState();
+  //   if (store.rootInstances.length > 0) return;
+  //   store.setRootInstances(buildMockRootInstances());
+  //   store.setLoadedFileName(MOCK_PLACE_FILE_NAME);
+  // }, []);
 
   const setActiveTab = (tabId: string) => updateConfig('ui', 'activeTab', tabId);
   const setIsExplorerOpen = (isOpen: boolean) => updateConfig('ui', 'assetExplorerOpen', isOpen);
@@ -66,73 +75,58 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden text-foreground relative font-sans selection:bg-primary/30 antialiased bg-background">
+    <div className="flex h-screen w-screen overflow-hidden text-foreground relative font-sans selection:bg-primary/30 antialiased bg-background">
+      {/* Sidebar spans the full window height (logo + version collapse with it,
+       * so there's no empty gap where the titlebar logo used to be). */}
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-        className="flex flex-col h-full w-full relative z-10"
+        className="flex flex-col flex-1 min-w-0 h-full relative z-10"
       >
         <Titlebar />
 
-        <div className="flex flex-1 overflow-hidden relative">
-          <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+        <div className="flex-1 relative overflow-hidden bg-transparent flex flex-col">
+          <RobloxStatusBanner isVisible={isRobloxApiDown} />
+          <PortDiagnosticBanner />
 
-          <div className="flex-1 relative overflow-hidden bg-transparent flex flex-col">
-            <RobloxStatusBanner isVisible={isRobloxApiDown} />
-            <PortDiagnosticBanner />
-
-            <div className="flex-1 relative overflow-hidden">
-              <Suspense fallback={<div className="w-full h-full bg-background/50" />}>
-                <AnimatePresence mode="wait" initial={false}>
-                  {activeTab === 'spoofing' && <SpoofingView key="spoofing" />}
-                  {activeTab === 'activity' && <ActivityView key="activity" />}
-                  {activeTab === 'accounts' && <AccountsView key="accounts" />}
-                  {activeTab === 'settings' && <SettingsView key="settings" />}
-                </AnimatePresence>
-              </Suspense>
-            </div>
-
-            <Suspense fallback={null}>
-              <DebugConsole
-                isOpen={config.debug?.debugMode || false}
-                onClose={() => updateConfig('debug', 'debugMode', false)}
-              />
+          <div className="flex-1 relative overflow-hidden">
+            <Suspense fallback={<div className="w-full h-full bg-background/50" />}>
+              <AnimatePresence mode="wait" initial={false}>
+                {activeTab === 'spoofing' && (
+                  <div key="spoofing" className="w-full h-full flex">
+                    {/* Explorer-first main view */}
+                    <AssetExplorer
+                      isOpen={isExplorerOpen}
+                      setIsOpen={setIsExplorerOpen}
+                      mode="main"
+                    />
+                    {/* Hidden logic host: keeps all run/scan handlers, effects,
+                     * event listeners, and portaled modals alive while the
+                     * explorer is the visible main surface. Radix modals portal
+                     * to <body>, so they remain visible despite this wrapper
+                     * being display:none. */}
+                    <div className="hidden" aria-hidden>
+                      <SpoofingView />
+                    </div>
+                  </div>
+                )}
+                {activeTab === 'activity' && <ActivityView key="activity" />}
+                {activeTab === 'accounts' && <AccountsView key="accounts" />}
+                {activeTab === 'settings' && <SettingsView key="settings" />}
+                {activeTab === 'console' && <ConsoleView key="console" />}
+              </AnimatePresence>
             </Suspense>
           </div>
 
           <Suspense fallback={null}>
-            <AssetExplorer
-              isOpen={isExplorerOpen}
-              setIsOpen={setIsExplorerOpen}
-              onScanReceived={() => setIsExplorerOpen(true)}
+            <DebugConsole
+              isOpen={config.debug?.debugMode || false}
+              onClose={() => updateConfig('debug', 'debugMode', false)}
             />
           </Suspense>
-
-          {!isExplorerOpen && (
-            <motion.div
-              initial={{ x: 20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 20, opacity: 0 }}
-              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-45 cursor-pointer flex items-center justify-end group"
-              onClick={() => setIsExplorerOpen(true)}
-            >
-              <motion.div
-                whileHover={{
-                  width: 24,
-                  backgroundColor: 'var(--muted)',
-                }}
-                className="w-5 h-20 bg-muted/60 backdrop-blur-xl border border-border border-r-0 rounded-l-2xl flex items-center justify-center shadow-lg transition-colors"
-              >
-                <ChevronLeft
-                  size={14}
-                  strokeWidth={2.5}
-                  className="text-muted-foreground group-hover:text-foreground transition-colors"
-                />
-              </motion.div>
-            </motion.div>
-          )}
         </div>
 
         <div
@@ -141,10 +135,9 @@ export default function App() {
             background: 'linear-gradient(to top, var(--primary), transparent)',
           }}
         />
-
-        <StatusBar />
-        <WatermarkEngine />
       </motion.div>
+
+      <TutorialGate />
     </div>
   );
 }

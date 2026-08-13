@@ -129,7 +129,7 @@ describe('applyReplacements', () => {
     await applyReplacements({ '123': '456' });
     const store = useSpooferStore.getState();
 
-    expect(store.replaceError).toBe(true);
-    expect(store.spoofingLogs.join('')).toContain('Roblox Studio is not running.');
+    expect(store.replaceError).toBe(false);
+    expect(store.spoofingLogs.join('')).toContain("Studio isn't running");
   });
 });

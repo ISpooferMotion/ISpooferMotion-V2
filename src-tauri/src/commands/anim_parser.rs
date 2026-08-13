@@ -99,6 +99,25 @@ fn parse_poses(dom: &WeakDom, referent: rbx_dom_weak::types::Ref) -> Vec<RobloxP
     poses
 }
 
+fn find_keyframe_sequence(
+    dom: &WeakDom,
+    referent: rbx_dom_weak::types::Ref,
+) -> Option<rbx_dom_weak::types::Ref> {
+    let instance = dom.get_by_ref(referent)?;
+    if instance.class == "KeyframeSequence"
+        || instance.class == "AnimationClip"
+        || instance.class == "CurveAnimation"
+    {
+        return Some(referent);
+    }
+    for child in instance.children() {
+        if let Some(found) = find_keyframe_sequence(dom, *child) {
+            return Some(found);
+        }
+    }
+    None
+}
+
 /// Takes raw Roblox XML (`<roblox!>...`) containing a `KeyframeSequence`
 /// and converts it into a `RobloxAnimationClip` for the frontend.
 #[tauri::command]
@@ -112,60 +131,51 @@ pub fn parse_animation_data(xml: String) -> Result<Option<RobloxAnimationClip>, 
         return Ok(None);
     };
 
-    let root = dom.root();
-
-    // Find KeyframeSequence, searching one level deep in case it's wrapped.
-    let mut kfs_ref = None;
-    'outer: for child in root.children() {
-        let Some(instance) = dom.get_by_ref(*child) else {
-            continue;
-        };
-        if instance.class == "KeyframeSequence" {
-            kfs_ref = Some(*child);
-            break;
-        }
-        for inner_child in instance.children() {
-            let Some(inner) = dom.get_by_ref(*inner_child) else {
-                continue;
-            };
-            if inner.class == "KeyframeSequence" {
-                kfs_ref = Some(*inner_child);
-                break 'outer;
-            }
-        }
-    }
-
-    let Some(kfs_ref) = kfs_ref else {
-        return Ok(None);
-    };
-
-    let Some(kfs_instance) = dom.get_by_ref(kfs_ref) else {
-        return Ok(None);
-    };
+    let kfs_ref = find_keyframe_sequence(&dom, dom.root_ref());
 
     let mut loop_flag = false;
     let mut priority = 2; // Core
 
-    if let Some(Variant::Bool(l)) = get_prop(kfs_instance, "Loop") {
-        loop_flag = *l;
-    }
-    if let Some(Variant::Enum(p)) = get_prop(kfs_instance, "Priority") {
-        priority = p.to_u32() as i32;
+    if let Some(ref_id) = kfs_ref {
+        if let Some(kfs_instance) = dom.get_by_ref(ref_id) {
+            if let Some(Variant::Bool(l)) = get_prop(kfs_instance, "Loop") {
+                loop_flag = *l;
+            }
+            if let Some(Variant::Enum(p)) = get_prop(kfs_instance, "Priority") {
+                priority = p.to_u32() as i32;
+            }
+        }
     }
 
     let mut keyframes = Vec::new();
 
-    for child_ref in kfs_instance.children() {
-        let Some(child) = dom.get_by_ref(*child_ref) else {
-            continue;
+    fn collect_keyframes(
+        dom: &WeakDom,
+        referent: rbx_dom_weak::types::Ref,
+        keyframes: &mut Vec<RobloxKeyframe>,
+    ) {
+        let Some(instance) = dom.get_by_ref(referent) else {
+            return;
         };
-        if child.class == "Keyframe" {
+        if instance.class == "Keyframe" {
             let mut time = 0.0;
-            if let Some(Variant::Float32(t)) = get_prop(child, "Time") {
+            if let Some(Variant::Float32(t)) = get_prop(instance, "Time") {
                 time = *t;
+            } else if let Some(Variant::Float64(t)) = get_prop(instance, "Time") {
+                time = *t as f32;
             }
-            keyframes.push(RobloxKeyframe { time, poses: parse_poses(&dom, *child_ref) });
+            keyframes.push(RobloxKeyframe { time, poses: parse_poses(dom, referent) });
         }
+        for child_ref in instance.children() {
+            collect_keyframes(dom, *child_ref, keyframes);
+        }
+    }
+
+    let start_ref = kfs_ref.unwrap_or_else(|| dom.root_ref());
+    collect_keyframes(&dom, start_ref, &mut keyframes);
+
+    if keyframes.is_empty() {
+        return Ok(None);
     }
 
     keyframes.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap_or(std::cmp::Ordering::Equal));
