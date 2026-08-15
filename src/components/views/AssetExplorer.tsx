@@ -1201,6 +1201,33 @@ export default function AssetExplorer({
                                     </div>
                                   </div>
 
+                                  <div>
+                                    <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted mb-1.5 block">
+                                      Script Mode
+                                    </span>
+                                    <div className="flex rounded-md overflow-hidden border border-border-subtle bg-bg-base">
+                                      {[
+                                        { key: 'assetIds', label: 'Fast IDs' },
+                                        { key: 'fullSource', label: 'Full Source' },
+                                        { key: 'off', label: 'Off' },
+                                      ].map((mode) => (
+                                        <button
+                                          key={mode.key}
+                                          type="button"
+                                          onClick={() => setScriptMode(mode.key)}
+                                          className={cn(
+                                            'flex-1 h-6 text-[9px] font-semibold transition-colors cursor-pointer',
+                                            scriptMode === mode.key
+                                              ? 'bg-primary text-primary-foreground'
+                                              : 'text-text-muted hover:text-text-primary hover:bg-bg-elevated',
+                                          )}
+                                        >
+                                          {mode.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+
                                   <div className="flex justify-end gap-2 pt-1 border-t border-border-subtle/50">
                                     <Button
                                       variant="ghost"

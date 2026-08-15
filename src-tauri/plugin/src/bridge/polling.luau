@@ -331,6 +331,11 @@ function startPolling(): ()
 							if type(decoded.scriptScanMode) == "string" then
 								activeScriptScanMode = decoded.scriptScanMode
 							end
+							if type(decoded.scanPath) == "string" and decoded.scanPath ~= "" then
+								activeScanPath = decoded.scanPath
+							else
+								activeScanPath = nil
+							end
 							logToPlugin("Scan requested by Desktop App")
 							autoReplaceEnabled = true
 							setPluginGuiStatus("Scanning Assets...")
