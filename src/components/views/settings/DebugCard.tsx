@@ -33,8 +33,10 @@ export default function DebugCard() {
         }
       });
       sessionStorage.clear();
+      store.showToast('success', successMessage);
       logIsm('success', successMessage);
     } catch (err) {
+      useSpooferStore.getState().showToast('error', `Failed to clear cache: ${String(err)}`);
       logIsm('error', `Failed to clear cache: ${String(err)}`);
     }
   }
