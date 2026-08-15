@@ -33,6 +33,7 @@ struct JobContext {
     batch_urls: HashMap<String, String>,
     batch_metadata: HashMap<String, AssetDetails>,
     enable_archive_recovery: bool,
+    operation_poll_interval_ms: Option<u64>,
 
     // Shared tracking state
     success_count: AtomicUsize,
@@ -512,11 +513,13 @@ pub async fn process_spoofer_action(
     let mut batch_urls = HashMap::new();
     let batch_assets =
         parsed_assets.iter().map(|(id, t, _, _)| (id.clone(), t.clone())).collect::<Vec<_>>();
+    let per_asset_place_ids = data.asset_force_place_ids.as_ref();
     if let Ok(urls) = crate::commands::spoofer::batch_get_download_urls_for_assets(
         app.clone(),
         batch_assets,
         cookie.clone(),
         forced_place_id.clone(),
+        per_asset_place_ids,
     )
     .await
     {
@@ -700,6 +703,7 @@ pub async fn process_spoofer_action(
         batch_urls,
         batch_metadata,
         enable_archive_recovery: data.enable_archive_recovery.unwrap_or(false),
+        operation_poll_interval_ms: data.operation_poll_interval_ms,
         success_count: AtomicUsize::new(0),
         skip_count: AtomicUsize::new(0),
         fail_count: AtomicUsize::new(0),
@@ -927,7 +931,7 @@ pub async fn process_spoofer_action(
                         let final_description = if preserve_metadata { details.description } else { "Uploaded by ISpooferMotion.".to_string() };
 
                         let up_res = crate::commands::spoofer::publish_asset_with_progress(
-                            ctx.app.clone(), file_path.clone(), details.name, final_description, ctx.cookie.clone(), ctx.csrf_token.clone(), ctx.group_id.clone(), format!("up_{asset_id}"), Some(mapped_type_name.to_string()), Some(ctx.api_key.clone()), upload_user_id, false, Some(asset_id.clone()), ctx.universe_id.clone(), Some(ctx.downloads_root.clone()), ctx.proxy_url.clone()
+                            ctx.app.clone(), file_path.clone(), details.name, final_description, ctx.cookie.clone(), ctx.csrf_token.clone(), ctx.group_id.clone(), format!("up_{asset_id}"), Some(mapped_type_name.to_string()), Some(ctx.api_key.clone()), upload_user_id, false, Some(asset_id.clone()), ctx.universe_id.clone(), Some(ctx.downloads_root.clone()), ctx.proxy_url.clone(), ctx.operation_poll_interval_ms
                         ).await;
 
                         match up_res {

@@ -70,6 +70,16 @@ export default function RoutingSection() {
             max={50}
             ticks={[1, 25, 50]}
           />
+
+          <SettingSliderItem
+            label="Upload Operation Poll Interval"
+            description="How frequently to check Roblox Open Cloud for upload completion (lower = faster, 200–400ms recommended)."
+            value={config.advanced.operationPollIntervalMs ?? 250}
+            onChange={(val) => updateConfig('advanced', 'operationPollIntervalMs', val)}
+            min={100}
+            max={1000}
+            ticks={[100, 250, 500, 1000]}
+          />
         </>
       )}
     </SettingCard>

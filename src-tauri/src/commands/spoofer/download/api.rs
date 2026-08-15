@@ -337,7 +337,7 @@ pub async fn batch_get_download_urls(
     place_id: Option<String>,
 ) -> crate::error::Result<HashMap<String, String>> {
     let assets = asset_ids.into_iter().map(|id| (id, "animation".to_string())).collect();
-    batch_get_download_urls_for_assets(app, assets, cookie, place_id).await
+    batch_get_download_urls_for_assets(app, assets, cookie, place_id, None).await
 }
 
 // Resolve multiple asset download links via batch request to reduce API calls.
@@ -346,6 +346,7 @@ pub async fn batch_get_download_urls_for_assets(
     assets: Vec<(String, String)>,
     cookie: String,
     place_id: Option<String>,
+    per_asset_place_ids: Option<&HashMap<String, String>>,
 ) -> crate::error::Result<HashMap<String, String>> {
     let cookie_header = build_roblox_cookie_header(&cookie);
     if cookie_header.is_empty() {
@@ -362,12 +363,19 @@ pub async fn batch_get_download_urls_for_assets(
             continue;
         }
         if let Ok(id) = id_str.parse::<i64>() {
-            let mut final_place_id = place_id_num;
-            if let Some(cached_place_id_str) =
-                crate::commands::spoofer::remote_cache::get_local_context(id_str)
-            {
-                if let Ok(cached_id) = cached_place_id_str.parse::<i64>() {
-                    final_place_id = Some(cached_id);
+            let mut final_place_id = per_asset_place_ids
+                .and_then(|map| map.get(id_str))
+                .filter(|p| is_valid_numeric_id(p))
+                .and_then(|p| p.parse::<i64>().ok())
+                .or(place_id_num);
+
+            if final_place_id.is_none() {
+                if let Some(cached_place_id_str) =
+                    crate::commands::spoofer::remote_cache::get_local_context(id_str)
+                {
+                    if let Ok(cached_id) = cached_place_id_str.parse::<i64>() {
+                        final_place_id = Some(cached_id);
+                    }
                 }
             }
 

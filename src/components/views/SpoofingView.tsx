@@ -825,6 +825,7 @@ export default function SpoofingView() {
         preserveMetadata: config.spoofing.preserveMetadata,
         enableArchiveRecovery: config.advanced.enableArchiveRecovery,
         proxyUrl: config.advanced.proxyUrl,
+        operationPollIntervalMs: config.advanced.operationPollIntervalMs || 250,
       };
 
       useSpooferStore.getState().setSpoofTotalCount(finalAssetsPayload.length);
@@ -844,6 +845,8 @@ export default function SpoofingView() {
           ...baseData,
           assets: JSON.stringify(finalAssetsPayload),
           forcePlaceIds: allForcedPlaceIds || null,
+          assetForcePlaceIds:
+            Object.keys(assetForcePlaceIds).length > 0 ? assetForcePlaceIds : null,
         },
       });
     } catch (err) {
