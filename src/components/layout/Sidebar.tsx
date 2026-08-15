@@ -11,8 +11,8 @@ import {
   Users,
 } from 'lucide-react';
 
-import AppIconDark from '../../assets/app_icon.png';
-import AppIconLight from '../../assets/app_icon_light.png';
+import IsmLogoDark from '../../assets/ism_logo_dark.webp';
+import IsmLogoLight from '../../assets/ism_logo_light.webp';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
 import { cn } from '../../utils/cn';
@@ -105,13 +105,13 @@ export default function Sidebar({
                     {isTauriRuntime() ? (
                       <>
                         <img
-                          src={AppIconLight}
-                          className="w-full h-full object-contain block dark:hidden"
+                          src={IsmLogoLight}
+                          className="w-full h-full object-contain block dark:hidden select-none pointer-events-none"
                           alt="Logo"
                         />
                         <img
-                          src={AppIconDark}
-                          className="w-full h-full object-contain hidden dark:block"
+                          src={IsmLogoDark}
+                          className="w-full h-full object-contain hidden dark:block select-none pointer-events-none"
                           alt="Logo"
                         />
                       </>

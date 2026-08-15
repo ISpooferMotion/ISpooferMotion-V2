@@ -10,6 +10,7 @@ import type {
 } from '../types/tauriEvents';
 import { appendSpoofingLog } from '../utils/spoofingLogs';
 import { isTauriRuntime } from '../utils/tauriRuntime';
+import { logIsm } from '../utils/robloxProfiles';
 
 export type { AppConfig };
 
@@ -167,7 +168,9 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const ok = results.filter((r) => r.success).length;
         const skipped = results.filter((r) => r.skipped).length;
         const failed = results.filter((r) => !r.success && !r.skipped).length;
-        const durationSec = (startTime ? (Date.now() - startTime) / 1000 : 0).toFixed(2);
+        const durationMs = startTime ? Date.now() - startTime : 0;
+        const durationSec = (durationMs / 1000).toFixed(2);
+        const avgMsPerAsset = Math.round(durationMs / Math.max(1, total));
         let level: 'success' | 'error' | 'info' = 'info';
         let message: string;
         if (e.payload.error) {
@@ -175,15 +178,20 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           message = `Job failed: ${e.payload.error}`;
         } else if (failed === 0 && total > 0) {
           level = 'success';
-          message = `Spoofing complete in ${durationSec}s: ${ok}/${total} succeeded${skipped ? `, ${skipped} skipped` : ''}.`;
+          message = `Spoofing complete for ${total} asset(s) in ${durationSec}s (${avgMsPerAsset}ms/asset, ${ok}/${total} succeeded${skipped ? `, ${skipped} skipped` : ''}).`;
         } else if (ok === 0) {
           level = 'error';
           message = `Spoofing failed: all ${total} asset(s) failed. See the Console for details.`;
         } else {
           level = 'info';
-          message = `Spoofing finished in ${durationSec}s: ${ok}/${total} succeeded, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}.`;
+          message = `Spoofing finished for ${total} asset(s) in ${durationSec}s (${avgMsPerAsset}ms/asset, ${ok}/${total} succeeded, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}).`;
         }
         useSpooferStore.getState().showToast(level, message, 6000);
+        logIsm(
+          level === 'error' ? 'error' : level === 'success' ? 'success' : 'info',
+          message,
+          false,
+        );
 
         if (e.payload.error) {
           setSpoofingLogs((prev) => appendSpoofingLog(prev, `[ERROR] ${e.payload.error}`));
