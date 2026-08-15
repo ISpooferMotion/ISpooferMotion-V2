@@ -26,6 +26,7 @@ export const AppConfigSchema = z.object({
     // a max attribute on the field.
     maxConcurrency: z.number().min(1).max(100).catch(100).default(50),
     maxDownloadConcurrency: z.number().min(1).max(100).catch(10).default(10),
+    discoveryConcurrency: z.number().min(1).max(50).catch(30).default(30),
     enableArchiveRecovery: z.boolean().default(false),
     proxyUrl: z.string().default(''),
   }),
@@ -99,6 +100,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     concurrentDownloading: true,
     maxConcurrency: 100,
     maxDownloadConcurrency: 10,
+    discoveryConcurrency: 30,
     enableArchiveRecovery: false,
     proxyUrl: '',
   },

@@ -133,6 +133,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       const p4 = listen<SpooferResultPayload>('spoofer-result', (e) => {
+        const startTime = useSpooferStore.getState().spoofStartTime;
         setIsSpoofing(false);
         setActiveSpooferJobId(null);
         setSpoofStartTime(null);
@@ -166,6 +167,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const ok = results.filter((r) => r.success).length;
         const skipped = results.filter((r) => r.skipped).length;
         const failed = results.filter((r) => !r.success && !r.skipped).length;
+        const durationSec = (startTime ? (Date.now() - startTime) / 1000 : 0).toFixed(2);
         let level: 'success' | 'error' | 'info' = 'info';
         let message: string;
         if (e.payload.error) {
@@ -173,29 +175,32 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           message = `Job failed: ${e.payload.error}`;
         } else if (failed === 0 && total > 0) {
           level = 'success';
-          message = `Spoofing complete: ${ok}/${total} succeeded${skipped ? `, ${skipped} skipped` : ''}.`;
+          message = `Spoofing complete in ${durationSec}s: ${ok}/${total} succeeded${skipped ? `, ${skipped} skipped` : ''}.`;
         } else if (ok === 0) {
           level = 'error';
           message = `Spoofing failed: all ${total} asset(s) failed. See the Console for details.`;
         } else {
           level = 'info';
-          message = `Spoofing finished: ${ok}/${total} succeeded, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}.`;
+          message = `Spoofing finished in ${durationSec}s: ${ok}/${total} succeeded, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}.`;
         }
         useSpooferStore.getState().showToast(level, message, 6000);
 
         if (e.payload.error) {
-          setSpoofingLogs((prev) => appendSpoofingLog(prev, `[ERROR]: ${e.payload.error}`));
-        } else if (e.payload.replacements) {
-          // Merge the new batch's replacements with any previously-accumulated mappings
-          // from earlier runs in this session. Without this merge, assets that were already
-          // uploaded and skipped by skipExistingReplacements would never have their known
-          // old->new mappings re-sent to Studio, causing only a subset to be replaced.
-          const existingMappings = useSpooferStore.getState().lastReplacements;
-          const mergedReplacements: Record<string, string> = {
-            ...existingMappings,
-            ...e.payload.replacements,
-          };
-          applyReplacements(mergedReplacements);
+          setSpoofingLogs((prev) => appendSpoofingLog(prev, `[ERROR] ${e.payload.error}`));
+        } else {
+          setSpoofingLogs((prev) => appendSpoofingLog(prev, `[SUCCESS] ${message}`));
+          if (e.payload.replacements) {
+            // Merge the new batch's replacements with any previously-accumulated mappings
+            // from earlier runs in this session. Without this merge, assets that were already
+            // uploaded and skipped by skipExistingReplacements would never have their known
+            // old->new mappings re-sent to Studio, causing only a subset to be replaced.
+            const existingMappings = useSpooferStore.getState().lastReplacements;
+            const mergedReplacements: Record<string, string> = {
+              ...existingMappings,
+              ...e.payload.replacements,
+            };
+            applyReplacements(mergedReplacements);
+          }
         }
       });
 

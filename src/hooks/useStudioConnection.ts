@@ -31,6 +31,7 @@ export function useStudioConnection() {
   const [studioConnected, setStudioConnected] = useState(false);
   const [scanStatus, setScanStatus] = useState<ScanStatus | null>(null);
   const [studioPlaceId, setStudioPlaceId] = useState(readCachedStudioPlaceId);
+  const [studioPlaceName, setStudioPlaceName] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,11 +51,15 @@ export function useStudioConnection() {
             synced: boolean;
             scanStatus: ScanStatus | null;
             studioPlaceId: string | null;
+            studioPlaceName: string | null;
           }>('get_studio_health_status');
 
           if (!cancelled) {
             success = result.synced === true;
             setStudioConnected(success);
+            if (result.studioPlaceName && result.studioPlaceName.trim() !== '') {
+              setStudioPlaceName(result.studioPlaceName);
+            }
             setScanStatus((prev) => {
               const next = result.scanStatus || null;
               if (prev === next) return prev;
@@ -125,7 +130,7 @@ export function useStudioConnection() {
   }, []);
 
   return useMemo(
-    () => ({ studioConnected, scanStatus, studioPlaceId }),
-    [studioConnected, scanStatus, studioPlaceId],
+    () => ({ studioConnected, scanStatus, studioPlaceId, studioPlaceName }),
+    [studioConnected, scanStatus, studioPlaceId, studioPlaceName],
   );
 }

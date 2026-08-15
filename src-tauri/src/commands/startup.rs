@@ -44,27 +44,34 @@ pub async fn close_splashscreen(app: AppHandle) {
     }
 }
 
-/// Resolve the OS-specific Roblox Studio Plugins directory.
-/// Returns `None` on unsupported platforms or when the relevant env var is missing.
-fn roblox_plugins_dir() -> Option<PathBuf> {
+/// Resolve all OS-specific Roblox Studio Plugins directories.
+fn roblox_plugins_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+
     #[cfg(target_os = "windows")]
-    return std::env::var("LOCALAPPDATA")
-        .ok()
-        .map(|local| PathBuf::from(local).join("Roblox").join("Plugins"));
+    {
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            dirs.push(PathBuf::from(local).join("Roblox").join("Plugins"));
+        }
+        if let Ok(userprofile) = std::env::var("USERPROFILE") {
+            dirs.push(PathBuf::from(userprofile).join("Documents").join("Roblox").join("Plugins"));
+        }
+    }
 
     #[cfg(target_os = "macos")]
-    return std::env::var("HOME")
-        .ok()
-        .map(|home| PathBuf::from(home).join("Documents").join("Roblox").join("Plugins"));
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            dirs.push(PathBuf::from(home).join("Documents").join("Roblox").join("Plugins"));
+        }
+    }
 
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    return None;
+    dirs
 }
 
 /// Automatically installs or updates the ISpooferMotion Luau plugin in Studio's local plugins folder.
 ///
 /// The `.rbxmx` plugin file is bundled into the Tauri binary at compile-time.
-/// When the app boots, this copies it directly into `%LOCALAPPDATA%\Roblox\Plugins`.
+/// When the app boots, this copies it directly into Roblox plugins folders.
 #[tauri::command]
 #[specta::specta]
 pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
@@ -89,8 +96,17 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
             candidates.push(p);
         }
 
-        // Standalone exe: walk up from the executable looking for dist-plugin/.
-        // Covers target/release/, target/, src-tauri/, tmp_clone/, and project root.
+        // Standalone exe or dev run: check direct relative paths from current_dir or workspace root.
+        let local_candidates = [
+            PathBuf::from("dist-plugin").join("ISpooferMotion.rbxmx"),
+            PathBuf::from("tmp_clone").join("dist-plugin").join("ISpooferMotion.rbxmx"),
+            PathBuf::from("../dist-plugin").join("ISpooferMotion.rbxmx"),
+            PathBuf::from("../../dist-plugin").join("ISpooferMotion.rbxmx"),
+        ];
+        for c in local_candidates {
+            candidates.push(c);
+        }
+
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
                 for depth in 0..5u32 {
@@ -122,39 +138,50 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
 
     log::info!("Found plugin resource at {:?}", resource_path);
 
-    let Some(dest_dir) = roblox_plugins_dir() else {
+    let dest_dirs = roblox_plugins_dirs();
+    if dest_dirs.is_empty() {
         log::warn!("Could not determine Roblox plugins directory for this OS.");
         return Ok(false);
-    };
-
-    // Create plugins directory if it doesn't exist yet.
-    if !dest_dir.exists() {
-        tokio::fs::create_dir_all(&dest_dir).await?;
     }
 
-    // Always overwrite: delete any existing ISpooferMotion plugin files so the
-    // fresh copy replaces them. If Studio is holding a read handle the delete
-    // may fail, but tokio::fs::copy can overwrite in-place on Windows anyway.
-    if let Ok(mut entries) = tokio::fs::read_dir(&dest_dir).await {
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            if let Some(file_name) = entry.file_name().to_str() {
-                if file_name.contains("ISpooferMotion") {
-                    let _ = tokio::fs::remove_file(entry.path()).await;
+    let mut any_copied = false;
+    for dest_dir in dest_dirs {
+        if !dest_dir.exists() {
+            let _ = tokio::fs::create_dir_all(&dest_dir).await;
+        }
+
+        if let Ok(mut entries) = tokio::fs::read_dir(&dest_dir).await {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                if let Some(file_name) = entry.file_name().to_str() {
+                    if file_name.contains("ISpooferMotion") {
+                        let _ = tokio::fs::remove_file(entry.path()).await;
+                    }
                 }
             }
         }
+
+        let dest_path = dest_dir.join("ISpooferMotion.rbxmx");
+        if let Ok(n) = tokio::fs::copy(&resource_path, &dest_path).await {
+            log::info!("Copied plugin ({} bytes) to {:?}", n, dest_path);
+            any_copied = true;
+        }
     }
 
-    let dest_path = dest_dir.join("ISpooferMotion.rbxmx");
+    Ok(any_copied)
+}
 
-    match tokio::fs::copy(&resource_path, &dest_path).await {
-        Ok(n) => {
-            log::info!("Copied plugin ({} bytes) to {:?}", n, dest_path);
-            Ok(true)
-        }
-        Err(e) => {
-            log::error!("Failed to copy plugin: {}", e);
-            Err(crate::error::AppError::Io(e))
+/// Uninstalls (deletes) the ISpooferMotion plugin from Roblox's plugins folder on app exit.
+pub fn uninstall_roblox_plugin() {
+    for dest_dir in roblox_plugins_dirs() {
+        if let Ok(entries) = std::fs::read_dir(&dest_dir) {
+            for entry in entries.flatten() {
+                if let Some(file_name) = entry.file_name().to_str() {
+                    if file_name.contains("ISpooferMotion") {
+                        let _ = std::fs::remove_file(entry.path());
+                        log::info!("Auto-uninstalled plugin from {:?}", entry.path());
+                    }
+                }
+            }
         }
     }
 }

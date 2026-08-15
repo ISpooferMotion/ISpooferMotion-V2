@@ -139,33 +139,33 @@ export default function ActivityView() {
                   <AccordionItem
                     key={job.id}
                     value={job.id}
-                    className="bg-card border border-border/50 shadow-sm rounded-xl overflow-hidden mb-4"
+                    className="bg-bg-surface/40 border border-border-subtle shadow-xs rounded-xl overflow-hidden mb-3"
                   >
-                    <AccordionTrigger className="hover:no-underline py-2 pr-3 pl-1 data-[state=open]:border-b data-[state=open]:border-border/30">
+                    <AccordionTrigger className="hover:no-underline py-2.5 pr-3 pl-2 data-[state=open]:border-b data-[state=open]:border-border-subtle/30">
                       <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-4">
-                          <div className="relative w-11 h-11 shrink-0">
+                        <div className="flex items-center gap-3">
+                          <div className="relative w-9 h-9 shrink-0">
                             {job.account?.avatarUrl ? (
                               <img
                                 src={job.account.avatarUrl}
                                 alt=""
-                                className="w-11 h-11 rounded-full border border-border object-cover bg-background shadow-sm"
+                                className="w-9 h-9 rounded-full border border-border-subtle object-cover bg-bg-base shadow-xs"
                               />
                             ) : (
-                              <div className="w-11 h-11 rounded-full border border-border bg-background flex items-center justify-center shadow-sm">
-                                <User2 size={20} className="text-muted-foreground" />
+                              <div className="w-9 h-9 rounded-full border border-border-subtle bg-bg-base flex items-center justify-center shadow-xs">
+                                <User2 size={16} className="text-muted-foreground" />
                               </div>
                             )}
                             {job.group?.iconUrl && (
                               <img
                                 src={job.group.iconUrl}
                                 alt=""
-                                className="w-5.5 h-5.5 rounded-full border-[2.5px] border-card absolute -bottom-1 -right-1 object-cover bg-background shadow-sm"
+                                className="w-4.5 h-4.5 rounded-full border-[2px] border-bg-surface absolute -bottom-0.5 -right-0.5 object-cover bg-bg-base shadow-xs"
                               />
                             )}
                           </div>
                           <div className="flex flex-col items-start gap-0.5">
-                            <span className="text-[15px] font-semibold text-foreground tracking-tight text-left">
+                            <span className="text-xs font-bold text-text-primary tracking-tight text-left">
                               {job.group
                                 ? t('activity.spoofedTo').replace('{name}', job.group.name)
                                 : t('activity.spoofedTo').replace(
@@ -173,7 +173,7 @@ export default function ActivityView() {
                                     job.account?.name || t('common.unknown'),
                                   )}
                             </span>
-                            <span className="text-[13px] text-muted-foreground flex items-center gap-2">
+                            <span className="text-[11px] text-text-muted flex items-center gap-2">
                               {dateStr}
                               <span className="w-1 h-1 rounded-full bg-border" />
                               <span className="font-medium">
@@ -189,23 +189,23 @@ export default function ActivityView() {
                     </AccordionTrigger>
 
                     <AccordionContent className="p-0">
-                      <div className="px-4 pb-4 pt-3 bg-muted/20">
-                        <div className="flex flex-wrap items-center gap-5 mb-4 px-1">
+                      <div className="px-4 pb-3.5 pt-2.5 bg-bg-base/20">
+                        <div className="flex flex-wrap items-center gap-4 mb-3 px-1">
                           <button
                             type="button"
                             onClick={(e) => handleRedoJob(job, e)}
-                            className="flex items-center text-[13px] font-medium text-muted-foreground hover:text-primary transition-colors"
+                            className="flex items-center text-xs font-semibold text-text-muted hover:text-primary transition-colors cursor-pointer"
                           >
-                            <Play size={14} className="mr-1.5" />
+                            <Play size={12} className="mr-1.5" />
                             {t('activity.redoJob')}
                           </button>
                           {failedAssets > 0 && (
                             <button
                               type="button"
                               onClick={(e) => handleRetryFailed(job, e)}
-                              className="flex items-center text-[13px] font-medium text-muted-foreground hover:text-yellow-500 transition-colors"
+                              className="flex items-center text-xs font-semibold text-text-muted hover:text-yellow-500 transition-colors cursor-pointer"
                             >
-                              <RotateCcw size={14} className="mr-1.5" />
+                              <RotateCcw size={12} className="mr-1.5" />
                               {t('activity.retryFailed').replace(
                                 '{count}',
                                 failedAssets.toString(),
@@ -216,27 +216,27 @@ export default function ActivityView() {
                             <button
                               type="button"
                               onClick={(e) => handleOpenLog(job.logFilePath!, e)}
-                              className="flex items-center text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                              className="flex items-center text-xs font-semibold text-text-muted hover:text-text-primary transition-colors cursor-pointer"
                             >
-                              <FileText size={14} className="mr-1.5" />
+                              <FileText size={12} className="mr-1.5" />
                               {t('activity.viewLog')}
                             </button>
                           )}
                           <button
                             type="button"
                             onClick={(e) => handleDelete(job.id, e)}
-                            className="flex items-center text-[13px] font-medium text-muted-foreground hover:text-destructive transition-colors ml-auto"
+                            className="flex items-center text-xs font-semibold text-text-muted hover:text-destructive transition-colors ml-auto cursor-pointer"
                           >
-                            <Trash2 size={14} className="mr-1.5" />
+                            <Trash2 size={12} className="mr-1.5" />
                             {t('common.delete')}
                           </button>
                         </div>
 
-                        <div className="space-y-1 max-h-72 overflow-y-auto pr-2 rounded-md border border-border/50 p-2 bg-background/50">
+                        <div className="space-y-1 max-h-72 overflow-y-auto pr-1 rounded-lg border border-border-subtle/50 p-2 bg-bg-base/50">
                           {job.assetResults?.map((res, i) => (
                             <div
                               key={i}
-                              className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 text-[12px] transition-colors"
+                              className="flex items-center justify-between p-1.5 rounded-md hover:bg-bg-elevated/40 text-[11px] transition-colors"
                             >
                               <div className="flex items-center gap-3 overflow-hidden">
                                 {res.success ? (
@@ -248,7 +248,7 @@ export default function ActivityView() {
                                 ) : (
                                   <XCircle size={14} className="text-destructive shrink-0" />
                                 )}
-                                <span className="font-mono text-muted-foreground w-24 shrink-0">
+                                <span className="font-mono text-muted-foreground min-w-[120px] shrink-0">
                                   {res.id}
                                 </span>
                                 <span className="truncate text-foreground max-w-50">

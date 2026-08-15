@@ -39,6 +39,7 @@ export default defineConfig(() => {
         input: {
           main: resolve(__dirname, './index.html'),
           splash: resolve(__dirname, './splash.html'),
+          preview: resolve(__dirname, './preview.html'),
         },
         output: {
           manualChunks(id) {

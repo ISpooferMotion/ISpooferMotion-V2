@@ -1,6 +1,6 @@
 [package]
 name         = "app"
-version      = "2.6.0"
+version      = "2.6.1"
 authors      = ["IncredibroXP <incredibroxpdev@gmail.com>"]
 description  = "Animation spoofing utility for Roblox"
 edition      = "2021"
@@ -38,7 +38,7 @@ reqwest = { version = "0.12", features = [
 
 keyring                   = { version = "3", features = ["windows-native"] }
 regex                     = "1"
-tokio                     = { version = "1", features = ["full"] }
+tokio                     = { version = "1", features = ["full", "sync"] }
 tauri-plugin-notification = "2.3.3"
 chrono                    = "0.4"
 

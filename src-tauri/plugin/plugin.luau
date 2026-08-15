@@ -100,7 +100,7 @@ local function runManualReplacements(text: string)
 			strVal = tostring(val)
 		end
 
-		if not strVal then
+		if not strVal or not string.find(strVal, "%d") then
 			return
 		end
 
@@ -371,10 +371,15 @@ local function runManualReplacements(text: string)
 
 	-- pcall so an unexpected error can never leave the ChangeHistory recording
 	-- open (an open recording breaks Studio undo until restart).
+	local lastYieldTime = os.clock()
 	local runOk, runErr = pcall(function()
 		for _, root in ipairs(roots) do
 			for _, descendant in ipairs(root:GetDescendants()) do
 				processInstance(descendant)
+				if os.clock() - lastYieldTime > 0.012 then
+					task.wait()
+					lastYieldTime = os.clock()
+				end
 			end
 		end
 	end)

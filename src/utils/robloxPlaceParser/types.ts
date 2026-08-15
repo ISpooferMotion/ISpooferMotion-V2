@@ -6,6 +6,7 @@ export type RobloxAssetType =
   | 'plugin'
   | 'script_ref'
   | 'raw_keyframe_sequence'
+  | 'ghost'
   | 'unknown';
 
 // A single external asset reference from a place file.

@@ -453,8 +453,23 @@ pub struct BatchAssetRequest {
 
 #[tauri::command]
 #[specta::specta]
-pub fn clear_asset_cache() {
+pub async fn clear_asset_cache(app: AppHandle) -> bool {
     get_asset_cache().clear();
+    place::clear_place_caches(Some(&app));
+    if let Some(data) = crate::studio_bridge::bridge_data() {
+        let mut guard = data.write().await;
+        guard.studio_records = std::sync::Arc::new(Vec::new());
+        if let Ok(mut pending) = guard.pending_studio_records.lock() {
+            pending.clear();
+        }
+        guard.last_sounds = Default::default();
+        guard.last_animations = Default::default();
+        guard.last_images = Default::default();
+        guard.last_meshes = Default::default();
+        guard.last_script_refs = Default::default();
+        guard.scan_status = None;
+    }
+    true
 }
 
 pub mod diagnostics;

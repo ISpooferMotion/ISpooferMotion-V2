@@ -695,6 +695,7 @@ local function applyPatches(patches: any)
 		patchRunning = false
 	end
 
+	local frameStart = os.clock()
 	local batchOk, batchErr = pcall(function()
 		for index, rawPatch in ipairs(patches) do
 			local ok, patchOk, patchErr = pcall(function()
@@ -730,7 +731,7 @@ local function applyPatches(patches: any)
 				)
 			end
 
-			if index % 50 == 0 and index < #patches then
+			if (index % 5 == 0 or (os.clock() - frameStart) > 0.01) and index < #patches then
 				-- Silent=true: transient progress updates should not produce log spam.
 				setPluginGuiStatus(
 					string.format("Applying replacements (%d/%d)...", index, #patches),

@@ -147,18 +147,35 @@ export default function ExecutionLogs({
             <button
               onClick={onOpenPasteIds}
               className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary hover:text-primary transition-colors"
-              title="Paste replacement IDs and send them to Studio"
+              title="Manual Replace & Add IDs"
             >
-              <ClipboardPaste size={14} /> Paste IDs
+              <ClipboardPaste size={14} /> Manual Replace
             </button>
           )}
           {Object.keys(lastReplacements).length > 0 && (
-            <button
-              onClick={() => setResultsModalOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
-            >
-              <ListChecks size={14} /> {t('spoof.viewResults')}
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  const text = Object.entries(lastReplacements)
+                    .map(([orig, rep]) => `${orig} -> ${rep}`)
+                    .join(',\n');
+                  void navigator.clipboard.writeText(text);
+                  useSpooferStore
+                    .getState()
+                    .showToast('success', 'Copied replacement pairs to clipboard!');
+                }}
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+                title="Copy all replacement pairs in original -> replaced format"
+              >
+                <Copy size={14} /> Copy Replacements
+              </button>
+              <button
+                onClick={() => setResultsModalOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+              >
+                <ListChecks size={14} /> {t('spoof.viewResults')}
+              </button>
+            </>
           )}
           {logs && logs.length > 0 && (
             <>

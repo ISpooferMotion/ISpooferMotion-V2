@@ -2,7 +2,17 @@ use super::{
     build_roblox_cookie_header, get_asset_cache, is_valid_numeric_id, set_rate_limit,
     wait_rate_limit, AppHandle, Duration, Manager, RateLimitBucket, Value, COOKIE,
 };
+use futures::stream::{self, StreamExt};
 use std::collections::HashSet;
+use tokio::sync::broadcast;
+
+static DISCOVERY_LOCKS: std::sync::OnceLock<
+    dashmap::DashMap<String, broadcast::Sender<Option<String>>>,
+> = std::sync::OnceLock::new();
+
+fn get_discovery_locks() -> &'static dashmap::DashMap<String, broadcast::Sender<Option<String>>> {
+    DISCOVERY_LOCKS.get_or_init(dashmap::DashMap::new)
+}
 
 #[must_use]
 pub fn parse_excluded_id_list(raw: Option<&str>) -> HashSet<String> {
@@ -311,12 +321,12 @@ pub async fn get_place_ids_for_asset_creator(
     };
 
     let mut place_ids = if fast_ids.is_empty() {
-        match get_asset_creator_for_asset(app.clone(), asset_id, cookie.clone()).await {
+        match get_asset_creator_for_asset(app.clone(), asset_id.clone(), cookie.clone()).await {
             Ok((creator_type, creator_id)) => get_place_id_from_creator(
                 app.clone(),
                 creator_type,
                 creator_id,
-                cookie,
+                cookie.clone(),
                 max_place_ids,
                 place_name,
             )
@@ -335,6 +345,28 @@ pub async fn get_place_ids_for_asset_creator(
     Ok(place_ids)
 }
 
+static CREATOR_CACHE: std::sync::OnceLock<dashmap::DashMap<String, (String, String)>> =
+    std::sync::OnceLock::new();
+
+fn get_creator_cache() -> &'static dashmap::DashMap<String, (String, String)> {
+    CREATOR_CACHE.get_or_init(dashmap::DashMap::new)
+}
+
+pub fn clear_place_caches(app: Option<&AppHandle>) {
+    if let Some(cache) = CREATOR_CACHE.get() {
+        cache.clear();
+    }
+    if let Some(cache) = CREATOR_WORKING_PLACE_CACHE.get() {
+        cache.clear();
+    }
+    if let Some(app_handle) = app {
+        if let Ok(data_dir) = app_handle.path().app_data_dir() {
+            let cache_path = data_dir.join("place_id_cache.json");
+            let _ = std::fs::remove_file(cache_path);
+        }
+    }
+}
+
 // hits the open cloud api to find out who actually made the asset so we know if we need to spoof it
 pub async fn get_asset_creator_for_asset(
     app: AppHandle,
@@ -345,9 +377,7 @@ pub async fn get_asset_creator_for_asset(
         return Err("Invalid Roblox asset id.".into());
     }
 
-    static CREATOR_CACHE: std::sync::OnceLock<dashmap::DashMap<String, (String, String)>> =
-        std::sync::OnceLock::new();
-    let cache = CREATOR_CACHE.get_or_init(dashmap::DashMap::new);
+    let cache = get_creator_cache();
     if let Some(cached) = cache.get(&asset_id) {
         return Ok(cached.value().clone());
     }
@@ -573,51 +603,48 @@ pub async fn get_place_id_from_creator(
                         .and_then(|rp| rp.get("id"))
                         .or_else(|| game.get("rootPlaceId"))
                         .or_else(|| game.get("placeId"))
-                        .or_else(|| game.get("id"))
                         .and_then(value_to_string);
 
-                    let mut found_subplaces = false;
-                    if let Some(universe_id) =
-                        game.get("id").or_else(|| game.get("universeId")).and_then(value_to_string)
-                    {
-                        let url = format!("https://develop.roblox.com/v1/universes/{universe_id}/places?limit=100");
-                        wait_rate_limit(RateLimitBucket::PlaceLookup).await;
-                        if let Ok(resp) = client
-                            .get(&url)
-                            .header(reqwest::header::COOKIE, &cookie_header)
-                            .send()
-                            .await
+                    if let Some(ref pid) = root_place_id {
+                        if seen_places.insert(pid.clone()) {
+                            root_places.push((pid.clone(), game_name.clone()));
+                        }
+                    }
+
+                    // Only query subplaces if we still need more place IDs
+                    if root_places.len() < max_results as usize {
+                        if let Some(universe_id) = game
+                            .get("id")
+                            .or_else(|| game.get("universeId"))
+                            .and_then(value_to_string)
                         {
-                            if let Ok(data) = resp.json::<serde_json::Value>().await {
-                                if let Some(places) = data.get("data").and_then(|d| d.as_array()) {
-                                    for place in places {
-                                        if let Some(pid) = place.get("id").and_then(value_to_string)
-                                        {
-                                            if seen_places.insert(pid.clone()) {
-                                                root_places.push((pid, game_name.clone()));
-                                                found_subplaces = true;
+                            let url = format!("https://develop.roblox.com/v1/universes/{universe_id}/places?limit=100");
+                            wait_rate_limit(RateLimitBucket::PlaceLookup).await;
+                            if let Ok(resp) = client
+                                .get(&url)
+                                .header(reqwest::header::COOKIE, &cookie_header)
+                                .send()
+                                .await
+                            {
+                                if let Ok(data) = resp.json::<serde_json::Value>().await {
+                                    if let Some(places) =
+                                        data.get("data").and_then(|d| d.as_array())
+                                    {
+                                        for place in places {
+                                            if let Some(pid) =
+                                                place.get("id").and_then(value_to_string)
+                                            {
+                                                if seen_places.insert(pid.clone()) {
+                                                    root_places.push((pid, game_name.clone()));
+                                                }
                                             }
-                                        }
-                                        if root_places.len() >= max_results as usize {
-                                            break;
+                                            if root_places.len() >= max_results as usize {
+                                                break;
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
-
-                    if !found_subplaces {
-                        if let Some(pid) = root_place_id {
-                            if seen_places.insert(pid.clone()) {
-                                root_places.push((pid, game_name.clone()));
-                            }
-                        } else if let Some(universe_id) = game
-                            .get("universeId")
-                            .or_else(|| game.get("id"))
-                            .and_then(value_to_string)
-                        {
-                            missing_root_universes.push((universe_id, game_name));
                         }
                     }
 
@@ -643,7 +670,8 @@ pub async fn get_place_id_from_creator(
     }
 
     if root_places.len() < max_results as usize && !missing_root_universes.is_empty() {
-        missing_root_universes.dedup_by(|a, b| a.0 == b.0);
+        missing_root_universes
+            .dedup_by(|a: &mut (String, String), b: &mut (String, String)| a.0 == b.0);
         for chunk in missing_root_universes.chunks(50) {
             if root_places.len() >= max_results as usize {
                 break;
@@ -993,6 +1021,13 @@ pub async fn search_global_places(
     Ok(data)
 }
 
+static CREATOR_WORKING_PLACE_CACHE: std::sync::OnceLock<dashmap::DashMap<String, String>> =
+    std::sync::OnceLock::new();
+
+fn get_creator_working_place_cache() -> &'static dashmap::DashMap<String, String> {
+    CREATOR_WORKING_PLACE_CACHE.get_or_init(dashmap::DashMap::new)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn discover_asset_place_id(
@@ -1001,6 +1036,7 @@ pub async fn discover_asset_place_id(
     cookie: String,
     forced_place_id: Option<String>,
 ) -> crate::error::Result<Option<String>> {
+    let start_time = std::time::Instant::now();
     let cookie_header = build_roblox_cookie_header(&cookie);
     if cookie_header.is_empty() {
         return Err("Missing ROBLOSECURITY cookie".into());
@@ -1008,9 +1044,25 @@ pub async fn discover_asset_place_id(
 
     let client = crate::utils::get_http_client();
 
+    let remember_working_place_id = |pid: &str| {
+        let app_clone = app.clone();
+        let asset_id_clone = asset_id.clone();
+        let cookie_clone = cookie.clone();
+        let pid_str = pid.to_string();
+        tokio::spawn(async move {
+            if let Ok((creator_type, creator_id)) =
+                get_asset_creator_for_asset(app_clone, asset_id_clone, cookie_clone).await
+            {
+                let key = format!("{creator_type}_{creator_id}");
+                get_creator_working_place_cache().insert(key, pid_str);
+            }
+        });
+    };
+
     // 0. If a pinned forced_place_id is provided, test it first
     if let Some(ref pid) = forced_place_id {
         if !pid.is_empty() && pid != "1818" {
+            log::info!("[Discovery:{}] Testing pinned forced Place ID: {}", asset_id, pid);
             let loc = crate::commands::spoofer::download::resolve_asset_id_location(
                 &app,
                 &client,
@@ -1022,12 +1074,40 @@ pub async fn discover_asset_place_id(
             .unwrap_or(None);
 
             if loc.is_some() {
+                log::info!(
+                    "[Discovery:{}] Verified via pinned Place ID {} in {}ms",
+                    asset_id,
+                    pid,
+                    start_time.elapsed().as_millis()
+                );
+                remember_working_place_id(pid);
                 return Ok(Some(pid.clone()));
             }
         }
     }
 
+    // 0.5. Try previously verified working Place ID for this creator
+    if let Ok((creator_type, creator_id)) =
+        get_asset_creator_for_asset(app.clone(), asset_id.clone(), cookie.clone()).await
+    {
+        let creator_key = format!("{creator_type}_{creator_id}");
+        if let Some(cached_pid) = get_creator_working_place_cache().get(&creator_key) {
+            let pid = cached_pid.value().clone();
+            if !pid.is_empty() && pid != "1818" {
+                log::info!(
+                    "[Discovery:{}] Using verified creator cache Place ID {} for {} in {}ms",
+                    asset_id,
+                    pid,
+                    creator_key,
+                    start_time.elapsed().as_millis()
+                );
+                return Ok(Some(pid));
+            }
+        }
+    }
+
     // 1. Try creator places & asset-to-universe
+    log::info!("[Discovery:{}] Fetching creator places/universes...", asset_id);
     let candidates = get_place_ids_for_asset_creator(
         app.clone(),
         asset_id.clone(),
@@ -1038,81 +1118,153 @@ pub async fn discover_asset_place_id(
     .await
     .unwrap_or_default();
 
-    let client = crate::utils::get_http_client();
-    for pid in &candidates {
-        if pid.is_empty() || pid == "1818" {
-            continue;
-        }
-        let loc = crate::commands::spoofer::download::resolve_asset_id_location(
-            &app,
-            &client,
-            &asset_id,
-            &cookie_header,
-            Some(pid),
-        )
-        .await
-        .unwrap_or(None);
+    // Check if another task for this creator is already doing discovery.
+    // If so, wait for it to finish and reuse its Place ID if it found one.
+    let creator_key_for_lock = if let Ok((creator_type, creator_id)) =
+        get_asset_creator_for_asset(app.clone(), asset_id.clone(), cookie.clone()).await
+    {
+        Some(format!("{creator_type}_{creator_id}"))
+    } else {
+        None
+    };
 
-        if loc.is_some() {
-            return Ok(Some(pid.clone()));
+    let mut rx_lock = None;
+    if let Some(ref lock_key) = creator_key_for_lock {
+        let locks = get_discovery_locks();
+        if let Some(tx) = locks.get(lock_key) {
+            rx_lock = Some(tx.subscribe());
+            log::info!(
+                "[Discovery:{}] Joining existing discovery for creator {}",
+                asset_id,
+                lock_key
+            );
+        } else {
+            let (tx, _rx) = broadcast::channel(1);
+            locks.insert(lock_key.clone(), tx);
         }
     }
 
+    if let Some(mut rx) = rx_lock {
+        if let Ok(Some(pid)) = rx.recv().await {
+            log::info!("[Discovery:{}] Resuming with locked Place ID {}", asset_id, pid);
+            return Ok(Some(pid));
+        }
+    }
+
+    let check_places_parallel = |candidates: Vec<String>| {
+        let app = app.clone();
+        let client = client.clone();
+        let asset_id = asset_id.clone();
+        let cookie_header = cookie_header.clone();
+        async move {
+            let mut stream =
+                stream::iter(candidates.into_iter().filter(|p| !p.is_empty() && p != "1818"))
+                    .map(|pid| {
+                        let app = app.clone();
+                        let client = client.clone();
+                        let asset_id = asset_id.clone();
+                        let cookie_header = cookie_header.clone();
+                        async move {
+                            let loc =
+                                crate::commands::spoofer::download::resolve_asset_id_location(
+                                    &app,
+                                    &client,
+                                    &asset_id,
+                                    &cookie_header,
+                                    Some(&pid),
+                                )
+                                .await
+                                .unwrap_or(None);
+                            (pid, loc.is_some())
+                        }
+                    })
+                    .buffer_unordered(10); // test 10 candidates simultaneously
+
+            while let Some((pid, success)) = stream.next().await {
+                if success {
+                    return Some(pid);
+                }
+            }
+            None
+        }
+    };
+
+    let broadcast_result = |pid_opt: Option<String>| {
+        if let Some(ref lock_key) = creator_key_for_lock {
+            if let Some((_, tx)) = get_discovery_locks().remove(lock_key) {
+                let _ = tx.send(pid_opt.clone());
+            }
+        }
+    };
+
+    if let Some(pid) = check_places_parallel(candidates.clone()).await {
+        log::info!(
+            "[Discovery:{}] Resolved via creator candidate Place ID {} in {}ms",
+            asset_id,
+            pid,
+            start_time.elapsed().as_millis()
+        );
+        remember_working_place_id(&pid);
+        broadcast_result(Some(pid.clone()));
+        return Ok(Some(pid));
+    }
+
     // 2. Try Asset Usage discovery
+    log::info!("[Discovery:{}] Attempting Asset Usage discovery...", asset_id);
     let usage_pids = crate::commands::spoofer::download::attempt_asset_usage_place_id_discovery(
         &asset_id,
         &cookie_header,
     )
     .await;
 
-    for pid in &usage_pids {
-        if pid.is_empty() || pid == "1818" {
-            continue;
-        }
-        let loc = crate::commands::spoofer::download::resolve_asset_id_location(
-            &app,
-            &client,
-            &asset_id,
-            &cookie_header,
-            Some(pid),
-        )
-        .await
-        .unwrap_or(None);
-
-        if loc.is_some() {
-            return Ok(Some(pid.clone()));
-        }
+    if let Some(pid) = check_places_parallel(usage_pids).await {
+        log::info!(
+            "[Discovery:{}] Resolved via Asset Usage Place ID {} in {}ms",
+            asset_id,
+            pid,
+            start_time.elapsed().as_millis()
+        );
+        remember_working_place_id(&pid);
+        broadcast_result(Some(pid.clone()));
+        return Ok(Some(pid));
     }
 
     // 3. Try Social Graph discovery
+    log::info!("[Discovery:{}] Attempting Social Graph discovery...", asset_id);
     let social_pids = crate::commands::spoofer::download::attempt_social_graph_place_id_discovery(
         &asset_id,
         &cookie_header,
     )
     .await;
 
-    for pid in &social_pids {
-        if pid.is_empty() || pid == "1818" {
-            continue;
-        }
-        let loc = crate::commands::spoofer::download::resolve_asset_id_location(
-            &app,
-            &client,
-            &asset_id,
-            &cookie_header,
-            Some(pid),
-        )
-        .await
-        .unwrap_or(None);
-
-        if loc.is_some() {
-            return Ok(Some(pid.clone()));
-        }
+    if let Some(pid) = check_places_parallel(social_pids).await {
+        log::info!(
+            "[Discovery:{}] Resolved via Social Graph Place ID {} in {}ms",
+            asset_id,
+            pid,
+            start_time.elapsed().as_millis()
+        );
+        remember_working_place_id(&pid);
+        broadcast_result(Some(pid.clone()));
+        return Ok(Some(pid));
     }
 
     if let Some(first) = candidates.into_iter().find(|p| !p.is_empty() && p != "1818") {
+        log::info!(
+            "[Discovery:{}] Fallback to first creator candidate {} after {}ms",
+            asset_id,
+            first,
+            start_time.elapsed().as_millis()
+        );
+        broadcast_result(Some(first.clone()));
         return Ok(Some(first));
     }
 
+    log::warn!(
+        "[Discovery:{}] Failed all discovery stages after {}ms",
+        asset_id,
+        start_time.elapsed().as_millis()
+    );
+    broadcast_result(None);
     Ok(None)
 }

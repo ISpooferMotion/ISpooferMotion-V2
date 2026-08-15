@@ -94,6 +94,9 @@ interface SpooferState {
   isScanningStudio: boolean;
   setIsScanningStudio: (val: boolean) => void;
 
+  lastScanTime: number | null;
+  setLastScanTime: (val: number | null) => void;
+
   keyframeWarningCount: number;
   setKeyframeWarningCount: (val: number | ((prev: number) => number)) => void;
 
@@ -132,11 +135,20 @@ interface SpooferState {
   isInspectorOpen: boolean;
   setIsInspectorOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
 
+  isPropertiesOpen: boolean;
+  setIsPropertiesOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+
   activeInspectAsset: ParsedAssetRef | null;
   setActiveInspectAsset: (asset: ParsedAssetRef | null) => void;
 
   forceSpoof: boolean;
   setForceSpoof: (val: boolean) => void;
+
+  // Ghost IDs state (IDs added manually without an instance in Studio)
+  ghostAssetIds: Set<string>;
+  addGhostAssets: (ids: string[]) => void;
+  removeGhostAssets: (ids: string[]) => void;
+  clearGhostAssets: () => void;
 
   discoveryTimeoutSecs: number;
   setDiscoveryTimeoutSecs: (val: number) => void;
@@ -272,6 +284,9 @@ export const useSpooferStore = create<SpooferState>((set) => ({
   isScanningStudio: false,
   setIsScanningStudio: (val) => set({ isScanningStudio: val }),
 
+  lastScanTime: null,
+  setLastScanTime: (val) => set({ lastScanTime: val }),
+
   keyframeWarningCount: 0,
   setKeyframeWarningCount: (val) =>
     set((state) => ({
@@ -337,6 +352,12 @@ export const useSpooferStore = create<SpooferState>((set) => ({
       isInspectorOpen: typeof val === 'function' ? val(state.isInspectorOpen) : val,
     })),
 
+  isPropertiesOpen: true,
+  setIsPropertiesOpen: (val) =>
+    set((state) => ({
+      isPropertiesOpen: typeof val === 'function' ? val(state.isPropertiesOpen) : val,
+    })),
+
   activeInspectAsset: null,
   setActiveInspectAsset: (asset) => set({ activeInspectAsset: asset }),
 
@@ -345,6 +366,23 @@ export const useSpooferStore = create<SpooferState>((set) => ({
 
   discoveryTimeoutSecs: 60,
   setDiscoveryTimeoutSecs: (val) => set({ discoveryTimeoutSecs: val }),
+
+  ghostAssetIds: new Set<string>(),
+  addGhostAssets: (ids: string[]) =>
+    set((state) => {
+      const next = new Set(state.ghostAssetIds);
+      for (const id of ids) {
+        if (id) next.add(id);
+      }
+      return { ghostAssetIds: next };
+    }),
+  removeGhostAssets: (ids: string[]) =>
+    set((state) => {
+      const next = new Set(state.ghostAssetIds);
+      for (const id of ids) next.delete(id);
+      return { ghostAssetIds: next };
+    }),
+  clearGhostAssets: () => set({ ghostAssetIds: new Set() }),
 }));
 
 /**

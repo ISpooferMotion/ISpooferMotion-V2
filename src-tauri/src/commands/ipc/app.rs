@@ -33,6 +33,7 @@ pub fn open_frontend_devtools(app: AppHandle) {
 #[tauri::command]
 #[specta::specta]
 pub fn window_close(app: AppHandle) {
+    crate::commands::startup::uninstall_roblox_plugin();
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.close();
     }
@@ -41,6 +42,7 @@ pub fn window_close(app: AppHandle) {
 #[tauri::command]
 #[specta::specta]
 pub fn quit_app(app: AppHandle) {
+    crate::commands::startup::uninstall_roblox_plugin();
     app.exit(0);
 }
 
@@ -118,13 +120,14 @@ pub async fn uninstall_app(app: AppHandle) -> crate::error::Result<bool> {
     if let Ok(data_dir) = app.path().app_data_dir() {
         let _ = tokio::fs::remove_dir_all(&data_dir).await;
     }
+    crate::commands::startup::uninstall_roblox_plugin();
     app.exit(0);
     Ok(true)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn clear_plugin_cache() -> crate::error::Result<bool> {
-    crate::commands::spoofer::clear_asset_cache();
+pub async fn clear_plugin_cache(app: AppHandle) -> crate::error::Result<bool> {
+    crate::commands::spoofer::clear_asset_cache(app).await;
     Ok(true)
 }

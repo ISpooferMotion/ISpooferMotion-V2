@@ -271,52 +271,67 @@ export default function AccountsView() {
                     <DialogHeader>
                       <DialogTitle>{t('accounts.addAccountTitle')}</DialogTitle>
                     </DialogHeader>
-                    <div className="flex flex-col gap-4 py-4">
-                      <div className="flex flex-col gap-2">
-                        <Label>{t('accounts.cookieLabel')}</Label>
+                    <div className="flex flex-col gap-3 py-3">
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs font-semibold">{t('accounts.cookieLabel')}</Label>
                         <Input
                           type="password"
                           value={newCookie}
                           onChange={(e) => setNewCookie(e.target.value)}
                           placeholder={t('accounts.cookiePlaceholder')}
+                          className="h-8 text-xs bg-bg-base/70"
                         />
                       </div>
-                      <div className="flex flex-col gap-2">
-                        <Label>{t('accounts.apiKeyLabel')}</Label>
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs font-semibold">{t('accounts.apiKeyLabel')}</Label>
                         <Input
                           type="password"
                           value={newApiKey}
                           onChange={(e) => setNewApiKey(e.target.value)}
                           placeholder={t('accounts.apiKeyPlaceholder')}
+                          className="h-8 text-xs bg-bg-base/70"
                         />
                       </div>
-                      <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                      <div className="flex items-center justify-between rounded-lg border border-border-subtle p-3 bg-bg-base/40">
                         <div className="space-y-0.5">
-                          <Label>{t('accounts.useForDownloading')}</Label>
-                          <p className="text-xs text-muted-foreground">
+                          <Label className="text-xs font-semibold">
+                            {t('accounts.useForDownloading')}
+                          </Label>
+                          <p className="text-[11px] text-text-secondary leading-snug">
                             {t('accounts.useForDownloadingDesc')}
                           </p>
                         </div>
                         <Switch checked={isDownloader} onCheckedChange={setIsDownloader} />
                       </div>
-                      <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                      <div className="flex items-center justify-between rounded-lg border border-border-subtle p-3 bg-bg-base/40">
                         <div className="space-y-0.5">
-                          <Label>{t('accounts.useForUploading')}</Label>
-                          <p className="text-xs text-muted-foreground">
+                          <Label className="text-xs font-semibold">
+                            {t('accounts.useForUploading')}
+                          </Label>
+                          <p className="text-[11px] text-text-secondary leading-snug">
                             {t('accounts.useForUploadingDesc')}
                           </p>
                         </div>
                         <Switch checked={isUploader} onCheckedChange={setIsUploader} />
                       </div>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => setIsAddOpen(false)}>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => setIsAddOpen(false)}
+                        >
                           {t('accounts.cancel')}
                         </Button>
                         <Button
+                          size="sm"
+                          className="h-8 text-xs font-semibold"
                           onClick={() => void handleAddAccount()}
                           disabled={isAdding || (!newCookie && !newApiKey)}
                         >
-                          {isAdding ? <RefreshCw className="animate-spin mr-2" size={16} /> : null}
+                          {isAdding ? (
+                            <RefreshCw className="animate-spin mr-1.5" size={13} />
+                          ) : null}
                           {t('accounts.add')}
                         </Button>
                       </div>
@@ -378,55 +393,68 @@ export default function AccountsView() {
                 <DialogHeader>
                   <DialogTitle>{t('accounts.addAccountTitle')}</DialogTitle>
                 </DialogHeader>
-                <div className="flex flex-col gap-4 py-4">
-                  <div className="flex flex-col gap-2">
-                    <Label>{t('accounts.cookieLabel')}</Label>
+                <div className="flex flex-col gap-3 py-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold">{t('accounts.cookieLabel')}</Label>
                     <Input
                       type="password"
                       value={newCookie}
                       onChange={(e) => setNewCookie(e.target.value)}
                       placeholder={t('accounts.cookiePlaceholder')}
+                      className="h-8 text-xs bg-bg-base/70"
                     />
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <Label>{t('accounts.apiKeyLabel')}</Label>
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold">{t('accounts.apiKeyLabel')}</Label>
                     <Input
                       type="password"
                       value={newApiKey}
                       onChange={(e) => setNewApiKey(e.target.value)}
                       placeholder={t('accounts.apiKeyPlaceholder')}
+                      className="h-8 text-xs bg-bg-base/70"
                     />
                   </div>
 
-                  <div className="flex items-center justify-between p-3 border rounded-md">
+                  <div className="flex items-center justify-between p-3 border border-border-subtle rounded-lg bg-bg-base/40">
                     <div className="space-y-0.5">
-                      <Label>{t('accounts.useForDownloading')}</Label>
-                      <p className="text-xs text-muted-foreground">
+                      <Label className="text-xs font-semibold">
+                        {t('accounts.useForDownloading')}
+                      </Label>
+                      <p className="text-[11px] text-text-secondary leading-snug">
                         {t('accounts.useForDownloadingDesc')}
                       </p>
                     </div>
                     <Switch checked={isDownloader} onCheckedChange={setIsDownloader} />
                   </div>
 
-                  <div className="flex items-center justify-between p-3 border rounded-md">
+                  <div className="flex items-center justify-between p-3 border border-border-subtle rounded-lg bg-bg-base/40">
                     <div className="space-y-0.5">
-                      <Label>{t('accounts.useForUploading')}</Label>
-                      <p className="text-xs text-muted-foreground">
+                      <Label className="text-xs font-semibold">
+                        {t('accounts.useForUploading')}
+                      </Label>
+                      <p className="text-[11px] text-text-secondary leading-snug">
                         {t('accounts.useForUploadingDesc')}
                       </p>
                     </div>
                     <Switch checked={isUploader} onCheckedChange={setIsUploader} />
                   </div>
                 </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsAddOpen(false)}>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => setIsAddOpen(false)}
+                  >
                     {t('accounts.cancel')}
                   </Button>
                   <Button
+                    size="sm"
+                    className="h-8 text-xs font-semibold"
                     onClick={() => void handleAddAccount()}
                     disabled={isAdding || (!newCookie && !newApiKey)}
                   >
-                    {isAdding ? <RefreshCw className="animate-spin mr-2" size={16} /> : null}
+                    {isAdding ? <RefreshCw className="animate-spin mr-1.5" size={13} /> : null}
                     {t('accounts.add')}
                   </Button>
                 </div>
@@ -439,23 +467,27 @@ export default function AccountsView() {
             className="w-full max-w-4xl mx-auto flex flex-col gap-6 pb-12"
           >
             <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">{t('accounts.description')}</p>
+              <p className="text-xs text-text-secondary">{t('accounts.description')}</p>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
+                  size="sm"
+                  className="h-8 text-xs font-semibold"
                   disabled={isValidatingAll || config.accounts.length === 0}
                   onClick={() => void handleValidateAll()}
                 >
                   <RefreshCw
-                    size={16}
-                    className={`mr-2 ${isValidatingAll ? 'animate-spin' : ''}`}
+                    size={13}
+                    className={`mr-1.5 ${isValidatingAll ? 'animate-spin' : ''}`}
                   />
                   {t('accounts.validateAll')}
                 </Button>
 
                 <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                  <DialogTrigger render={<Button />}>
-                    <Plus size={16} className="mr-2" />
+                  <DialogTrigger
+                    render={<Button size="sm" className="h-8 text-xs font-semibold" />}
+                  >
+                    <Plus size={14} className="mr-1.5" />
                     {t('accounts.addAccount')}
                   </DialogTrigger>
                   <DialogContent>

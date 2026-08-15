@@ -65,12 +65,14 @@ pub struct AssetServerStateData {
     pub skip_owned_check: bool,
     pub scan_status: Option<Value>,
     pub studio_place_id: Option<String>,
+    pub studio_place_name: Option<String>,
     pub theme_accent: Option<String>,
     pub keyframe_warning_count: usize,
     pub scan_records_truncated: bool,
     pub notify: std::sync::Arc<tokio::sync::Notify>,
     pub scan_types: Vec<String>,
     pub script_scan_mode: String,
+    pub scan_path: Option<String>,
 }
 
 impl Default for AssetServerStateData {
@@ -94,6 +96,7 @@ impl Default for AssetServerStateData {
             skip_owned_check: false,
             scan_status: None,
             studio_place_id: None,
+            studio_place_name: None,
             theme_accent: None,
             keyframe_warning_count: 0,
             scan_records_truncated: false,
@@ -106,6 +109,7 @@ impl Default for AssetServerStateData {
                 "scripts".into(),
             ],
             script_scan_mode: "assetIds".into(),
+            scan_path: None,
         }
     }
 }
@@ -577,6 +581,7 @@ pub fn analyze_records(
     let mut meshes = AssetStore::completed();
     let mut script_refs = AssetStore::completed();
     let mut seen: HashSet<(String, String, String)> = HashSet::new();
+    let mut seen_instance_tokens: HashSet<(String, String, String)> = HashSet::new();
 
     let mut category_id_indices: HashMap<(&'static str, String), usize> = HashMap::new();
 
@@ -965,7 +970,7 @@ pub fn analyze_records(
             continue;
         }
 
-        if !seen.insert((category.to_string(), String::new(), asset_id.to_string())) {
+        if !seen.insert((category.to_string(), record.token.clone(), asset_id.to_string())) {
             let store = match category {
                 "animation" => &mut animations,
                 "sound" => &mut sounds,
@@ -974,10 +979,21 @@ pub fn analyze_records(
                 _ => continue,
             };
             if let Some(last) = store.assets.iter_mut().find(|a| a["assetId"] == asset_id) {
-                last["instanceCount"] = json!(last["instanceCount"].as_u64().unwrap_or(1) + 1);
+                if seen_instance_tokens.insert((
+                    category.to_string(),
+                    asset_id.to_string(),
+                    record.token.clone(),
+                )) {
+                    last["instanceCount"] = json!(last["instanceCount"].as_u64().unwrap_or(1) + 1);
+                }
             }
             continue;
         }
+        seen_instance_tokens.insert((
+            category.to_string(),
+            asset_id.to_string(),
+            record.token.clone(),
+        ));
         let asset = json!({
             "kind": record.class_name,
             "name": record.name.clone(),
