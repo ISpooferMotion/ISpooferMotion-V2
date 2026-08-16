@@ -793,20 +793,14 @@ export default function SpoofingView() {
         .map((a) => accountSecrets[a.id]?.cookie)
         .filter(Boolean) as string[];
 
-      // Per-asset forced place IDs: partition the asset payload by each asset's
-      // pinned place id (if any) and submit one job per group. The backend
-      // accepts a single forcePlaceIds string per job, so per-asset scoping is
-      // achieved by splitting into multiple jobs.
-      const assetForcePlaceIds = useSpooferStore.getState().assetForcePlaceIds;
-      const fallbackPlaceIds = studioPlaceIdFallback;
-      const groupsByPlaceId = new Map<string, typeof finalAssetsPayload>();
-      for (const asset of finalAssetsPayload) {
-        const pinned = assetForcePlaceIds[asset.id];
-        const key = pinned && pinned.trim() ? pinned.trim() : fallbackPlaceIds;
-        const bucket = groupsByPlaceId.get(key);
-        if (bucket) bucket.push(asset);
-        else groupsByPlaceId.set(key, [asset]);
-      }
+      const assetForcePlaceIds = useSpooferStore.getState().assetForcePlaceIds || {};
+      const allForcedPlaceIds = Array.from(
+        new Set(
+          finalAssetsPayload
+            .map((a) => assetForcePlaceIds[a.id]?.trim() || studioPlaceIdFallback?.trim())
+            .filter((p): p is string => Boolean(p && p.length > 0)),
+        ),
+      ).join(',');
 
       const baseData = {
         cookie,
@@ -824,27 +818,37 @@ export default function SpoofingView() {
         skipOwned: config.advanced.skipOwned,
         excludedUserIds: config.advanced.excludedUserIds,
         excludedGroupIds: config.advanced.excludedGroupIds,
-        skipExistingReplacements: true,
+        skipExistingReplacements: !overrideAssetIds && !skipQuotaWarning && !runContext,
         existingReplacements: lastReplacements,
         account: accountPayload,
         group: groupPayload,
         preserveMetadata: config.spoofing.preserveMetadata,
         enableArchiveRecovery: config.advanced.enableArchiveRecovery,
         proxyUrl: config.advanced.proxyUrl,
+        operationPollIntervalMs: config.advanced.operationPollIntervalMs || 250,
       };
 
-      // Submit groups sequentially to avoid overloading the backend. If only
-      // the unpinned group exists this is a single invoke, as before.
-      const groupEntries = Array.from(groupsByPlaceId.entries());
-      for (const [placeIds, groupAssets] of groupEntries) {
-        await invoke('run_spoofer_action', {
-          data: {
-            ...baseData,
-            assets: JSON.stringify(groupAssets),
-            forcePlaceIds: placeIds,
-          },
+      useSpooferStore.getState().setSpoofTotalCount(finalAssetsPayload.length);
+      useSpooferStore.getState().setSpoofCurrentCount(0);
+
+      // Instantly mark all queued assets in the spoofer store so the tree shows "Queued..." badges
+      const storeState = useSpooferStore.getState();
+      for (const item of finalAssetsPayload) {
+        storeState.setAssetStatus(item.id, {
+          stage: 'downloading',
+          message: 'Queued for spoofing...',
         });
       }
+
+      await invoke('run_spoofer_action', {
+        data: {
+          ...baseData,
+          assets: JSON.stringify(finalAssetsPayload),
+          forcePlaceIds: allForcedPlaceIds || null,
+          assetForcePlaceIds:
+            Object.keys(assetForcePlaceIds).length > 0 ? assetForcePlaceIds : null,
+        },
+      });
     } catch (err) {
       logIsm('error', 'Failed to start spoofer: ' + err, true);
       setIsSpoofing(false);
@@ -858,7 +862,8 @@ export default function SpoofingView() {
   // the visible main view; SpoofingView runs hidden as the logic host).
   useEffect(() => {
     const onOpenScan = () => setScanOptionsOpen(true);
-    const onRun = () => void handleRunSpooferRef.current();
+    const onRun = (e?: Event) =>
+      void handleRunSpooferRef.current((e as CustomEvent)?.detail?.assetIds);
     const onOpenPaste = () => setPasteIdsOpen(true);
     const onStartScan = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -906,7 +911,7 @@ export default function SpoofingView() {
       );
 
       let discoveredCount = 0;
-      const CONCURRENCY_LIMIT = 10;
+      const CONCURRENCY_LIMIT = config.advanced.discoveryConcurrency ?? 30;
 
       const discoverSingleAsset = async (assetId: string) => {
         store.setAssetStatus(assetId, {
@@ -953,6 +958,7 @@ export default function SpoofingView() {
       };
 
       try {
+        const batchStartTime = Date.now();
         const queue = [...targetAssetIds];
         const workers = Array.from(
           { length: Math.min(CONCURRENCY_LIMIT, queue.length) },
@@ -967,16 +973,20 @@ export default function SpoofingView() {
         );
         await Promise.all(workers);
 
+        const durationMs = Date.now() - batchStartTime;
+        const avgMsPerAsset = Math.round(durationMs / Math.max(1, targetAssetIds.length));
+        const durationSec = (durationMs / 1000).toFixed(2);
+
         if (discoveredCount > 0) {
           logIsm(
             'success',
-            `Discovered and assigned working place IDs for ${discoveredCount} asset(s).`,
+            `Discovery complete for ${targetAssetIds.length} asset(s) in ${durationSec}s (${avgMsPerAsset}ms/asset, ${discoveredCount} resolved).`,
             false,
           );
         } else {
           logIsm(
             'warn',
-            'No working place IDs could be discovered for the selected asset(s).',
+            `Discovery completed in ${durationSec}s, but no working place IDs were found.`,
             false,
           );
         }

@@ -485,7 +485,7 @@ pub async fn get_port_diagnostic() -> AnyValue {
 pub async fn get_studio_health_status() -> AnyValue {
     let Some(data) = bridge_data() else {
         return AnyValue(
-            json!({ "synced": false, "protocolVersion": STUDIO_PROTOCOL_VERSION, "scanStatus": null, "studioPlaceId": null }),
+            json!({ "synced": false, "protocolVersion": STUDIO_PROTOCOL_VERSION, "scanStatus": null, "studioPlaceId": null, "studioPlaceName": null }),
         );
     };
     let guard = data.read().await;
@@ -500,7 +500,8 @@ pub async fn get_studio_health_status() -> AnyValue {
         "synced": synced,
         "protocolVersion": STUDIO_PROTOCOL_VERSION,
         "scanStatus": guard.scan_status,
-        "studioPlaceId": guard.studio_place_id
+        "studioPlaceId": guard.studio_place_id,
+        "studioPlaceName": guard.studio_place_name
     }))
 }
 

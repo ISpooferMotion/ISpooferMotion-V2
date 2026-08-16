@@ -1,13 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Sliders, HelpCircle } from 'lucide-react';
+import { HelpCircle, Laptop } from 'lucide-react';
 
 import { useConfig } from '../../../contexts/ConfigContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { logIsm } from '../../../utils/robloxProfiles';
 import { Button } from '../../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { Label } from '../../ui/label';
-import { Switch } from '../../ui/switch';
+import { SettingCard, SettingSwitchRow } from './SettingComponents';
 
 export default function BehaviorCard() {
   const { t } = useLanguage();
@@ -37,81 +35,62 @@ export default function BehaviorCard() {
   };
 
   const handleShowTutorial = () => {
-    // Re-runs the first-launch tutorial.
     updateConfig('ui', 'tutorialCompleted', false);
     window.dispatchEvent(new Event('ism-start-tutorial'));
   };
 
   return (
-    <Card className="bg-bg-surface/50 border border-border-subtle shadow-sm overflow-hidden">
-      <CardHeader className="pb-3 border-b border-border-subtle/40 bg-bg-base/20">
-        <CardTitle className="text-base font-bold flex items-center gap-2 text-text-primary">
-          <Sliders size={16} className="text-primary" />
-          {t('settings.behavior')}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
-          <div className="space-y-0.5 min-w-0 flex-1">
-            <Label className="text-sm font-semibold text-text-primary">
-              {t('settings.desktopNotifications')}
-            </Label>
-          </div>
-          <Switch
-            checked={config.general.desktopNotifications}
-            onCheckedChange={handleDesktopNotificationsChange}
-          />
-        </div>
+    <SettingCard
+      icon={Laptop}
+      title={t('settings.behavior') || 'App Behavior'}
+      description="Configure application tray behavior, desktop notifications, and tutorials."
+    >
+      <SettingSwitchRow
+        label={t('settings.desktopNotifications') || 'Desktop Notifications'}
+        description="Show system notifications when downloads or spoof jobs finish."
+        checked={config.general.desktopNotifications}
+        onCheckedChange={handleDesktopNotificationsChange}
+      />
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
-          <div className="space-y-0.5 min-w-0 flex-1">
-            <Label className="text-sm font-semibold text-text-primary">
-              {t('settings.hideToTray')}
-            </Label>
-            <p className="text-xs text-text-secondary leading-relaxed">
-              {t('settings.hideToTrayDesc')}
-            </p>
-          </div>
-          <Switch
-            checked={config.general.hideToTrayOnClose}
-            onCheckedChange={(v) => updateConfig('general', 'hideToTrayOnClose', v)}
-          />
-        </div>
+      <SettingSwitchRow
+        label={t('settings.hideToTray') || 'Minimize to System Tray'}
+        description={
+          t('settings.hideToTrayDesc') ||
+          'Keep the application running in the background when closing the window.'
+        }
+        checked={config.general.hideToTrayOnClose}
+        onCheckedChange={(v) => updateConfig('general', 'hideToTrayOnClose', v)}
+      />
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
-          <div className="space-y-0.5 min-w-0 flex-1">
-            <Label className="text-sm font-semibold text-text-primary">
-              {t('settings.telemetry')}
-            </Label>
-            <p className="text-xs text-text-secondary leading-relaxed">
-              {t('settings.telemetryDesc')}
-            </p>
-          </div>
-          <Switch
-            checked={config.general.telemetryEnabled}
-            onCheckedChange={(v) => updateConfig('general', 'telemetryEnabled', v)}
-          />
-        </div>
+      <SettingSwitchRow
+        label={t('settings.telemetry') || 'Anonymous Diagnostics'}
+        description={
+          t('settings.telemetryDesc') || 'Send anonymous error logs to help improve compatibility.'
+        }
+        checked={config.general.telemetryEnabled}
+        onCheckedChange={(v) => updateConfig('general', 'telemetryEnabled', v)}
+      />
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
-          <div className="space-y-0.5 min-w-0 flex-1">
-            <Label className="text-sm font-semibold text-text-primary">First-launch tutorial</Label>
-            <p className="text-xs text-text-secondary leading-relaxed">
-              Walk through adding an account, the API key, loading a place, and running your first
-              spoof.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleShowTutorial}
-            className="flex items-center gap-1.5"
-          >
-            <HelpCircle size={14} />
-            Show tutorial
-          </Button>
+      <div className="px-4 py-3 flex items-center justify-between gap-4 hover:bg-bg-elevated/20 transition-colors">
+        <div className="space-y-0.5 min-w-0 flex-1">
+          <span className="text-xs font-semibold text-text-primary block">
+            Interactive Onboarding Tutorial
+          </span>
+          <p className="text-[11px] text-text-secondary leading-relaxed">
+            Walk through adding an account, setting up API keys, loading places, and running your
+            first spoof.
+          </p>
         </div>
-      </CardContent>
-    </Card>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleShowTutorial}
+          className="h-8 px-3 text-xs flex items-center gap-1.5 shrink-0"
+        >
+          <HelpCircle size={13} />
+          <span>Launch Tutorial</span>
+        </Button>
+      </div>
+    </SettingCard>
   );
 }

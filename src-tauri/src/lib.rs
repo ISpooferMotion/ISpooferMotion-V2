@@ -171,6 +171,12 @@ pub fn run() {
     }
 
     app_builder
+        .on_window_event(|_window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                // When any main window closes, clean up the Roblox plugin
+                crate::commands::startup::uninstall_roblox_plugin();
+            }
+        })
         .setup(|app| {
             #[cfg(any(windows, target_os = "linux"))]
             {
@@ -181,6 +187,12 @@ pub fn run() {
             app.handle().plugin(
                 tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build(),
             )?;
+
+            // Automatically install / sync Roblox plugin on backend startup.
+            let sync_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = crate::commands::startup::sync_roblox_plugin(sync_handle).await;
+            });
 
             // Initialize the bridge server asynchronously.
             tauri::async_runtime::spawn(crate::studio_bridge::start_server(app.handle().clone()));

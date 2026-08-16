@@ -3,6 +3,7 @@ import {
   Check,
   ChevronRight,
   Download,
+  Ghost,
   Inbox,
   Loader2,
   Lock,
@@ -81,6 +82,13 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   onInspectAsset?: (asset: ParsedAssetRef) => void;
   activeInspectAssetId?: string | null;
 }) {
+  const activeInspectAsset = useSpooferStore((s) => s.activeInspectAsset);
+  const setActiveInspectAsset = useSpooferStore((s) => s.setActiveInspectAsset);
+  const setIsInspectorOpen = useSpooferStore((s) => s.setIsInspectorOpen);
+  const assetForcePlaceIds = useSpooferStore((s) => s.assetForcePlaceIds) ?? {};
+  const assetStatuses = useSpooferStore((s) => s.assetStatuses) ?? {};
+  const lastReplacements = useSpooferStore((s) => s.lastReplacements) ?? {};
+
   const [userExpanded, setExpanded] = useState(initialExpanded);
   // Force-expand while a search is active so matches are visible without the
   // user having to click every folder open.
@@ -91,22 +99,28 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   const ASSET_RENDER_CHUNK = 300;
   const [renderLimit, setRenderLimit] = useState(ASSET_RENDER_CHUNK);
 
-  const matchesFilter = (type: string) =>
-    activeAssetFilters.length === 0 || activeAssetFilters.includes(type);
+  const matchesFilter = (type: string) => {
+    if (activeAssetFilters.length === 0) return true;
+    if (type === 'ghost') return true;
+    return activeAssetFilters.includes(type);
+  };
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const matchesSearch = (asset: ParsedAssetRef) => {
     if (!normalizedSearch) return true;
-    const id = ('assetId' in asset ? asset.assetId : '') || '';
-    const name = (
-      'name' in asset ? String((asset as { name?: string }).name || '') : ''
-    ).toLowerCase();
+    const id = (asset.assetId || '').toLowerCase();
+    const name = ('instanceName' in asset ? String(asset.instanceName || '') : '').toLowerCase();
     const path = (asset.path || '').toLowerCase();
     const propertyName = (asset.propertyName || '').toLowerCase();
+    const rawValue = (asset.rawValue || '').toLowerCase();
+    const nodeNameMatches = node.name.toLowerCase().includes(normalizedSearch);
+
     return (
+      nodeNameMatches ||
       id.includes(normalizedSearch) ||
       name.includes(normalizedSearch) ||
       path.includes(normalizedSearch) ||
-      propertyName.includes(normalizedSearch)
+      propertyName.includes(normalizedSearch) ||
+      rawValue.includes(normalizedSearch)
     );
   };
   const filteredAssets = useMemo(() => {
@@ -117,7 +131,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
     [filteredAssets, renderLimit],
   );
   const hiddenAssetCount = filteredAssets.length - visibleAssets.length;
-  const totalChildren = node.children.length;
   const allIds = getAllAssetIds(node);
 
   const hasMatchingDescendant = useMemo(() => {
@@ -143,15 +156,30 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   };
 
   const getAssetTitle = (asset: ParsedAssetRef) => {
-    const name = asset.instanceName || asset.propertyName || asset.path.split('.').pop();
-    return name || `${asset.type} ${asset.assetId}`;
+    const baseName =
+      asset.instanceName || asset.path.split('.').pop() || `${asset.type} ${asset.assetId}`;
+    const prop = asset.propertyName;
+    if (
+      prop &&
+      prop !== 'Unknown' &&
+      prop !== 'Value' &&
+      prop !== baseName &&
+      prop !== 'AnimationContent' &&
+      prop !== 'AudioContent' &&
+      prop !== 'MeshContent'
+    ) {
+      if (
+        asset.className === 'Sky' ||
+        asset.className === 'SurfaceAppearance' ||
+        asset.className === 'MaterialVariant' ||
+        asset.className === 'HumanoidDescription' ||
+        (asset.className === 'MeshPart' && (prop === 'TextureID' || prop === 'MeshId'))
+      ) {
+        return `${baseName} (${prop})`;
+      }
+    }
+    return baseName;
   };
-
-  const setActiveInspectAsset = useSpooferStore((s) => s.setActiveInspectAsset);
-  const setIsInspectorOpen = useSpooferStore((s) => s.setIsInspectorOpen);
-  const assetForcePlaceIds = useSpooferStore((s) => s.assetForcePlaceIds) ?? {};
-  const assetStatuses = useSpooferStore((s) => s.assetStatuses) ?? {};
-  const lastReplacements = useSpooferStore((s) => s.lastReplacements) ?? {};
 
   const renderAssetRow = (asset: ParsedAssetRef) => {
     // Compact single-line row item: [Icon] + [Asset Name] + optional [Lock]
@@ -171,7 +199,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           'h-7 rounded-sm hover:bg-accent/60 group transition-colors flex items-center pr-2 cursor-pointer select-none',
           isInspected && 'bg-primary/15 font-semibold',
         )}
-        style={{ marginLeft: `${(level + 1) * 16 + 18}px` }}
+        style={{ paddingLeft: `${level * 16 + 20}px` }}
         onClick={handleRowClick}
         onMouseEnter={() => {
           if (isDragSelecting) {
@@ -341,18 +369,59 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           );
         })()}
 
+        {/* Ghost ID indicator badge */}
+        {asset.type === 'ghost' && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <div className="flex items-center gap-1 justify-center h-5 px-1.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 shrink-0 text-[10px] font-bold ml-1">
+                  <Ghost size={11} />
+                  <span>Ghost ID</span>
+                </div>
+              }
+            />
+            <TooltipContent className="whitespace-nowrap font-mono text-xs">
+              Ghost Asset (No instance in Studio)
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         {/* Quick actions removed — play/preview/copy are all available
          * in the Inspector panel. Tree rows stay clean. */}
       </div>
     );
   };
 
+  const isLeafInstance = node.children.length === 0 && node.assets.length > 0;
+  const isInspected =
+    isLeafInstance &&
+    node.assets.some(
+      (a) =>
+        activeInspectAssetId === getAssetId(a) ||
+        activeInspectAsset?.path === a.path ||
+        activeInspectAsset?.path === node.referent.replace(/^datamodel-/, ''),
+    );
+
+  const handleNodeClick = () => {
+    if (isLeafInstance) {
+      if (node.assets.length > 0) {
+        setActiveInspectAsset(node.assets[0]);
+        setIsInspectorOpen(true);
+      }
+    } else {
+      setExpanded(!expanded);
+    }
+  };
+
   return (
     <div className="flex flex-col">
       <div
-        className="flex items-center py-1 px-1 hover:bg-accent/40 cursor-pointer rounded-sm group select-none"
+        className={cn(
+          'flex items-center py-1 px-1 hover:bg-accent/40 cursor-pointer rounded-sm group select-none transition-colors',
+          isInspected && 'bg-primary/15 font-semibold',
+        )}
         style={{ paddingLeft: `${level * 16}px` }}
-        onClick={() => setExpanded(!expanded)}
+        onClick={handleNodeClick}
       >
         <div
           className="mr-2 cursor-pointer flex items-center justify-center shrink-0"
@@ -373,14 +442,16 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
         >
           <Checkbox checked={isChecked} />
         </div>
-        <div className="w-4 h-4 flex items-center justify-center shrink-0 mr-1">
-          {(filteredAssets.length > 0 || totalChildren > 0) && (
+        {node.children.length > 0 ? (
+          <div className="w-4 h-4 flex items-center justify-center shrink-0 mr-1">
             <ChevronRight
               size={12}
               className={cn('transition-transform text-muted-foreground', expanded && 'rotate-90')}
             />
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="w-1 shrink-0" />
+        )}
         <div className="w-4 h-4 shrink-0 mr-2 flex items-center justify-center">
           <img
             src={`/icons/${node.className === 'StudioSession' ? 'Place' : node.className}.png`}
@@ -396,14 +467,152 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             }}
           />
         </div>
-        <span className="text-xs text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+        <span className="text-xs text-foreground whitespace-nowrap overflow-hidden text-ellipsis flex-1">
           {node.name}
         </span>
+        {node.assets.length > 1 && isLeafInstance && (
+          <span className="text-[9px] text-muted-foreground bg-bg-surface px-1.5 py-0.5 rounded border border-border-subtle shrink-0 ml-1">
+            {node.assets.length} assets
+          </span>
+        )}
+
+        {/* Status / Lock / Spoofed badges on leaf instance row */}
+        {(() => {
+          if (!isLeafInstance || node.assets.length === 0) return null;
+          const primaryAsset = node.assets[0];
+          const primaryAssetId = getAssetId(primaryAsset);
+          const status = primaryAssetId ? assetStatuses[primaryAssetId] : undefined;
+          const pinnedPid = primaryAssetId ? assetForcePlaceIds[primaryAssetId] : undefined;
+          const replId = primaryAssetId ? lastReplacements[primaryAssetId] : undefined;
+
+          const stageConfigs: Record<
+            string,
+            { icon: React.ReactNode; color: string; label: string }
+          > = {
+            resolving_location: {
+              icon: <Loader2 size={10} className="animate-spin" />,
+              color: 'text-blue-400',
+              label: status?.message || 'Checking direct Place IDs...',
+            },
+            discovering_usage: {
+              icon: <Loader2 size={10} className="animate-spin" />,
+              color: 'text-purple-400',
+              label: status?.message || 'Discovering Place IDs (Asset Usage)...',
+            },
+            discovering_graph: {
+              icon: <Loader2 size={10} className="animate-spin" />,
+              color: 'text-indigo-400',
+              label: status?.message || 'Discovering Place IDs (Creator Graph)...',
+            },
+            downloading: {
+              icon: <Download size={10} />,
+              color: 'text-cyan-400',
+              label: status?.message || 'Downloading...',
+            },
+            uploading: {
+              icon: <Upload size={10} />,
+              color: 'text-amber-400',
+              label: status?.message || 'Uploading...',
+            },
+            done: {
+              icon: <Check size={10} />,
+              color: 'text-green-400',
+              label: status?.message || 'Completed',
+            },
+            error: {
+              icon: <AlertCircle size={10} />,
+              color: 'text-red-400',
+              label: status?.message || 'Error',
+            },
+            skipped: {
+              icon: <SkipForward size={10} />,
+              color: 'text-muted-foreground',
+              label: status?.message || 'Skipped',
+            },
+          };
+
+          return (
+            <div className="flex items-center gap-1 shrink-0 ml-1">
+              {status &&
+                status.stage !== 'idle' &&
+                stageConfigs[status.stage] &&
+                (() => {
+                  const cfg = stageConfigs[status.stage];
+                  const isError = status.stage === 'error';
+                  const isDiscoveryError =
+                    isError && status.message?.toLowerCase().includes('no place id');
+                  const badgeText = isError
+                    ? isDiscoveryError
+                      ? 'Discovery failed'
+                      : 'Download failed'
+                    : status.message || cfg.label;
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <div
+                            className={cn(
+                              'flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap',
+                              cfg.color,
+                            )}
+                          >
+                            {cfg.icon}
+                            <span>{badgeText}</span>
+                          </div>
+                        }
+                      />
+                      <TooltipContent className="text-xs max-w-xs break-words">
+                        {status.message || cfg.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
+
+              {pinnedPid && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <div
+                        className="flex items-center justify-center h-5 w-6 rounded border shrink-0 transition-transform hover:scale-110 cursor-help"
+                        style={{
+                          color: getBrightPlaceIdColor(pinnedPid),
+                          backgroundColor: `${getBrightPlaceIdColor(pinnedPid)}18`,
+                          borderColor: `${getBrightPlaceIdColor(pinnedPid)}50`,
+                        }}
+                      >
+                        <Lock size={11} style={{ color: getBrightPlaceIdColor(pinnedPid) }} />
+                      </div>
+                    }
+                  />
+                  <TooltipContent className="whitespace-nowrap font-mono text-xs">
+                    Place ID: {formatShortId(pinnedPid)}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
+              {replId && (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <div className="flex items-center justify-center h-5 w-6 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shrink-0 transition-transform hover:scale-110 cursor-help">
+                        <Inbox size={11} />
+                      </div>
+                    }
+                  />
+                  <TooltipContent className="whitespace-nowrap font-mono text-xs">
+                    Spoofed: rbxassetid://{replId}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {expanded && (
         <div className="flex flex-col overflow-hidden">
-          {visibleAssets.length > 0 && (
+          {/* Render child assets only for container nodes that contain loose script references or ghost IDs */}
+          {node.children.length > 0 && visibleAssets.length > 0 && (
             <div className="flex flex-col">
               {visibleAssets.map((asset) => (
                 <div key={`${asset.type}:${asset.path}:${asset.propertyName}:${getAssetId(asset)}`}>

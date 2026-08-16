@@ -33,6 +33,7 @@ struct JobContext {
     batch_urls: HashMap<String, String>,
     batch_metadata: HashMap<String, AssetDetails>,
     enable_archive_recovery: bool,
+    operation_poll_interval_ms: Option<u64>,
 
     // Shared tracking state
     success_count: AtomicUsize,
@@ -203,7 +204,8 @@ async fn batch_fetch_asset_details(
 ) -> (HashMap<String, AssetDetails>, BatchCreatorInfo) {
     let mut details = HashMap::new();
     let mut creators: BatchCreatorInfo = HashMap::new();
-    let chunks = asset_ids.chunks(120);
+    // Roblox Catalog API hard limit is max 30 items per request
+    let chunks = asset_ids.chunks(30);
 
     for chunk in chunks {
         let items: Vec<serde_json::Value> = chunk
@@ -260,6 +262,57 @@ async fn batch_fetch_asset_details(
                                 .map(str::to_string);
                             let creator_id =
                                 item.get("creatorTargetId").and_then(serde_json::Value::as_u64);
+                            if let (Some(t), Some(cid)) = (creator_type, creator_id) {
+                                if cid != 0 && !t.is_empty() {
+                                    creators.insert(id.to_string(), (t, cid));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // For developer assets not listed in the catalog (e.g. Animations, private sounds),
+    // query develop.roblox.com/v1/assets in batches of 50
+    let missing_ids: Vec<String> =
+        asset_ids.iter().filter(|id| !details.contains_key(*id)).cloned().collect();
+
+    for chunk in missing_ids.chunks(50) {
+        let id_str = chunk.join(",");
+        let url = format!("https://develop.roblox.com/v1/assets?assetIds={id_str}");
+        let req = client
+            .get(&url)
+            .header("Cookie", format!(".ROBLOSECURITY={cookie}"))
+            .header("Accept", "application/json");
+
+        if let Ok(res) = req.send().await {
+            if let Ok(json) = res.json::<serde_json::Value>().await {
+                if let Some(data) = json.get("data").and_then(|v| v.as_array()) {
+                    for item in data {
+                        if let Some(id) = item.get("id").and_then(serde_json::Value::as_u64) {
+                            let name = item
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("Spoofed Asset")
+                                .to_string();
+                            let description = item
+                                .get("description")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("Uploaded by ISpooferMotion.")
+                                .to_string();
+                            details.insert(id.to_string(), AssetDetails { name, description });
+
+                            let creator_type = item
+                                .get("creator")
+                                .and_then(|c| c.get("type"))
+                                .and_then(|v| v.as_str())
+                                .map(str::to_string);
+                            let creator_id = item
+                                .get("creator")
+                                .and_then(|c| c.get("targetId"))
+                                .and_then(serde_json::Value::as_u64);
                             if let (Some(t), Some(cid)) = (creator_type, creator_id) {
                                 if cid != 0 && !t.is_empty() {
                                     creators.insert(id.to_string(), (t, cid));
@@ -460,11 +513,13 @@ pub async fn process_spoofer_action(
     let mut batch_urls = HashMap::new();
     let batch_assets =
         parsed_assets.iter().map(|(id, t, _, _)| (id.clone(), t.clone())).collect::<Vec<_>>();
+    let per_asset_place_ids = data.asset_force_place_ids.as_ref();
     if let Ok(urls) = crate::commands::spoofer::batch_get_download_urls_for_assets(
         app.clone(),
         batch_assets,
         cookie.clone(),
         forced_place_id.clone(),
+        per_asset_place_ids,
     )
     .await
     {
@@ -648,6 +703,7 @@ pub async fn process_spoofer_action(
         batch_urls,
         batch_metadata,
         enable_archive_recovery: data.enable_archive_recovery.unwrap_or(false),
+        operation_poll_interval_ms: data.operation_poll_interval_ms,
         success_count: AtomicUsize::new(0),
         skip_count: AtomicUsize::new(0),
         fail_count: AtomicUsize::new(0),
@@ -875,7 +931,7 @@ pub async fn process_spoofer_action(
                         let final_description = if preserve_metadata { details.description } else { "Uploaded by ISpooferMotion.".to_string() };
 
                         let up_res = crate::commands::spoofer::publish_asset_with_progress(
-                            ctx.app.clone(), file_path.clone(), details.name, final_description, ctx.cookie.clone(), ctx.csrf_token.clone(), ctx.group_id.clone(), format!("up_{asset_id}"), Some(mapped_type_name.to_string()), Some(ctx.api_key.clone()), upload_user_id, false, Some(asset_id.clone()), ctx.universe_id.clone(), Some(ctx.downloads_root.clone()), ctx.proxy_url.clone()
+                            ctx.app.clone(), file_path.clone(), details.name, final_description, ctx.cookie.clone(), ctx.csrf_token.clone(), ctx.group_id.clone(), format!("up_{asset_id}"), Some(mapped_type_name.to_string()), Some(ctx.api_key.clone()), upload_user_id, false, Some(asset_id.clone()), ctx.universe_id.clone(), Some(ctx.downloads_root.clone()), ctx.proxy_url.clone(), ctx.operation_poll_interval_ms
                         ).await;
 
                         match up_res {
@@ -1046,7 +1102,16 @@ pub async fn process_spoofer_action(
         ctx.log(&format!("Could not save spoofing job history: {error}"), "error");
     }
 
-    let summary = format!("Total Assets: {total}\nSuccessful: {success} (Skipped Uploads: {skipped})\nFailed: {failed}");
+    let summary = format!(
+        "Spoofing job finished in {:.2}s ({}ms/asset avg).\nTotal Assets: {} | Successful: {} (Skipped: {}) | Failed: {}",
+        (duration_ms as f64) / 1000.0,
+        if total > 0 { duration_ms / (total as i64) } else { 0 },
+        total,
+        success,
+        skipped,
+        failed
+    );
+    ctx.log(&summary, if failed == 0 { "success" } else { "warn" });
     ctx.log(&summary, if completed_successfully { "success" } else { "warn" });
 
     // If the job effectively failed across the board, surface the most likely

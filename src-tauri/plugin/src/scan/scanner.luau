@@ -1,3 +1,28 @@
+local function resolveInstancePath(pathStr: string): Instance?
+	local clean = string.gsub(pathStr, "^game%.", "")
+	local parts = string.split(clean, ".")
+	if #parts == 0 then
+		return nil
+	end
+	local okService, rootObj = pcall(function()
+		return game:GetService(parts[1])
+	end)
+	local current: Instance? = if okService and rootObj then rootObj else (game :: any)[parts[1]]
+	if not current then
+		return nil
+	end
+	for i = 2, #parts do
+		local okChild, child = pcall(function()
+			return current:FindFirstChild(parts[i])
+		end)
+		if not okChild or not child then
+			return nil
+		end
+		current = child
+	end
+	return current
+end
+
 --!nolint UnknownGlobal
 --!nocheck
 --!nolint
@@ -252,6 +277,35 @@ end
 
 --- Runs all property extractors against a single instance.
 local function processScannedObject(records: { Record }, obj: Instance)
+	if obj:IsA("Sound") or obj:IsA("AudioPlayer") or obj:IsA("AudioEmitter") then
+		if not isScanTypeEnabled("sounds") then
+			return
+		end
+	elseif obj:IsA("Animation") then
+		if not isScanTypeEnabled("animations") then
+			return
+		end
+	elseif
+		obj:IsA("Decal")
+		or obj:IsA("Texture")
+		or obj:IsA("ImageLabel")
+		or obj:IsA("ImageButton")
+		or obj:IsA("Sky")
+	then
+		if not isScanTypeEnabled("images") then
+			return
+		end
+	elseif
+		obj:IsA("SpecialMesh")
+		or obj:IsA("FileMesh")
+		or obj:IsA("MeshPart")
+		or obj:IsA("CharacterMesh")
+	then
+		if not isScanTypeEnabled("meshes") then
+			return
+		end
+	end
+
 	scanAttributeRecords(records, obj)
 	scanTagRecords(records, obj)
 
@@ -301,7 +355,14 @@ local function scanAssets(): ()
 		placeId = game.PlaceId
 	end)
 
-	if not postJson("/scan-start", { placeId = placeId }) then
+	local placeName = nil
+	pcall(function()
+		if game.Name and game.Name ~= "" then
+			placeName = game.Name
+		end
+	end)
+
+	if not postJson("/scan-start", { placeId = placeId, placeName = placeName }) then
 		pcall(function()
 			postJson("/scan-abort", {})
 		end)
@@ -319,13 +380,41 @@ local function scanAssets(): ()
 
 	local stack: { { obj: Instance, currentService: string } } = {}
 
-	for i = #SERVICES_TO_SCAN, 1, -1 do
-		local serviceName = SERVICES_TO_SCAN[i]
-		local ok, service = pcall(function()
-			return game:GetService(serviceName)
-		end)
-		if ok and service then
-			table.insert(stack, { obj = service, currentService = serviceName })
+	if activeScanPath and activeScanPath ~= "" then
+		local targetObj = resolveInstancePath(activeScanPath)
+		if targetObj then
+			local fullPath = "Unknown"
+			pcall(function()
+				fullPath = targetObj:GetFullName()
+			end)
+			logToPlugin("[ISpooferMotion] Scanning targeted path: " .. fullPath)
+			table.insert(stack, { obj = targetObj, currentService = fullPath })
+		else
+			logToPlugin(
+				"[Warning] [ISpooferMotion] Target path not found: "
+					.. tostring(activeScanPath)
+					.. ", scanning all services."
+			)
+			for i = #SERVICES_TO_SCAN, 1, -1 do
+				local serviceName = SERVICES_TO_SCAN[i]
+				local ok, service = pcall(function()
+					return game:GetService(serviceName)
+				end)
+				if ok and service then
+					table.insert(stack, { obj = service, currentService = serviceName })
+				end
+			end
+		end
+		activeScanPath = nil
+	else
+		for i = #SERVICES_TO_SCAN, 1, -1 do
+			local serviceName = SERVICES_TO_SCAN[i]
+			local ok, service = pcall(function()
+				return game:GetService(serviceName)
+			end)
+			if ok and service then
+				table.insert(stack, { obj = service, currentService = serviceName })
+			end
 		end
 	end
 

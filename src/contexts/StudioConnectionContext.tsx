@@ -6,6 +6,7 @@ type StudioConnectionContextValue = {
   studioConnected: boolean;
   scanStatus: ScanStatus | null;
   studioPlaceId: string;
+  studioPlaceName: string | null;
 };
 
 const StudioConnectionContext = createContext<StudioConnectionContextValue | undefined>(undefined);

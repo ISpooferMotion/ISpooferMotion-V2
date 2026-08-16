@@ -67,7 +67,7 @@ describe('useAppInitialization', () => {
       Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
     );
 
-    (tauriCore.invoke as any).mockImplementationOnce((cmd: string) => {
+    (tauriCore.invoke as any).mockImplementation((cmd: string) => {
       if (cmd === 'check_roblox_api_status') return Promise.resolve(false);
       return Promise.resolve(null);
     });

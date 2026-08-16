@@ -35,9 +35,18 @@ input[type='number'] {
   }
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .animate-spin {
+  animation: spin 1s linear infinite;
   will-change: transform;
-  transform: translateZ(0);
 }
 
 .theme-range {

@@ -55,6 +55,7 @@ local function createPluginGui()
 	gui = Instance.new("ScreenGui")
 	gui.Name = "ISpooferMotionPluginGui"
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.Enabled = false
 
 	local success = pcall(function()
 		gui.Parent = CoreGui

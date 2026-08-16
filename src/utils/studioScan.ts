@@ -49,6 +49,7 @@ async function waitForStudioScanComplete(): Promise<void> {
 export interface ScanOptions {
   scanTypes: string[];
   scriptScanMode: string;
+  scanPath?: string;
 }
 
 export async function triggerStudioScan(options?: ScanOptions): Promise<void> {

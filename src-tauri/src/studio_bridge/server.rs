@@ -3,7 +3,8 @@
 //! Handles endpoints for polling, health checks, scan data uploads, and patch orchestration.
 //! All mutable state is guarded by `RwLock` and `Mutex` bounds to prevent race conditions
 //! between concurrent Studio requests.
-use axum::extract::{Json, State};
+use axum::extract::{Json, Query, State};
+use serde::Deserialize;
 use serde_json::Value;
 use std::time::{Duration, Instant};
 use tauri::Emitter;
@@ -12,6 +13,12 @@ use super::messages::{
     analyze_records, count_keyframe_warnings, plan_patches, AssetStore, StudioRecord,
 };
 use super::{AppState, STUDIO_PROTOCOL_VERSION};
+
+#[derive(Deserialize, Default)]
+pub struct PollQuery {
+    pub place_id: Option<String>,
+    pub place_name: Option<String>,
+}
 
 /// Responds to the health check ping from the frontend UI.
 pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> {
@@ -23,6 +30,7 @@ pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> 
         "protocolVersion": STUDIO_PROTOCOL_VERSION,
         "scanStatus": guard.scan_status,
         "studioPlaceId": guard.studio_place_id,
+        "studioPlaceName": guard.studio_place_name,
         "themeAccent": guard.theme_accent.clone()
     }))
 }
@@ -46,6 +54,13 @@ pub async fn handle_scan_start(
         .filter(|id| id != "0" && id.chars().all(|character| character.is_ascii_digit()));
     if incoming_place_id.is_some() {
         guard.studio_place_id = incoming_place_id;
+    }
+    let incoming_place_name = payload
+        .get("placeName")
+        .and_then(|value| value.as_str().map(std::string::ToString::to_string))
+        .filter(|name| !name.trim().is_empty());
+    if incoming_place_name.is_some() {
+        guard.studio_place_name = incoming_place_name;
     }
     guard.last_sounds = AssetStore { scanning: true, ..Default::default() };
     guard.last_animations = AssetStore { scanning: true, ..Default::default() };
@@ -130,7 +145,6 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
     let (records, mappings) = {
         let mut guard = state.data.write().await;
         guard.last_plugin_poll_time = Some(Instant::now());
-        guard.scan_status = None;
         let extracted_records = std::mem::take(
             &mut *guard
                 .pending_studio_records
@@ -205,6 +219,7 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
         guard.last_meshes,
         guard.last_script_refs,
     ) = stores;
+    guard.scan_status = None;
     if !mappings.is_empty() {
         guard.stored_patches = patches;
         guard.notify.notify_waiters();
@@ -242,7 +257,10 @@ pub async fn handle_scan_abort(State(state): State<AppState>) -> Json<Value> {
 ///
 /// Keeps the connection open for up to 8 seconds waiting for the desktop daemon
 /// to request an action (like a new scan).
-pub async fn handle_poll(State(state): State<AppState>) -> Json<Value> {
+pub async fn handle_poll(
+    State(state): State<AppState>,
+    Query(query): Query<PollQuery>,
+) -> Json<Value> {
     let timeout = tokio::time::Duration::from_secs(8);
     // Heartbeat interval: refresh last_plugin_poll_time while we're waiting so
     // the frontend health check never sees a stale timestamp during a quiet poll.
@@ -254,6 +272,14 @@ pub async fn handle_poll(State(state): State<AppState>) -> Json<Value> {
         {
             let mut guard = state.data.write().await;
             guard.last_plugin_poll_time = Some(Instant::now());
+            if let Some(name) = query.place_name.as_deref().filter(|n| !n.trim().is_empty()) {
+                guard.studio_place_name = Some(name.to_string());
+            }
+            if let Some(id) =
+                query.place_id.as_deref().filter(|i| !i.trim().is_empty() && *i != "0")
+            {
+                guard.studio_place_id = Some(id.to_string());
+            }
             let request_assets = guard.request_sounds
                 || guard.request_animations
                 || guard.request_images
@@ -267,10 +293,12 @@ pub async fn handle_poll(State(state): State<AppState>) -> Json<Value> {
                 guard.request_script_refs = false;
                 let scan_types = guard.scan_types.clone();
                 let script_scan_mode = guard.script_scan_mode.clone();
+                let scan_path = guard.scan_path.take();
                 return Json(serde_json::json!({
                     "requestAssets": true,
                     "scanTypes": scan_types,
                     "scriptScanMode": script_scan_mode,
+                    "scanPath": scan_path,
                 }));
             }
         }
@@ -459,6 +487,9 @@ pub async fn set_scan_options(
     }
     if let Some(mode) = body.get("scriptScanMode").and_then(|v| v.as_str()) {
         guard.script_scan_mode = mode.to_string();
+    }
+    if let Some(path) = body.get("scanPath").and_then(|v| v.as_str()) {
+        guard.scan_path = if path.trim().is_empty() { None } else { Some(path.trim().to_string()) };
     }
     Json(serde_json::json!({"success": true}))
 }

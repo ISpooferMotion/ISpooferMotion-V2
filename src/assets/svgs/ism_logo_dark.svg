@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="150 150 700 700" width="100%" height="100%">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@800&amp;display=swap');
+      .text {
+        font-family: 'Inter', sans-serif;
+        font-weight: 800;
+        font-size: 280px;
+        letter-spacing: -12px;
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
+      }
+      
+      @keyframes slideAurora {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-1000px); }
+      }
+      .aurora-bg {
+        animation: slideAurora 4s linear infinite;
+        shape-rendering: geometricPrecision;
+      }
+
+      @keyframes flowWater {
+        0% { transform: translateY(0); }
+        100% { transform: translateY(-200px); }
+      }
+      .water-flow { 
+        animation: flowWater 3s linear infinite; 
+      }
+
+      @keyframes surge {
+        0%, 100% { transform: rotate(45deg) translateX(80px); }
+        50% { transform: rotate(45deg) translateX(10px); }
+      }
+      .liquid-boundary {
+        transform-origin: 0px 0px;
+        animation: surge 8s ease-in-out infinite;
+      }
+    </style>
+
+    <!-- Container Grid Pattern -->
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#FFFFFF" stroke-opacity="0.04" stroke-width="1"/>
+    </pattern>
+
+
+    <!-- Aurora Repeating Gradient -->
+    <linearGradient id="aurora-grad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1000" y2="0" spreadMethod="repeat">
+      <stop offset="0%" stop-color="#FF0080" />
+      <stop offset="25%" stop-color="#7928CA" />
+      <stop offset="50%" stop-color="#0070F3" />
+      <stop offset="75%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#FF0080" />
+    </linearGradient>
+
+    <!-- Base Seamless Wave Path -->
+    <path id="water-wave" d="M 2000,-1000 L 0,-1000 
+      C 40,-950 -40,-850 0,-800
+      C 40,-750 -40,-650 0,-600
+      C 40,-550 -40,-450 0,-400
+      C 40,-350 -40,-250 0,-200
+      C 40,-150 -40,-50 0,0
+      C 40,50 -40,150 0,200
+      C 40,250 -40,350 0,400
+      C 40,450 -40,550 0,600
+      C 40,650 -40,750 0,800
+      C 40,850 -40,950 0,1000
+      L 2000,1000 Z" />
+
+    <!-- Single Crisp Diagonal Mask -->
+    <mask id="liquid-mask">
+      <rect x="-2000" y="-2000" width="4000" height="4000" fill="black" />
+      <g class="liquid-boundary">
+        <use href="#water-wave" class="water-flow" fill="white" />
+      </g>
+    </mask>
+
+    <!-- Text Clip Path -->
+    <clipPath id="text-mask">
+      <text x="0" y="100" text-anchor="middle" class="text">ISM</text>
+    </clipPath>
+  </defs>
+
+  <!-- Outer Container (Rounded Squircle) -->
+  <rect x="150" y="150" width="700" height="700" rx="200" fill="#0A0A0C" />
+  
+  <!-- Grid Texture Inside Container -->
+  <rect x="150" y="150" width="700" height="700" rx="200" fill="url(#grid)" />
+
+  <!-- Logo Mark -->
+  <g transform="translate(500, 500) skewX(-12)">
+    <!-- Base text (Solid color) -->
+    <text x="0" y="100" text-anchor="middle" class="text" fill="#FFFFFF">ISM</text>
+
+    <!-- Aurora layer -->
+    <g mask="url(#liquid-mask)" clip-path="url(#text-mask)">
+      <rect class="aurora-bg" x="-1000" y="-500" width="3000" height="1000" fill="url(#aurora-grad)" />
+    </g>
+  </g>
+</svg>

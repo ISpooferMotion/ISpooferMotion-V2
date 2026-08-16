@@ -1,12 +1,13 @@
 import {
   ArrowDownUp,
   Bug,
+  Gauge,
   KeyRound,
+  Laptop,
   Palette,
-  Settings2,
   ShieldAlert,
-  SlidersHorizontal,
   TriangleAlert,
+  Wrench,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
@@ -37,11 +38,11 @@ export default function SettingsView() {
   const tabs = [
     { id: 'credentials', label: t('spoof.options') || 'Credentials', icon: <KeyRound size={15} /> },
     { id: 'appearance', label: t('settings.appearance'), icon: <Palette size={15} /> },
-    { id: 'behavior', label: t('settings.behavior'), icon: <SlidersHorizontal size={15} /> },
+    { id: 'behavior', label: t('settings.behavior'), icon: <Laptop size={15} /> },
     { id: 'upload', label: t('config.assetProcessing'), icon: <ArrowDownUp size={15} /> },
-    { id: 'routing', label: t('config.routingLimits'), icon: <SlidersHorizontal size={15} /> },
+    { id: 'routing', label: t('config.routingLimits'), icon: <Gauge size={15} /> },
     { id: 'exclusions', label: t('config.exclusions'), icon: <ShieldAlert size={15} /> },
-    { id: 'features', label: t('settings.advanced'), icon: <Settings2 size={15} /> },
+    { id: 'features', label: t('settings.advanced'), icon: <Wrench size={15} /> },
     { id: 'debug', label: t('debug.title'), icon: <Bug size={15} /> },
     { id: 'danger', label: t('settings.dangerZone'), icon: <TriangleAlert size={15} /> },
   ];

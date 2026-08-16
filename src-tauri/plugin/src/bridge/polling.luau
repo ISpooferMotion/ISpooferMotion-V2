@@ -237,6 +237,24 @@ end
 --- Starts the background polling loops.
 ---
 --- Idempotent; if polling is already running, this does nothing.
+local function getPollUrl(): string
+	local pId = 0
+	pcall(function()
+		pId = game.PlaceId
+	end)
+	local pName = ""
+	pcall(function()
+		if game.Name and game.Name ~= "" then
+			pName = game.Name
+		end
+	end)
+	return string.format(
+		"/poll?place_id=%s&place_name=%s",
+		tostring(pId),
+		HttpService:UrlEncode(pName)
+	)
+end
+
 function startPolling(): ()
 	if polling then
 		return
@@ -290,7 +308,7 @@ function startPolling(): ()
 		while polling do
 			local baseUrl = BASE_URL
 			if baseUrl then
-				local pollOk, decoded, _statusCode = requestPollEndpoint(baseUrl, "/poll")
+				local pollOk, decoded, _statusCode = requestPollEndpoint(baseUrl, getPollUrl())
 
 				if not pollOk then
 					pollFailureStreak += 1
@@ -312,6 +330,11 @@ function startPolling(): ()
 							end
 							if type(decoded.scriptScanMode) == "string" then
 								activeScriptScanMode = decoded.scriptScanMode
+							end
+							if type(decoded.scanPath) == "string" and decoded.scanPath ~= "" then
+								activeScanPath = decoded.scanPath
+							else
+								activeScanPath = nil
 							end
 							logToPlugin("Scan requested by Desktop App")
 							autoReplaceEnabled = true

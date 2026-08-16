@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Clapperboard, Loader2, Pause, Play, RotateCcw, X } from 'lucide-react';
+import { Check, ChevronDown, Clapperboard, Loader2, Pause, Play, RotateCcw, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import * as THREE from 'three';
@@ -12,6 +12,7 @@ import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useSpooferStore } from '../../stores/spooferStore';
 import { Button } from '../ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { cn } from '../../utils/cn';
 import {
   parseAnimationXml,
@@ -152,6 +153,7 @@ export default function AnimationPreview({
 
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
+  const scrubThumbRef = useRef<HTMLDivElement>(null);
   const scrubBarRef = useRef<HTMLDivElement>(null);
   const isScrubbing = useRef(false);
 
@@ -555,6 +557,7 @@ export default function AnimationPreview({
         const wt = ((currentTimeRef.current % dur) + dur) % dur;
         const pct = (wt / dur) * 100;
         if (progressBarRef.current) progressBarRef.current.style.width = `${pct}%`;
+        if (scrubThumbRef.current) scrubThumbRef.current.style.left = `${pct}%`;
         if (timeDisplayRef.current)
           timeDisplayRef.current.textContent = `${wt.toFixed(2)}s / ${dur.toFixed(2)}s`;
       }
@@ -684,7 +687,7 @@ export default function AnimationPreview({
         <div className="shrink-0 px-4 py-3 bg-bg-elevated border-t border-border-subtle flex flex-col gap-2.5">
           {}
           <div
-            className="relative w-full h-1.5 bg-bg-base rounded-full cursor-pointer select-none"
+            className="relative w-full h-2 bg-bg-base hover:h-2.5 rounded-full cursor-pointer select-none transition-all group flex items-center"
             ref={scrubBarRef}
             onPointerDown={(e) => {
               // Scrub through animation manually via timeline drag.
@@ -720,6 +723,12 @@ export default function AnimationPreview({
               className="absolute top-0 left-0 bottom-0 bg-primary rounded-full z-10 pointer-events-none"
               style={{ width: '0%', transition: 'none' }}
             />
+            {/* Draggable Scrubber Thumb (Fixed Size on Hover) */}
+            <div
+              ref={scrubThumbRef}
+              className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full shadow-md border-2 border-white pointer-events-none z-20"
+              style={{ left: '0%' }}
+            />
           </div>
 
           {}
@@ -749,26 +758,48 @@ export default function AnimationPreview({
               0.00s / {duration.toFixed(2)}s
             </span>
 
-            <div className="ml-auto flex items-center gap-1.5 bg-bg-base/80 border border-border-subtle p-0.5 rounded-lg select-none">
-              <span className="text-[10px] font-bold text-text-muted px-1.5 uppercase tracking-wider">
-                {t('misc.speed')}
-              </span>
-              {speedOptions.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setSpeed(s)}
-                  className={cn(
-                    'px-2 py-0.5 rounded-md text-[10px] font-bold transition-all',
-                    speed === s
-                      ? 'bg-primary text-primary-foreground shadow-xs'
-                      : 'text-text-muted hover:text-text-primary hover:bg-bg-elevated/50',
-                  )}
-                >
-                  {s}×
-                </button>
-              ))}
-            </div>
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <button
+                    type="button"
+                    className="ml-auto flex items-center gap-1 h-7 px-2 bg-bg-base/80 hover:bg-bg-elevated border border-border-subtle rounded-md text-xs font-semibold text-text-primary transition-colors select-none shrink-0"
+                    title="Playback speed"
+                  >
+                    <span className="text-[10px] text-text-muted font-bold uppercase mr-0.5">
+                      {t('misc.speed') || 'Speed'}
+                    </span>
+                    <span>{speed}×</span>
+                    <ChevronDown size={11} className="text-muted-foreground" />
+                  </button>
+                }
+              />
+              <PopoverContent
+                align="end"
+                side="top"
+                sideOffset={6}
+                className="w-24 p-1 bg-bg-surface border border-border shadow-xl rounded-md z-[350]"
+              >
+                <div className="flex flex-col gap-0.5">
+                  {speedOptions.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSpeed(s)}
+                      className={cn(
+                        'flex items-center justify-between px-2 py-1 rounded text-xs font-mono transition-colors text-left',
+                        speed === s
+                          ? 'bg-primary text-primary-foreground font-bold'
+                          : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
+                      )}
+                    >
+                      <span>{s}×</span>
+                      {speed === s && <Check size={11} />}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       )}

@@ -3,11 +3,10 @@ import { Bug, FolderOpen, Trash2 } from 'lucide-react';
 
 import { useConfig } from '../../../contexts/ConfigContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
+import { useSpooferStore } from '../../../stores/spooferStore';
 import { logIsm } from '../../../utils/robloxProfiles';
 import { Button } from '../../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { Label } from '../../ui/label';
-import { Switch } from '../../ui/switch';
+import { SettingCard, SettingSwitchRow } from './SettingComponents';
 
 export default function DebugCard() {
   const { t } = useLanguage();
@@ -21,17 +20,23 @@ export default function DebugCard() {
         invoke('clear_app_cache'),
       ]);
 
+      // Clear all spoofer store runtime states (replacements, pins, statuses)
+      const store = useSpooferStore.getState();
+      store.setLastReplacements({});
+      store.clearAssetStatuses();
+      store.setAssetForcePlaceIds({});
+
+      // Clear all cached keys from localStorage
       Object.keys(localStorage).forEach((key) => {
-        if (
-          key.startsWith('ISpooferMotion_DetectedGroups_') ||
-          key === 'ISpooferMotion_AssetExplorerState'
-        ) {
+        if (key.startsWith('ISpooferMotion_') || key.startsWith('preview-')) {
           localStorage.removeItem(key);
         }
       });
       sessionStorage.clear();
+      store.showToast('success', successMessage);
       logIsm('success', successMessage);
     } catch (err) {
+      useSpooferStore.getState().showToast('error', `Failed to clear cache: ${String(err)}`);
       logIsm('error', `Failed to clear cache: ${String(err)}`);
     }
   }
@@ -46,59 +51,50 @@ export default function DebugCard() {
   };
 
   return (
-    <Card className="bg-bg-surface/50 border border-border-subtle shadow-sm overflow-hidden">
-      <CardHeader className="pb-3 border-b border-border-subtle/40 bg-bg-base/20">
-        <CardTitle className="text-base font-bold flex items-center gap-2 text-text-primary">
-          <Bug size={16} className="text-primary" />
-          {t('debug.title')}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
-          <div className="space-y-0.5 min-w-0 flex-1">
-            <Label className="text-sm font-semibold text-text-primary">
-              {t('settings.debugMode')}
-            </Label>
-          </div>
-          <Switch
-            checked={config.debug.debugMode}
-            onCheckedChange={(v) => updateConfig('debug', 'debugMode', v)}
-          />
-        </div>
+    <SettingCard
+      icon={Bug}
+      title={t('debug.title') || 'Debug & Diagnostics'}
+      description="Enable developer debug console and manage local cache files."
+    >
+      <SettingSwitchRow
+        label={t('settings.debugMode') || 'Developer Debug Mode'}
+        description="Show floating real-time debug console for IPC and network tracing."
+        checked={config.debug.debugMode}
+        onCheckedChange={(v) => updateConfig('debug', 'debugMode', v)}
+      />
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
-          <div className="space-y-0.5 min-w-0 flex-1">
-            <Label className="text-sm font-semibold text-text-primary">
-              {t('settings.enableCache')}
-            </Label>
-          </div>
-          <Switch checked={config.debug.enableCache} onCheckedChange={handleCacheChange} />
-        </div>
+      <SettingSwitchRow
+        label={t('settings.enableCache') || 'Persistent File & Asset Cache'}
+        description="Store downloaded meshes, images, and audio payloads on disk to speed up repeated scans."
+        checked={config.debug.enableCache}
+        onCheckedChange={handleCacheChange}
+      />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-          <Button
-            variant="outline"
-            className="h-10 text-xs font-semibold"
-            onClick={() => void handleClearCache()}
-          >
-            <Trash2 size={15} className="mr-2 text-muted-foreground" />
-            {t('settings.clearCache')}
-          </Button>
+      <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-bg-base/20">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs font-semibold flex items-center justify-center gap-2"
+          onClick={() => void handleClearCache()}
+        >
+          <Trash2 size={13} className="text-muted-foreground" />
+          <span>{t('settings.clearCache') || 'Clear Local Cache'}</span>
+        </Button>
 
-          <Button
-            variant="outline"
-            className="h-10 text-xs font-semibold"
-            onClick={() =>
-              invoke('open_logs_folder').catch((err) =>
-                logIsm('error', `Failed to open logs folder: ${String(err)}`),
-              )
-            }
-          >
-            <FolderOpen size={15} className="mr-2 text-muted-foreground" />
-            {t('settings.openLogsFolder')}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs font-semibold flex items-center justify-center gap-2"
+          onClick={() =>
+            invoke('open_logs_folder').catch((err) =>
+              logIsm('error', `Failed to open logs folder: ${String(err)}`),
+            )
+          }
+        >
+          <FolderOpen size={13} className="text-muted-foreground" />
+          <span>{t('settings.openLogsFolder') || 'Open Logs Folder'}</span>
+        </Button>
+      </div>
+    </SettingCard>
   );
 }

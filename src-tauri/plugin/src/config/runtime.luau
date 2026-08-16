@@ -61,6 +61,7 @@ local lastDiscovery = 0
 --- works if the app sends nothing.
 local activeScanTypes: { string } = { "sounds", "animations", "images", "meshes", "scripts" }
 local activeScriptScanMode: string = "assetIds"
+local activeScanPath: string? = nil
 
 --- The specific top-level containers we care about when scanning for assets.
 --- We explicitly ignore places like CoreGui to avoid engine warnings and crashes.

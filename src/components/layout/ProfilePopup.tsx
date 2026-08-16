@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Plus, UserCircle } from 'lucide-react';
+import { Check, ChevronRight, Loader2, Plus, UserCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -237,8 +237,9 @@ export default function ProfilePopup({ collapsed = false }: { collapsed?: boolea
 
           {/* Group */}
           <div className="flex flex-col gap-1 px-1">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-text-muted">
-              {t('spoof.selectedGroup')}
+            <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-text-muted">
+              <span>{t('spoof.selectedGroup')}</span>
+              {loadingGroups && <Loader2 size={11} className="animate-spin text-text-muted" />}
             </div>
             <select
               value={config.spoofing.selectedGroup}
@@ -252,7 +253,6 @@ export default function ProfilePopup({ collapsed = false }: { collapsed?: boolea
                 </option>
               ))}
             </select>
-            {loadingGroups && <span className="text-[10px] text-text-muted">Loading groups…</span>}
           </div>
         </div>
       </PopoverContent>
