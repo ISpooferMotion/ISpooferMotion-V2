@@ -92,13 +92,13 @@ async fn poll_roblox_operation(
     transfer_id: &str,
     name: &str,
     original_asset_id: Option<&str>,
-    poll_interval_ms: Option<u64>,
+    poll_interval_ms: Option<u32>,
 ) -> Result<String, String> {
     let path = operation_path.trim_start_matches('/');
     let path =
         if path.starts_with("assets/v1/") { path.to_string() } else { format!("assets/v1/{path}") };
     let url = format!("https://apis.roblox.com/{path}");
-    let target_interval = poll_interval_ms.unwrap_or(250).clamp(100, 2000);
+    let target_interval = u64::from(poll_interval_ms.unwrap_or(250).clamp(100, 2000));
     for attempt in 0..150 {
         if attempt > 0 {
             let delay_ms = if attempt == 1 {
@@ -272,7 +272,7 @@ pub async fn publish_asset_with_progress(
     universe_id: Option<String>,
     downloads_root: Option<String>,
     proxy_url: Option<String>,
-    operation_poll_interval_ms: Option<u64>,
+    operation_poll_interval_ms: Option<u32>,
 ) -> crate::error::Result<PublishResult> {
     for id in [group_id.as_deref(), user_id.as_deref(), original_asset_id.as_deref()]
         .into_iter()

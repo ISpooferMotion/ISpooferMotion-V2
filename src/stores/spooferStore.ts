@@ -35,6 +35,9 @@ interface SpooferState {
   selectedAssetIds: Set<string>;
   setSelectedAssetIds: (val: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
 
+  selectedAssetKeys: Set<string>;
+  setSelectedAssetKeys: (val: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
+
   spoofingLogs: string[];
   setSpoofingLogs: (val: string[] | ((prev: string[]) => string[])) => void;
 
@@ -59,6 +62,11 @@ interface SpooferState {
   lastReplacements: Record<string, string>;
   setLastReplacements: (
     val: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>),
+  ) => void;
+
+  targetPathsMap: Record<string, string[]>;
+  setTargetPathsMap: (
+    val: Record<string, string[]> | ((prev: Record<string, string[]>) => Record<string, string[]>),
   ) => void;
 
   isReplacing: boolean;
@@ -204,6 +212,12 @@ export const useSpooferStore = create<SpooferState>((set) => ({
       selectedAssetIds: typeof val === 'function' ? val(state.selectedAssetIds) : val,
     })),
 
+  selectedAssetKeys: new Set<string>(),
+  setSelectedAssetKeys: (val) =>
+    set((state) => ({
+      selectedAssetKeys: typeof val === 'function' ? val(state.selectedAssetKeys) : val,
+    })),
+
   spoofingLogs: [],
   setSpoofingLogs: (val) =>
     set((state) => {
@@ -244,6 +258,12 @@ export const useSpooferStore = create<SpooferState>((set) => ({
       } catch {}
       return { lastReplacements: next };
     }),
+
+  targetPathsMap: {},
+  setTargetPathsMap: (val) =>
+    set((state) => ({
+      targetPathsMap: typeof val === 'function' ? val(state.targetPathsMap) : val,
+    })),
 
   isReplacing: false,
   setIsReplacing: (val) => set({ isReplacing: val }),

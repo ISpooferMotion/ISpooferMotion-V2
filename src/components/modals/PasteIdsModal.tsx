@@ -23,6 +23,7 @@ export default function PasteIdsModal({
 
   const rootInstances = useSpooferStore((s) => s.rootInstances);
   const setSelectedAssetIds = useSpooferStore((s) => s.setSelectedAssetIds);
+  const setSelectedAssetKeys = useSpooferStore((s) => s.setSelectedAssetKeys);
   const addGhostAssets = useSpooferStore((s) => s.addGhostAssets);
   const showToast = useSpooferStore((s) => s.showToast);
 
@@ -135,6 +136,11 @@ export default function PasteIdsModal({
 
       // Select all provided IDs (both matched and ghosts)
       setSelectedAssetIds((prev) => {
+        const next = new Set(prev);
+        for (const id of singleIds) next.add(id);
+        return next;
+      });
+      setSelectedAssetKeys((prev) => {
         const next = new Set(prev);
         for (const id of singleIds) next.add(id);
         return next;

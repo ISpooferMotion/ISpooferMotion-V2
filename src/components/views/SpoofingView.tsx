@@ -105,6 +105,7 @@ export default function SpoofingView() {
     loadedFileName,
     selectedAssetIds,
     setSelectedAssetIds,
+    setSelectedAssetKeys,
     spoofingLogs: logs,
     setSpoofingLogs: setLogs,
     isSpoofing,
@@ -132,6 +133,7 @@ export default function SpoofingView() {
       loadedFileName: s.loadedFileName,
       selectedAssetIds: s.selectedAssetIds,
       setSelectedAssetIds: s.setSelectedAssetIds,
+      setSelectedAssetKeys: s.setSelectedAssetKeys,
       spoofingLogs: s.spoofingLogs,
       setSpoofingLogs: s.setSpoofingLogs,
       isSpoofing: s.isSpoofing,
@@ -862,8 +864,13 @@ export default function SpoofingView() {
   // the visible main view; SpoofingView runs hidden as the logic host).
   useEffect(() => {
     const onOpenScan = () => setScanOptionsOpen(true);
-    const onRun = (e?: Event) =>
-      void handleRunSpooferRef.current((e as CustomEvent)?.detail?.assetIds);
+    const onRun = (e?: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail?.targetPaths) {
+        useSpooferStore.getState().setTargetPathsMap(detail.targetPaths);
+      }
+      void handleRunSpooferRef.current(detail?.assetIds);
+    };
     const onOpenPaste = () => setPasteIdsOpen(true);
     const onStartScan = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -1026,6 +1033,7 @@ export default function SpoofingView() {
       }, {});
 
       setSelectedAssetIds(new Set(failedAssetIds));
+      setSelectedAssetKeys(new Set(failedAssetIds));
       setLogs((prev) =>
         appendSpoofingLog(prev, `[INFO] Retrying ${failedAssetIds.length} failed asset(s)...\n`),
       );
@@ -1067,6 +1075,7 @@ export default function SpoofingView() {
       }
       updateCategory('spoofing', spoofingUpdates);
       setSelectedAssetIds(new Set(retry.assetIds));
+      setSelectedAssetKeys(new Set(retry.assetIds));
       setLogs([`Retrying ${retry.assetIds.length} failed asset(s)...`]);
 
       timeout = window.setTimeout(() => {

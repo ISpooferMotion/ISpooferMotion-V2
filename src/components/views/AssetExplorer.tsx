@@ -50,6 +50,7 @@ import {
   ExplorerTreeNode,
   formatShortId,
   getAssetId,
+  getAssetKey,
   getBrightPlaceIdColor,
 } from './asset-explorer/ExplorerTree';
 import { logIsm } from '../../utils/robloxProfiles';
@@ -273,6 +274,8 @@ export default function AssetExplorer({
   const setLoadedFileName = useSpooferStore((s) => s.setLoadedFileName);
   const selectedAssetIds = useSpooferStore((s) => s.selectedAssetIds);
   const setSelectedAssetIds = useSpooferStore((s) => s.setSelectedAssetIds);
+  const selectedAssetKeys = useSpooferStore((s) => s.selectedAssetKeys);
+  const setSelectedAssetKeys = useSpooferStore((s) => s.setSelectedAssetKeys);
   const isScanningStudio = useSpooferStore((s) => s.isScanningStudio);
   const lastScanTime = useSpooferStore((s) => s.lastScanTime);
   const isSpoofing = useSpooferStore((s) => s.isSpoofing);
@@ -447,6 +450,7 @@ export default function AssetExplorer({
   });
 
   const selectedIds = Array.from(selectedAssetIds);
+  const selectedCount = selectedAssetKeys.size > 0 ? selectedAssetKeys.size : selectedAssetIds.size;
   const pinnedCount = selectedIds.filter((id) => assetForcePlaceIds[id]).length;
 
   const applyPin = () => {
@@ -562,16 +566,25 @@ export default function AssetExplorer({
     return { total, displayed: total };
   }, [displayedInstances]);
 
-  const toggleAsset = useCallback(
-    (assetId: string, checked: boolean) => {
-      setSelectedAssetIds((prev) => {
-        const next = new Set(prev);
-        if (checked) next.add(assetId);
-        else next.delete(assetId);
-        return next;
-      });
+  const getAllAssetKeys = useCallback(
+    (node: RbxInstance): string[] => {
+      const filters = activeAssetFilters;
+      const filterFn = (type: string) => {
+        if (!filters || filters.length === 0) return true;
+        if (type === 'ghost') return true;
+        return filters.includes(type);
+      };
+
+      let keys: string[] = node.assets
+        .filter((a) => filterFn(a.type))
+        .map((a) => getAssetKey(a))
+        .filter(Boolean);
+      for (const child of node.children) {
+        keys = keys.concat(getAllAssetKeys(child));
+      }
+      return keys;
     },
-    [setSelectedAssetIds],
+    [activeAssetFilters],
   );
 
   const getAllAssetIds = useCallback(
@@ -595,20 +608,98 @@ export default function AssetExplorer({
     [activeAssetFilters],
   );
 
-  const toggleNode = useCallback(
-    (node: RbxInstance, checked: boolean) => {
-      const ids = getAllAssetIds(node);
+  const toggleAsset = useCallback(
+    (assetOrKey: ParsedAssetRef | string, checked: boolean) => {
+      const key = typeof assetOrKey === 'string' ? assetOrKey : getAssetKey(assetOrKey);
+      const assetId =
+        typeof assetOrKey === 'string'
+          ? assetOrKey.split(':').pop() || assetOrKey
+          : getAssetId(assetOrKey);
+
+      setSelectedAssetKeys((prev) => {
+        const next = new Set(prev);
+        if (checked) next.add(key);
+        else next.delete(key);
+        return next;
+      });
+
       setSelectedAssetIds((prev) => {
         const next = new Set(prev);
-        for (const id of ids) {
-          if (checked) next.add(id);
-          else next.delete(id);
+        if (checked) {
+          if (assetId) next.add(assetId);
+        } else {
+          const currentKeys = useSpooferStore.getState().selectedAssetKeys;
+          const stillHas = Array.from(currentKeys).some(
+            (k) => k !== key && (k.endsWith(`:${assetId}`) || k === assetId),
+          );
+          if (!stillHas && assetId) {
+            next.delete(assetId);
+          }
         }
         return next;
       });
     },
-    [getAllAssetIds, setSelectedAssetIds],
+    [setSelectedAssetKeys, setSelectedAssetIds],
   );
+
+  const toggleNode = useCallback(
+    (node: RbxInstance, checked: boolean) => {
+      const keys = getAllAssetKeys(node);
+      const ids = getAllAssetIds(node);
+
+      setSelectedAssetKeys((prev) => {
+        const next = new Set(prev);
+        for (const k of keys) {
+          if (checked) next.add(k);
+          else next.delete(k);
+        }
+        return next;
+      });
+
+      setSelectedAssetIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) {
+          if (checked) next.add(id);
+          else {
+            const currentKeys = useSpooferStore.getState().selectedAssetKeys;
+            const stillHas = Array.from(currentKeys).some(
+              (k) => !keys.includes(k) && (k.endsWith(`:${id}`) || k === id),
+            );
+            if (!stillHas) {
+              next.delete(id);
+            }
+          }
+        }
+        return next;
+      });
+    },
+    [getAllAssetKeys, getAllAssetIds, setSelectedAssetKeys, setSelectedAssetIds],
+  );
+
+  const computeTargetPaths = useCallback(() => {
+    const keys = useSpooferStore.getState().selectedAssetKeys;
+    if (keys.size === 0) return undefined;
+    const map: Record<string, string[]> = {};
+    const walk = (nodes: RbxInstance[]) => {
+      for (const node of nodes) {
+        for (const asset of node.assets) {
+          const key = getAssetKey(asset);
+          if (keys.has(key)) {
+            const id = getAssetId(asset);
+            if (id) {
+              map[id] = map[id] || [];
+              if (asset.path && !map[id].includes(asset.path)) {
+                map[id].push(asset.path);
+              }
+            }
+          }
+        }
+        if (node.children) walk(node.children);
+      }
+    };
+    walk(displayedInstances);
+    return map;
+  }, [displayedInstances]);
 
   return (
     <motion.div
@@ -1272,9 +1363,11 @@ export default function AssetExplorer({
                           level={0}
                           config={config}
                           selectedAssetIds={selectedAssetIds}
+                          selectedAssetKeys={selectedAssetKeys}
                           toggleAsset={toggleAsset}
                           toggleNode={toggleNode}
                           getAllAssetIds={getAllAssetIds}
+                          getAllAssetKeys={getAllAssetKeys}
                           setEnlargedImage={setEnlargedImage}
                           setPreviewingAnimation={setPreviewingAnimation}
                           activeAssetFilters={activeAssetFilters}
@@ -1394,7 +1487,7 @@ export default function AssetExplorer({
 
                 <div className="flex items-center gap-2 shrink-0">
                   {/* Selection Actions Pill Group — only shown when assets are selected */}
-                  {selectedAssetIds.size > 0 && (
+                  {selectedCount > 0 && (
                     <div className="flex items-center rounded-lg border border-border-subtle bg-bg-surface p-0.5 shrink-0 gap-0.5 shadow-sm">
                       {/* Force Place ID Pin */}
                       <Popover open={lockOpen} onOpenChange={setLockOpen}>
@@ -1426,7 +1519,7 @@ export default function AssetExplorer({
                         >
                           <div className="flex flex-col gap-2">
                             <div className="text-[10px] font-semibold uppercase tracking-widest text-text-muted">
-                              {t('settings.forcePlaceIds')} · {selectedAssetIds.size} selected
+                              {t('settings.forcePlaceIds')} · {selectedCount} selected
                             </div>
                             <Input
                               value={placeIdInput}
@@ -1525,7 +1618,7 @@ export default function AssetExplorer({
                                 <TooltipContent>
                                   {allHaveReplacements
                                     ? 'Copy replacement pairs (orig -> new)'
-                                    : `Copy selected IDs (${selectedAssetIds.size})`}
+                                    : `Copy selected IDs (${selectedCount})`}
                                 </TooltipContent>
                               </Tooltip>
 
@@ -1555,7 +1648,7 @@ export default function AssetExplorer({
                                 >
                                   <Copy size={13} className="text-muted-foreground" />
                                   <span className="flex-1">
-                                    Copy Selected IDs ({selectedAssetIds.size})
+                                    Copy Selected IDs ({selectedCount})
                                   </span>
                                 </button>
 
@@ -1764,14 +1857,23 @@ export default function AssetExplorer({
                         data-tutorial-target="run-spoofer"
                         className="h-8 px-3 rounded-r-none rounded-l-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm"
                         onClick={() => {
+                          const targetPaths = computeTargetPaths();
+                          useSpooferStore.getState().setTargetPathsMap(targetPaths || {});
                           if (selectedAssetIds.size > 0) {
                             document.dispatchEvent(
                               new CustomEvent('ism-run-spoofer', {
-                                detail: { assetIds: Array.from(selectedAssetIds) },
+                                detail: {
+                                  assetIds: Array.from(selectedAssetIds),
+                                  targetPaths,
+                                },
                               }),
                             );
                           } else {
-                            document.dispatchEvent(new CustomEvent('ism-run-spoofer'));
+                            document.dispatchEvent(
+                              new CustomEvent('ism-run-spoofer', {
+                                detail: { targetPaths },
+                              }),
+                            );
                           }
                         }}
                         disabled={busy}
@@ -1784,11 +1886,11 @@ export default function AssetExplorer({
                         {isSpoofing
                           ? (t('spoof.runSpoofer') ?? 'Run Spoofer') + '…'
                           : config.spoofing.downloadOnly
-                            ? selectedAssetIds.size > 0
-                              ? `Download Selected (${selectedAssetIds.size})`
+                            ? selectedCount > 0
+                              ? `Download Selected (${selectedCount})`
                               : `Download All (${stats.displayed})`
-                            : selectedAssetIds.size > 0
-                              ? `Spoof Selected (${selectedAssetIds.size})`
+                            : selectedCount > 0
+                              ? `Spoof Selected (${selectedCount})`
                               : `Spoof All Assets (${stats.displayed})`}
                       </Button>
                       <PopoverTrigger

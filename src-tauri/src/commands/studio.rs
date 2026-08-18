@@ -3,6 +3,26 @@
 pub(crate) fn parse_replacements_map(
     replacements_map: &crate::commands::AnyValue,
 ) -> Vec<serde_json::Value> {
+    if let Some(arr) = replacements_map.0.as_array() {
+        return arr
+            .iter()
+            .filter_map(|item| {
+                let orig = item.get("originalId")?.as_str()?;
+                let new_id = item.get("newId")?.as_str()?;
+                if new_id.is_empty() || new_id == orig {
+                    return None;
+                }
+                let mut mapping = serde_json::json!({
+                    "originalId": orig,
+                    "newId": new_id,
+                });
+                if let Some(targets) = item.get("targetPaths") {
+                    mapping["targetPaths"] = targets.clone();
+                }
+                Some(mapping)
+            })
+            .collect();
+    }
     replacements_map
         .0
         .as_object()
@@ -11,21 +31,42 @@ pub(crate) fn parse_replacements_map(
             replacements
                 .into_iter()
                 .filter_map(|(original_id, new_id)| {
-                    let new_id_str = if let Some(s) = new_id.as_str() {
-                        s.to_string()
+                    let (new_id_str, target_paths) = if let Some(s) = new_id.as_str() {
+                        (s.to_string(), None)
                     } else if let Some(n) = new_id.as_u64() {
-                        n.to_string()
+                        (n.to_string(), None)
+                    } else if let Some(n) = new_id.as_i64() {
+                        (n.to_string(), None)
+                    } else if let Some(obj) = new_id.as_object() {
+                        let new_id_str = if let Some(s) =
+                            obj.get("newId").and_then(serde_json::Value::as_str)
+                        {
+                            s.to_string()
+                        } else if let Some(n) = obj.get("newId").and_then(serde_json::Value::as_u64)
+                        {
+                            n.to_string()
+                        } else if let Some(n) = obj.get("newId").and_then(serde_json::Value::as_i64)
+                        {
+                            n.to_string()
+                        } else {
+                            return None;
+                        };
+                        let targets = obj.get("targetPaths").cloned();
+                        (new_id_str, targets)
                     } else {
-                        let n = new_id.as_i64()?;
-                        n.to_string()
+                        return None;
                     };
                     if new_id_str.is_empty() || new_id_str == original_id {
                         return None;
                     }
-                    Some(serde_json::json!({
+                    let mut mapping = serde_json::json!({
                         "originalId": original_id,
                         "newId": new_id_str,
-                    }))
+                    });
+                    if let Some(targets) = target_paths {
+                        mapping["targetPaths"] = targets;
+                    }
+                    Some(mapping)
                 })
                 .collect::<Vec<_>>()
         })

@@ -583,7 +583,7 @@ pub fn analyze_records(
     let mut seen: HashSet<(String, String, String)> = HashSet::new();
     let mut seen_instance_tokens: HashSet<(String, String, String)> = HashSet::new();
 
-    let mut category_id_indices: HashMap<(&'static str, String), usize> = HashMap::new();
+    let mut category_id_indices: HashMap<(&'static str, String, String), usize> = HashMap::new();
 
     for record in records {
         if record.property == "KeyframeSequence" {
@@ -681,7 +681,11 @@ pub fn analyze_records(
                 match hint {
                     Some("animation") => {
                         use std::collections::hash_map::Entry;
-                        match category_id_indices.entry(("animation", asset_id.clone())) {
+                        match category_id_indices.entry((
+                            "animation",
+                            record.token.clone(),
+                            asset_id.clone(),
+                        )) {
                             Entry::Vacant(e) => {
                                 e.insert(animations.assets.len());
                                 animations.assets.push(json!({
@@ -705,7 +709,11 @@ pub fn analyze_records(
                     }
                     Some("sound") => {
                         use std::collections::hash_map::Entry;
-                        match category_id_indices.entry(("sound", asset_id.clone())) {
+                        match category_id_indices.entry((
+                            "sound",
+                            record.token.clone(),
+                            asset_id.clone(),
+                        )) {
                             Entry::Vacant(e) => {
                                 e.insert(sounds.assets.len());
                                 sounds.assets.push(json!({
@@ -729,7 +737,11 @@ pub fn analyze_records(
                     }
                     Some("image") => {
                         use std::collections::hash_map::Entry;
-                        match category_id_indices.entry(("image", asset_id.clone())) {
+                        match category_id_indices.entry((
+                            "image",
+                            record.token.clone(),
+                            asset_id.clone(),
+                        )) {
                             Entry::Vacant(e) => {
                                 e.insert(images.assets.len());
                                 images.assets.push(json!({
@@ -753,7 +765,11 @@ pub fn analyze_records(
                     }
                     Some("mesh") => {
                         use std::collections::hash_map::Entry;
-                        match category_id_indices.entry(("mesh", asset_id.clone())) {
+                        match category_id_indices.entry((
+                            "mesh",
+                            record.token.clone(),
+                            asset_id.clone(),
+                        )) {
                             Entry::Vacant(e) => {
                                 e.insert(meshes.assets.len());
                                 meshes.assets.push(json!({
@@ -815,7 +831,11 @@ pub fn analyze_records(
             for asset_id in extract_script_asset_ids(&record.value) {
                 if let Some(category) = infer_category_from_property(&record.property) {
                     use std::collections::hash_map::Entry;
-                    match category_id_indices.entry((category, asset_id.clone())) {
+                    match category_id_indices.entry((
+                        category,
+                        record.token.clone(),
+                        asset_id.clone(),
+                    )) {
                         Entry::Vacant(e) => {
                             let store = match category {
                                 "animation" => &mut animations,
@@ -872,7 +892,11 @@ pub fn analyze_records(
 
                 if let Some(category) = category {
                     use std::collections::hash_map::Entry;
-                    match category_id_indices.entry((category, asset_id.clone())) {
+                    match category_id_indices.entry((
+                        category,
+                        record.token.clone(),
+                        asset_id.clone(),
+                    )) {
                         Entry::Vacant(e) => {
                             let store = match category {
                                 "animation" => &mut animations,
@@ -1014,6 +1038,31 @@ pub fn analyze_records(
     (animations, sounds, images, meshes, script_refs)
 }
 
+fn path_matches_target(target: &str, record_full_name: &str) -> bool {
+    let t = target.trim();
+    let r = record_full_name.trim();
+    if t == r {
+        return true;
+    }
+    let norm_target = t.replace('/', ".");
+    let norm_record = r.replace('/', ".");
+    if norm_target == norm_record {
+        return true;
+    }
+    let t_clean = norm_target.trim_start_matches("game.");
+    let r_clean = norm_record.trim_start_matches("game.");
+    if t_clean == r_clean {
+        return true;
+    }
+    if !t_clean.is_empty()
+        && !r_clean.is_empty()
+        && (t_clean.ends_with(r_clean) || r_clean.ends_with(t_clean))
+    {
+        return true;
+    }
+    false
+}
+
 #[must_use]
 pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> {
     let mapping_map: HashMap<&str, &str> = mappings
@@ -1022,6 +1071,29 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
             Some((mapping.get("originalId")?.as_str()?, mapping.get("newId")?.as_str()?))
         })
         .collect();
+
+    let mapping_targets: HashMap<&str, Vec<&str>> = mappings
+        .iter()
+        .filter_map(|mapping| {
+            let orig = mapping.get("originalId")?.as_str()?;
+            let targets = mapping
+                .get("targetPaths")
+                .and_then(|t| t.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
+                .unwrap_or_default();
+            Some((orig, targets))
+        })
+        .collect();
+
+    let is_path_allowed = |asset_id: &str, record_full_name: &str| -> bool {
+        match mapping_targets.get(asset_id) {
+            Some(targets) if !targets.is_empty() => {
+                targets.iter().any(|target| path_matches_target(target, record_full_name))
+            }
+            _ => true,
+        }
+    };
+
     let mut patches = Vec::new();
     let mut mesh_patches: HashMap<String, Value> = HashMap::new();
 
@@ -1047,8 +1119,10 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
             if let Ok(ids) = serde_json::from_str::<Vec<String>>(&record.value) {
                 let mut mapping = serde_json::Map::new();
                 for id in ids {
-                    if let Some(new_id) = mapping_map.get(id.as_str()) {
-                        mapping.insert(id, json!(*new_id));
+                    if is_path_allowed(id.as_str(), &record.full_name) {
+                        if let Some(new_id) = mapping_map.get(id.as_str()) {
+                            mapping.insert(id, json!(*new_id));
+                        }
                     }
                 }
                 if !mapping.is_empty() {
@@ -1067,7 +1141,15 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
             record.property.as_str(),
             "Source" | "__Tags__" | "__Emotes__" | "__Accessories__"
         ) {
-            let rewritten = replace_script_asset_ids(&record.value, &mapping_map);
+            let filtered_mappings: HashMap<&str, &str> = mapping_map
+                .iter()
+                .filter(|(orig, _)| is_path_allowed(orig, &record.full_name))
+                .map(|(k, v)| (*k, *v))
+                .collect();
+            if filtered_mappings.is_empty() {
+                continue;
+            }
+            let rewritten = replace_script_asset_ids(&record.value, &filtered_mappings);
             if let std::borrow::Cow::Owned(rewritten) = rewritten {
                 let action = match record.property.as_str() {
                     "Source" => "replaceScriptSource",
@@ -1092,6 +1174,10 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
         let Some(new_id) = mapping_map.get(&asset_id) else {
             continue;
         };
+
+        if !is_path_allowed(asset_id, &record.full_name) {
+            continue;
+        }
 
         if record.class_name == "MeshPart"
             && matches!(record.property.as_str(), "MeshId" | "MeshContent" | "TextureID")
@@ -1475,5 +1561,37 @@ mod tests {
         assert_eq!(patches.len(), 1);
         // The value should be replaced cleanly to the numeric new_id.
         assert_eq!(patches[0]["value"], 67890u64);
+    }
+
+    #[test]
+    fn targeted_replacement_only_replaces_matching_path() {
+        let records = vec![
+            StudioRecord {
+                token: "1".into(),
+                class_name: "Sound".into(),
+                name: "SoundA".into(),
+                full_name: "Workspace.ModelA.SoundA".into(),
+                property: "SoundId".into(),
+                value: "rbxassetid://12345".into(),
+            },
+            StudioRecord {
+                token: "2".into(),
+                class_name: "Sound".into(),
+                name: "SoundB".into(),
+                full_name: "Workspace.ModelB.SoundB".into(),
+                property: "SoundId".into(),
+                value: "rbxassetid://12345".into(),
+            },
+        ];
+        let mappings = vec![json!({
+            "originalId": "12345",
+            "newId": "99999",
+            "targetPaths": ["Workspace.ModelA.SoundA"]
+        })];
+        let patches = plan_patches(&records, &mappings);
+        assert_eq!(patches.len(), 1);
+        assert_eq!(patches[0]["token"], "1");
+        assert_eq!(patches[0]["fullName"], "Workspace.ModelA.SoundA");
+        assert_eq!(patches[0]["value"], "rbxassetid://99999");
     }
 }
