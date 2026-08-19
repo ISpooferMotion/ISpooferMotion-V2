@@ -24,7 +24,7 @@ pub struct SpooferActionRequest {
     #[serde(rename = "assetForcePlaceIds")]
     pub asset_force_place_ids: Option<std::collections::HashMap<String, String>>,
     #[serde(rename = "operationPollIntervalMs")]
-    pub operation_poll_interval_ms: Option<u64>,
+    pub operation_poll_interval_ms: Option<u32>,
 
     #[serde(rename = "placeName")]
     pub place_name: Option<String>,

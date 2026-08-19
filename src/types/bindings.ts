@@ -29,8 +29,10 @@ export const commands = {
    *
    *  Converts binary-format animations (`<roblox!`) into readable XML text before returning.
    */
-  fetchAnimationXml: (assetId: string, cookie: string | null) =>
-    typedError<string | null, AppError>(__TAURI_INVOKE('fetch_animation_xml', { assetId, cookie })),
+  fetchAnimationXml: (assetId: string, cookie: string | null, placeId: string | null) =>
+    typedError<string | null, AppError>(
+      __TAURI_INVOKE('fetch_animation_xml', { assetId, cookie, placeId }),
+    ),
   getCookieFromRobloxStudio: (userId: string | null) =>
     typedError<string | null, AppError>(
       __TAURI_INVOKE('get_cookie_from_roblox_studio', { userId }),
@@ -72,7 +74,7 @@ export const commands = {
    *  Automatically installs or updates the ISpooferMotion Luau plugin in Studio's local plugins folder.
    *
    *  The `.rbxmx` plugin file is bundled into the Tauri binary at compile-time.
-   *  When the app boots, this copies it directly into `%LOCALAPPDATA%\Roblox\Plugins`.
+   *  When the app boots, this copies it directly into Roblox plugins folders.
    */
   syncRobloxPlugin: () => typedError<boolean, AppError>(__TAURI_INVOKE('sync_roblox_plugin')),
   /**  Opens the application's config directory in the native file explorer. */
@@ -197,7 +199,7 @@ export const commands = {
     typedError<{ [key in string]: MemoryInjectionResult }, string>(
       __TAURI_INVOKE('scan_and_replace_multiple_strings', { pid, replacements }),
     ),
-  clearAssetCache: () => __TAURI_INVOKE<void>('clear_asset_cache'),
+  clearAssetCache: () => __TAURI_INVOKE<boolean>('clear_asset_cache'),
   /**
    *  Configure the push URL for the community asset cache.
    *
@@ -210,6 +212,16 @@ export const commands = {
   patchAssetPermissions: (assetId: string, universeId: string, cookie: string, csrfToken: string) =>
     typedError<boolean, AppError>(
       __TAURI_INVOKE('patch_asset_permissions', { assetId, universeId, cookie, csrfToken }),
+    ),
+  /**
+   *  Grants access permissions to multiple assets for experiences, users, or groups
+   *  via the Roblox Asset Permissions API (Creator Hub PATCH endpoint).
+   *
+   *  Handles pacing and retry backoff to prevent hitting Roblox rate limits.
+   */
+  batchGrantAssetPermissions: (req: BatchGrantPermissionsRequest) =>
+    typedError<BatchGrantPermissionsResponse, AppError>(
+      __TAURI_INVOKE('batch_grant_asset_permissions', { req }),
     ),
   setAssetPrivacy: (assetId: string, privacyStatus: string, cookie: string, csrfToken: string) =>
     typedError<boolean, AppError>(
@@ -246,6 +258,10 @@ export const commands = {
         maxPlaceIds,
         placeName,
       }),
+    ),
+  discoverAssetPlaceId: (assetId: string, cookie: string, forcedPlaceId: string | null) =>
+    typedError<string | null, AppError>(
+      __TAURI_INVOKE('discover_asset_place_id', { assetId, cookie, forcedPlaceId }),
     ),
   getUniverseIdFromPlaceId: (placeId: string, cookie: string) =>
     typedError<string, AppError>(
@@ -317,6 +333,21 @@ export type AssetExplorerItem = {
   creatorType: string;
   creatorId: string;
   isModerated: boolean;
+};
+
+export type BatchGrantPermissionsRequest = {
+  asset_ids: (number | null)[];
+  subject_type: string;
+  subject_ids: string[];
+  action: string;
+  api_key: string | null;
+  cookie: string | null;
+};
+
+export type BatchGrantPermissionsResponse = {
+  success_asset_ids: (number | null)[];
+  failed_asset_ids: (number | null)[];
+  errors: string[];
 };
 
 export type FetchAssetsRequest = {
@@ -452,6 +483,8 @@ export type SpooferActionRequest = {
   uploadTypes: string[] | null;
   downloadPath: string | null;
   forcePlaceIds: string | null;
+  assetForcePlaceIds: { [key in string]: string } | null;
+  operationPollIntervalMs: number | null;
   placeName: string | null;
   concurrent: boolean | null;
   concurrentDownloading: boolean | null;

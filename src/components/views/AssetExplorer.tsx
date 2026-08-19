@@ -34,7 +34,16 @@ import { Input } from '../ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -50,6 +59,7 @@ import {
   ExplorerTreeNode,
   formatShortId,
   getAssetId,
+  getAssetKey,
   getBrightPlaceIdColor,
 } from './asset-explorer/ExplorerTree';
 import { logIsm } from '../../utils/robloxProfiles';
@@ -209,6 +219,7 @@ export default function AssetExplorer({
     name: string;
   } | null>(null);
   const searchQuery = useSpooferStore((s) => s.searchQuery);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const activeAssetFilters = useSpooferStore((s) => s.activeAssetFilters);
   const ghostAssetIds = useSpooferStore((s) => s.ghostAssetIds);
   const showToast = useSpooferStore((s) => s.showToast);
@@ -273,10 +284,14 @@ export default function AssetExplorer({
   const setLoadedFileName = useSpooferStore((s) => s.setLoadedFileName);
   const selectedAssetIds = useSpooferStore((s) => s.selectedAssetIds);
   const setSelectedAssetIds = useSpooferStore((s) => s.setSelectedAssetIds);
+  const selectedAssetKeys = useSpooferStore((s) => s.selectedAssetKeys);
+  const setSelectedAssetKeys = useSpooferStore((s) => s.setSelectedAssetKeys);
   const isScanningStudio = useSpooferStore((s) => s.isScanningStudio);
   const lastScanTime = useSpooferStore((s) => s.lastScanTime);
   const isSpoofing = useSpooferStore((s) => s.isSpoofing);
   const isReplacing = useSpooferStore((s) => s.isReplacing);
+  const lastReplacements = useSpooferStore((s) => s.lastReplacements) ?? {};
+  const storedReplacementsCount = Object.keys(lastReplacements).length;
   const isDiscoveringPlaceIds = useSpooferStore((s) => s.isDiscoveringPlaceIds);
   const spoofProgress = useSpooferStore((s) => s.spoofProgress);
   const spoofStatusText = useSpooferStore((s) => s.spoofStatusText);
@@ -447,6 +462,7 @@ export default function AssetExplorer({
   });
 
   const selectedIds = Array.from(selectedAssetIds);
+  const selectedCount = selectedAssetKeys.size > 0 ? selectedAssetKeys.size : selectedAssetIds.size;
   const pinnedCount = selectedIds.filter((id) => assetForcePlaceIds[id]).length;
 
   const applyPin = () => {
@@ -507,6 +523,41 @@ export default function AssetExplorer({
     }
   };
 
+  const handleForceApplyReplacements = useCallback(async () => {
+    const store = useSpooferStore.getState();
+    const replacements = store.lastReplacements || {};
+    const count = Object.keys(replacements).length;
+    if (count === 0) {
+      showToast('error', 'No stored replacements found. Spoof some assets or paste IDs first!');
+      return;
+    }
+
+    // If specific assets are selected and have stored replacements, prioritize them;
+    // otherwise apply all stored replacements.
+    let toApply: Record<string, string> = {};
+    if (selectedAssetIds.size > 0) {
+      for (const id of selectedAssetIds) {
+        if (replacements[id]) {
+          toApply[id] = replacements[id];
+        }
+      }
+    }
+    if (Object.keys(toApply).length === 0) {
+      toApply = replacements;
+    }
+
+    try {
+      const { applyReplacements } = await import('../../stores/spooferStore');
+      await applyReplacements(toApply);
+      showToast(
+        'success',
+        `Pushed ${Object.keys(toApply).length} asset replacement(s) to Studio without re-spoofing!`,
+      );
+    } catch (err) {
+      showToast('error', `Failed to apply replacements: ${String(err)}`);
+    }
+  }, [selectedAssetIds, showToast]);
+
   const displayedInstances = useMemo(() => {
     const VALID_ROOTS = new Set([
       'Workspace',
@@ -562,16 +613,25 @@ export default function AssetExplorer({
     return { total, displayed: total };
   }, [displayedInstances]);
 
-  const toggleAsset = useCallback(
-    (assetId: string, checked: boolean) => {
-      setSelectedAssetIds((prev) => {
-        const next = new Set(prev);
-        if (checked) next.add(assetId);
-        else next.delete(assetId);
-        return next;
-      });
+  const getAllAssetKeys = useCallback(
+    (node: RbxInstance): string[] => {
+      const filters = activeAssetFilters;
+      const filterFn = (type: string) => {
+        if (!filters || filters.length === 0) return true;
+        if (type === 'ghost') return true;
+        return filters.includes(type);
+      };
+
+      let keys: string[] = (node?.assets || [])
+        .filter((a) => filterFn(a?.type || ''))
+        .map((a) => getAssetKey(a))
+        .filter(Boolean);
+      for (const child of node?.children || []) {
+        keys = keys.concat(getAllAssetKeys(child));
+      }
+      return keys;
     },
-    [setSelectedAssetIds],
+    [activeAssetFilters],
   );
 
   const getAllAssetIds = useCallback(
@@ -583,11 +643,11 @@ export default function AssetExplorer({
         return filters.includes(type);
       };
 
-      let ids: string[] = node.assets
-        .filter((a) => filterFn(a.type))
+      let ids: string[] = (node?.assets || [])
+        .filter((a) => filterFn(a?.type || ''))
         .map((a) => getAssetId(a))
         .filter(Boolean);
-      for (const child of node.children) {
+      for (const child of node?.children || []) {
         ids = ids.concat(getAllAssetIds(child));
       }
       return ids;
@@ -595,20 +655,98 @@ export default function AssetExplorer({
     [activeAssetFilters],
   );
 
-  const toggleNode = useCallback(
-    (node: RbxInstance, checked: boolean) => {
-      const ids = getAllAssetIds(node);
+  const toggleAsset = useCallback(
+    (assetOrKey: ParsedAssetRef | string, checked: boolean) => {
+      const key = typeof assetOrKey === 'string' ? assetOrKey : getAssetKey(assetOrKey);
+      const assetId =
+        typeof assetOrKey === 'string'
+          ? assetOrKey.split(':').pop() || assetOrKey
+          : getAssetId(assetOrKey);
+
+      setSelectedAssetKeys((prev) => {
+        const next = new Set(prev);
+        if (checked) next.add(key);
+        else next.delete(key);
+        return next;
+      });
+
       setSelectedAssetIds((prev) => {
         const next = new Set(prev);
-        for (const id of ids) {
-          if (checked) next.add(id);
-          else next.delete(id);
+        if (checked) {
+          if (assetId) next.add(assetId);
+        } else {
+          const currentKeys = useSpooferStore.getState().selectedAssetKeys;
+          const stillHas = Array.from(currentKeys).some(
+            (k) => k !== key && (k.endsWith(`:${assetId}`) || k === assetId),
+          );
+          if (!stillHas && assetId) {
+            next.delete(assetId);
+          }
         }
         return next;
       });
     },
-    [getAllAssetIds, setSelectedAssetIds],
+    [setSelectedAssetKeys, setSelectedAssetIds],
   );
+
+  const toggleNode = useCallback(
+    (node: RbxInstance, checked: boolean) => {
+      const keys = getAllAssetKeys(node);
+      const ids = getAllAssetIds(node);
+
+      setSelectedAssetKeys((prev) => {
+        const next = new Set(prev);
+        for (const k of keys) {
+          if (checked) next.add(k);
+          else next.delete(k);
+        }
+        return next;
+      });
+
+      setSelectedAssetIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) {
+          if (checked) next.add(id);
+          else {
+            const currentKeys = useSpooferStore.getState().selectedAssetKeys;
+            const stillHas = Array.from(currentKeys).some(
+              (k) => !keys.includes(k) && (k.endsWith(`:${id}`) || k === id),
+            );
+            if (!stillHas) {
+              next.delete(id);
+            }
+          }
+        }
+        return next;
+      });
+    },
+    [getAllAssetKeys, getAllAssetIds, setSelectedAssetKeys, setSelectedAssetIds],
+  );
+
+  const computeTargetPaths = useCallback(() => {
+    const keys = useSpooferStore.getState().selectedAssetKeys;
+    if (keys.size === 0) return undefined;
+    const map: Record<string, string[]> = {};
+    const walk = (nodes: RbxInstance[]) => {
+      for (const node of nodes) {
+        for (const asset of node.assets) {
+          const key = getAssetKey(asset);
+          if (keys.has(key)) {
+            const id = getAssetId(asset);
+            if (id) {
+              map[id] = map[id] || [];
+              if (asset.path && !map[id].includes(asset.path)) {
+                map[id].push(asset.path);
+              }
+            }
+          }
+        }
+        if (node.children) walk(node.children);
+      }
+    };
+    walk(displayedInstances);
+    return map;
+  }, [displayedInstances]);
 
   return (
     <motion.div
@@ -1272,13 +1410,15 @@ export default function AssetExplorer({
                           level={0}
                           config={config}
                           selectedAssetIds={selectedAssetIds}
+                          selectedAssetKeys={selectedAssetKeys}
                           toggleAsset={toggleAsset}
                           toggleNode={toggleNode}
                           getAllAssetIds={getAllAssetIds}
+                          getAllAssetKeys={getAllAssetKeys}
                           setEnlargedImage={setEnlargedImage}
                           setPreviewingAnimation={setPreviewingAnimation}
                           activeAssetFilters={activeAssetFilters}
-                          searchQuery={searchQuery}
+                          searchQuery={deferredSearchQuery}
                           playingAudioId={playingAudioId}
                           initialExpanded={true}
                           onInspectAsset={setActiveInspectAsset}
@@ -1394,7 +1534,7 @@ export default function AssetExplorer({
 
                 <div className="flex items-center gap-2 shrink-0">
                   {/* Selection Actions Pill Group — only shown when assets are selected */}
-                  {selectedAssetIds.size > 0 && (
+                  {selectedCount > 0 && (
                     <div className="flex items-center rounded-lg border border-border-subtle bg-bg-surface p-0.5 shrink-0 gap-0.5 shadow-sm">
                       {/* Force Place ID Pin */}
                       <Popover open={lockOpen} onOpenChange={setLockOpen}>
@@ -1426,7 +1566,7 @@ export default function AssetExplorer({
                         >
                           <div className="flex flex-col gap-2">
                             <div className="text-[10px] font-semibold uppercase tracking-widest text-text-muted">
-                              {t('settings.forcePlaceIds')} · {selectedAssetIds.size} selected
+                              {t('settings.forcePlaceIds')} · {selectedCount} selected
                             </div>
                             <Input
                               value={placeIdInput}
@@ -1525,7 +1665,7 @@ export default function AssetExplorer({
                                 <TooltipContent>
                                   {allHaveReplacements
                                     ? 'Copy replacement pairs (orig -> new)'
-                                    : `Copy selected IDs (${selectedAssetIds.size})`}
+                                    : `Copy selected IDs (${selectedCount})`}
                                 </TooltipContent>
                               </Tooltip>
 
@@ -1555,7 +1695,7 @@ export default function AssetExplorer({
                                 >
                                   <Copy size={13} className="text-muted-foreground" />
                                   <span className="flex-1">
-                                    Copy Selected IDs ({selectedAssetIds.size})
+                                    Copy Selected IDs ({selectedCount})
                                   </span>
                                 </button>
 
@@ -1743,7 +1883,7 @@ export default function AssetExplorer({
                         render={
                           <button
                             type="button"
-                            className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground rounded transition-colors"
+                            className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer"
                             onClick={() =>
                               document.dispatchEvent(new CustomEvent('ism-open-paste-ids'))
                             }
@@ -1754,6 +1894,29 @@ export default function AssetExplorer({
                       />
                       <TooltipContent>Manual Replace & Add IDs</TooltipContent>
                     </Tooltip>
+
+                    {/* Dedicated Quick Re-Apply Replacements Button (without spoof/download) */}
+                    {storedReplacementsCount > 0 && (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="h-7 px-2.5 flex items-center gap-1.5 text-xs text-primary bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded transition-colors disabled:opacity-50 cursor-pointer font-medium"
+                              onClick={() => void handleForceApplyReplacements()}
+                            >
+                              <RotateCcw size={12} className={isReplacing ? 'animate-spin' : ''} />
+                              <span>Apply IDs ({storedReplacementsCount})</span>
+                            </button>
+                          }
+                        />
+                        <TooltipContent>
+                          Force push stored ID replacements into Studio (Memory Injection + Plugin)
+                          without re-spoofing or downloading.
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
 
                   {/* Split Spoof/Download button with mode dropdown */}
@@ -1764,14 +1927,23 @@ export default function AssetExplorer({
                         data-tutorial-target="run-spoofer"
                         className="h-8 px-3 rounded-r-none rounded-l-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm"
                         onClick={() => {
+                          const targetPaths = computeTargetPaths();
+                          useSpooferStore.getState().setTargetPathsMap(targetPaths || {});
                           if (selectedAssetIds.size > 0) {
                             document.dispatchEvent(
                               new CustomEvent('ism-run-spoofer', {
-                                detail: { assetIds: Array.from(selectedAssetIds) },
+                                detail: {
+                                  assetIds: Array.from(selectedAssetIds),
+                                  targetPaths,
+                                },
                               }),
                             );
                           } else {
-                            document.dispatchEvent(new CustomEvent('ism-run-spoofer'));
+                            document.dispatchEvent(
+                              new CustomEvent('ism-run-spoofer', {
+                                detail: { targetPaths },
+                              }),
+                            );
                           }
                         }}
                         disabled={busy}
@@ -1784,11 +1956,11 @@ export default function AssetExplorer({
                         {isSpoofing
                           ? (t('spoof.runSpoofer') ?? 'Run Spoofer') + '…'
                           : config.spoofing.downloadOnly
-                            ? selectedAssetIds.size > 0
-                              ? `Download Selected (${selectedAssetIds.size})`
+                            ? selectedCount > 0
+                              ? `Download Selected (${selectedCount})`
                               : `Download All (${stats.displayed})`
-                            : selectedAssetIds.size > 0
-                              ? `Spoof Selected (${selectedAssetIds.size})`
+                            : selectedCount > 0
+                              ? `Spoof Selected (${selectedCount})`
                               : `Spoof All Assets (${stats.displayed})`}
                       </Button>
                       <PopoverTrigger
@@ -1807,7 +1979,7 @@ export default function AssetExplorer({
                       align="end"
                       side="top"
                       sideOffset={6}
-                      className="w-44 p-1 bg-bg-surface border border-border shadow-xl flex flex-col gap-0.5"
+                      className="w-48 p-1 bg-bg-surface border border-border shadow-xl flex flex-col gap-0.5"
                     >
                       <button
                         type="button"
@@ -1816,7 +1988,7 @@ export default function AssetExplorer({
                           setSpoofModeOpen(false);
                         }}
                         className={cn(
-                          'flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors',
+                          'flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors cursor-pointer',
                           !config.spoofing.downloadOnly
                             ? 'text-primary bg-primary/10 font-semibold'
                             : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
@@ -1843,7 +2015,7 @@ export default function AssetExplorer({
                           setSpoofModeOpen(false);
                         }}
                         className={cn(
-                          'flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors',
+                          'flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors cursor-pointer',
                           config.spoofing.downloadOnly
                             ? 'text-primary bg-primary/10 font-semibold'
                             : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
@@ -1865,33 +2037,35 @@ export default function AssetExplorer({
 
                       <button
                         type="button"
-                        onClick={async () => {
+                        onClick={() => {
                           setSpoofModeOpen(false);
-                          const lastReplacements =
-                            useSpooferStore.getState().lastReplacements || {};
-                          if (Object.keys(lastReplacements).length === 0) {
-                            showToast(
-                              'error',
-                              'No stored replacements to apply. Spoof some assets first!',
-                            );
-                            return;
-                          }
-                          try {
-                            const { queueStudioReplacements } =
-                              await import('../../utils/studioBridge');
-                            await queueStudioReplacements(lastReplacements);
-                            showToast(
-                              'success',
-                              `Re-sent ${Object.keys(lastReplacements).length} replacement(s) to Studio!`,
-                            );
-                          } catch (err) {
-                            showToast('error', `Failed to queue replacements: ${String(err)}`);
-                          }
+                          void handleForceApplyReplacements();
                         }}
-                        className="flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-elevated"
+                        className="flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-elevated cursor-pointer"
                       >
-                        <RotateCcw size={12} className="text-muted-foreground" />
+                        <RotateCcw size={12} className="text-primary" />
                         <span className="flex-1 font-medium">Re-apply Replacements</span>
+                        {storedReplacementsCount > 0 && (
+                          <span className="text-[10px] text-muted-foreground font-mono bg-bg-base px-1 rounded border border-border-subtle">
+                            {storedReplacementsCount}
+                          </span>
+                        )}
+                      </button>
+
+                      <div className="my-0.5 border-t border-border-subtle" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSpoofModeOpen(false);
+                          useSpooferStore.getState().setIsSpoofing(false);
+                          useSpooferStore.getState().setIsReplacing(false);
+                          useSpooferStore.getState().setIsScanningStudio(false);
+                          showToast('info', 'Button state reset. You can start a new spoof.');
+                        }}
+                        className="flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      >
+                        <X size={12} className="text-red-400" />
+                        <span className="flex-1 font-medium">Force Reset (Stuck?)</span>
                       </button>
                     </PopoverContent>
                   </Popover>

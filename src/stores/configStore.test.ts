@@ -82,6 +82,7 @@ describe('configStore', () => {
       data: {
         cookie: 'new_cookie',
         apiKey: 'new_key',
+        groupApiKey: '',
         profileCookies: {},
         accountSecrets: {},
       },

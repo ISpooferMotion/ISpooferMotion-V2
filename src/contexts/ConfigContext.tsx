@@ -197,17 +197,160 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setSpoofingLogs((prev) => appendSpoofingLog(prev, `[ERROR] ${e.payload.error}`));
         } else {
           setSpoofingLogs((prev) => appendSpoofingLog(prev, `[SUCCESS] ${message}`));
-          if (e.payload.replacements) {
-            // Merge the new batch's replacements with any previously-accumulated mappings
-            // from earlier runs in this session. Without this merge, assets that were already
-            // uploaded and skipped by skipExistingReplacements would never have their known
-            // old->new mappings re-sent to Studio, causing only a subset to be replaced.
+          // Always apply replacements when the backend emits them (even if the
+          // payload object exists but is empty, we still want to persist and
+          // re-send mappings that were skipped by skipExistingReplacements).
+          //
+          // IMPORTANT: Only send the NEW batch's replacements to Studio, not
+          // the full merged history. Sending 4000 stale mappings after a
+          // 2-asset re-spoof causes Studio plugin timeouts / silently dropped
+          // packets. The merge is only used for persisting to lastReplacements
+          // so that "Retry Replacement" covers all historical assets.
+          if (e.payload.replacements !== undefined) {
+            const newBatchReplacements: Record<string, string> = e.payload.replacements ?? {};
             const existingMappings = useSpooferStore.getState().lastReplacements;
             const mergedReplacements: Record<string, string> = {
               ...existingMappings,
-              ...e.payload.replacements,
+              ...newBatchReplacements,
             };
-            applyReplacements(mergedReplacements);
+            // Persist the full history for Retry Replacement button
+            useSpooferStore.getState().setLastReplacements(mergedReplacements);
+            // But only push the new batch to Studio — avoids flooding the
+            // plugin bridge with thousands of already-applied mappings
+            const toApply =
+              Object.keys(newBatchReplacements).length > 0
+                ? newBatchReplacements
+                : mergedReplacements;
+            applyReplacements(toApply, true);
+          }
+
+          // Auto-grant permissions to target experiences/users/groups if configured
+          const storeState = useConfigStore.getState();
+          const currentConfig = storeState.config;
+          const permissionsConfig = currentConfig.permissions;
+          if (permissionsConfig?.enabled && permissionsConfig.subjectIds?.trim()) {
+            const rawIds: unknown[] = [];
+            if (e.payload.replacements) {
+              rawIds.push(...Object.values(e.payload.replacements));
+            }
+            if (e.payload.assetResults) {
+              for (const r of e.payload.assetResults as any[]) {
+                const newId = r.new_asset_id || r.newAssetId;
+                if (newId) {
+                  rawIds.push(newId);
+                }
+              }
+            }
+
+            const newAssetIds: number[] = [];
+            for (const val of rawIds) {
+              const num = Number(val);
+              if (Number.isFinite(num) && num > 0 && !newAssetIds.includes(num)) {
+                newAssetIds.push(num);
+              }
+            }
+
+            if (newAssetIds.length > 0) {
+              const subjectIds = permissionsConfig.subjectIds
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean);
+
+              if (subjectIds.length > 0) {
+                const selectedUser = currentConfig.spoofing.selectedUser;
+                const accountSecrets = storeState.accountSecrets;
+                let apiKey =
+                  (selectedUser !== 'none' ? accountSecrets[selectedUser]?.apiKey : null) ||
+                  currentConfig.spoofing.apiKey?.trim() ||
+                  null;
+                let cookie =
+                  (selectedUser !== 'none' ? accountSecrets[selectedUser]?.cookie : null) ||
+                  currentConfig.spoofing.cookie?.trim() ||
+                  null;
+
+                // Fallback to any available account's secrets if selected user has none
+                if (!cookie && currentConfig.accounts?.length) {
+                  for (const acc of currentConfig.accounts) {
+                    const candidate = accountSecrets[acc.id]?.cookie?.trim();
+                    if (candidate) {
+                      cookie = candidate;
+                      break;
+                    }
+                  }
+                }
+                if (!apiKey && currentConfig.accounts?.length) {
+                  for (const acc of currentConfig.accounts) {
+                    const candidate = accountSecrets[acc.id]?.apiKey?.trim();
+                    if (candidate) {
+                      apiKey = candidate;
+                      break;
+                    }
+                  }
+                }
+
+                console.log(
+                  '[AssetPermissions] Auto-granting permissions for asset IDs:',
+                  newAssetIds,
+                  'to targets:',
+                  subjectIds,
+                  `(${permissionsConfig.subjectType})`,
+                  'Has Cookie:',
+                  Boolean(cookie),
+                  'Has API Key:',
+                  Boolean(apiKey),
+                );
+
+                setSpoofingLogs((prev) =>
+                  appendSpoofingLog(
+                    prev,
+                    `[INFO] Auto-granting permissions for ${newAssetIds.length} asset(s) to ${subjectIds.length} target(s) (${permissionsConfig.subjectType})...`,
+                  ),
+                );
+
+                import('@tauri-apps/api/core')
+                  .then(({ invoke }) =>
+                    invoke<{
+                      success_asset_ids: number[];
+                      failed_asset_ids: number[];
+                      errors: string[];
+                    }>('batch_grant_asset_permissions', {
+                      req: {
+                        asset_ids: newAssetIds,
+                        subject_type: permissionsConfig.subjectType,
+                        subject_ids: subjectIds,
+                        action: 'Use',
+                        api_key: apiKey,
+                        cookie: cookie,
+                      },
+                    }),
+                  )
+                  .then((res) => {
+                    console.log('[AssetPermissions] Response:', res);
+                    const okCount = res.success_asset_ids.length;
+                    const failCount = res.failed_asset_ids.length;
+                    const logMsg = `Permissions auto-grant complete: ${okCount} succeeded${failCount > 0 ? `, ${failCount} failed` : ''}`;
+                    setSpoofingLogs((prev) =>
+                      appendSpoofingLog(
+                        prev,
+                        failCount > 0 ? `[WARN] ${logMsg}` : `[SUCCESS] ${logMsg}`,
+                      ),
+                    );
+                    if (res.errors && res.errors.length > 0) {
+                      for (const err of res.errors) {
+                        console.error('[AssetPermissions] Error:', err);
+                        setSpoofingLogs((prev) => appendSpoofingLog(prev, `[ERROR] ${err}`));
+                      }
+                    }
+                    logIsm(failCount > 0 ? 'warn' : 'success', logMsg, false);
+                  })
+                  .catch((err) => {
+                    console.error('[AssetPermissions] Fatal error granting permissions:', err);
+                    const errMsg = `Failed to auto-grant permissions: ${String(err)}`;
+                    setSpoofingLogs((prev) => appendSpoofingLog(prev, `[ERROR] ${errMsg}`));
+                    logIsm('error', errMsg, false);
+                  });
+              }
+            }
           }
         }
       });

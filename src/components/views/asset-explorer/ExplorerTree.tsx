@@ -29,9 +29,34 @@ if (typeof window !== 'undefined') {
   });
 }
 
-export const getAssetId = (asset: ParsedAssetRef | { id: string; name: string }) => {
-  if ('assetId' in asset) return asset.assetId;
-  return asset.id ?? '';
+export const getAssetId = (
+  asset: ParsedAssetRef | { id?: string; assetId?: string; name?: string },
+) => {
+  if ('assetId' in asset && asset.assetId) return asset.assetId;
+  if ('id' in asset && asset.id) return asset.id;
+  return '';
+};
+
+export const getAssetKey = (
+  asset:
+    | ParsedAssetRef
+    | {
+        id?: string;
+        assetId?: string;
+        name?: string;
+        path?: string;
+        propertyName?: string;
+        type?: string;
+      },
+): string => {
+  const type = 'type' in asset && asset.type ? asset.type : 'asset';
+  const path = 'path' in asset && asset.path ? asset.path : '';
+  const prop = 'propertyName' in asset && asset.propertyName ? asset.propertyName : '';
+  const id = 'assetId' in asset && asset.assetId ? asset.assetId : ((asset as any).id ?? '');
+  if (path || prop) {
+    return `${type}:${path}:${prop}:${id}`;
+  }
+  return id;
 };
 
 export function getBrightPlaceIdColor(placeId: string): string {
@@ -54,9 +79,11 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   level,
   config,
   selectedAssetIds,
+  selectedAssetKeys,
   toggleAsset,
   toggleNode,
   getAllAssetIds,
+  getAllAssetKeys,
   setEnlargedImage,
   setPreviewingAnimation,
   activeAssetFilters,
@@ -70,9 +97,11 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   level: number;
   config: AppConfig;
   selectedAssetIds: Set<string>;
-  toggleAsset: (id: string, checked: boolean) => void;
+  selectedAssetKeys?: Set<string>;
+  toggleAsset: (assetOrKey: ParsedAssetRef | string, checked: boolean) => void;
   toggleNode: (node: RbxInstance, checked: boolean) => void;
   getAllAssetIds: (node: RbxInstance) => string[];
+  getAllAssetKeys?: (node: RbxInstance) => string[];
   setEnlargedImage: (value: { id: string; name: string } | null) => void;
   setPreviewingAnimation: (value: { id: string; name: string } | null) => void;
   activeAssetFilters: string[];
@@ -90,9 +119,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   const lastReplacements = useSpooferStore((s) => s.lastReplacements) ?? {};
 
   const [userExpanded, setExpanded] = useState(initialExpanded);
-  // Force-expand while a search is active so matches are visible without the
-  // user having to click every folder open.
-  const expanded = userExpanded || (searchQuery ?? '').trim().length > 0;
   // Cap the initial render to keep expanding huge folders (e.g. thousands of
   // Unverified Script IDs) from freezing the app. User can click 'show more'
   // to reveal the rest in chunks.
@@ -104,47 +130,72 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
     if (type === 'ghost') return true;
     return activeAssetFilters.includes(type);
   };
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-  const matchesSearch = (asset: ParsedAssetRef) => {
+  const normalizedSearch = (searchQuery ?? '').trim().toLowerCase();
+  const matchesSearch = (asset: ParsedAssetRef, targetNode: RbxInstance = node) => {
     if (!normalizedSearch) return true;
-    const id = (asset.assetId || '').toLowerCase();
-    const name = ('instanceName' in asset ? String(asset.instanceName || '') : '').toLowerCase();
-    const path = (asset.path || '').toLowerCase();
-    const propertyName = (asset.propertyName || '').toLowerCase();
-    const rawValue = (asset.rawValue || '').toLowerCase();
-    const nodeNameMatches = node.name.toLowerCase().includes(normalizedSearch);
+    const id = (asset?.assetId || '').toLowerCase();
+    const replacementId = (
+      asset?.assetId ? String(lastReplacements[asset.assetId] || '') : ''
+    ).toLowerCase();
+    const name = (
+      'instanceName' in (asset || {}) ? String(asset.instanceName || '') : ''
+    ).toLowerCase();
+    const path = (asset?.path || '').toLowerCase();
+    const propertyName = (asset?.propertyName || '').toLowerCase();
+    const rawValue = (asset?.rawValue || '').toLowerCase();
+    const nodeNameMatches = (targetNode?.name || '').toLowerCase().includes(normalizedSearch);
 
     return (
       nodeNameMatches ||
       id.includes(normalizedSearch) ||
+      replacementId.includes(normalizedSearch) ||
       name.includes(normalizedSearch) ||
       path.includes(normalizedSearch) ||
       propertyName.includes(normalizedSearch) ||
       rawValue.includes(normalizedSearch)
     );
   };
+
+  const hasMatchingDescendant = useMemo(() => {
+    if (!normalizedSearch && activeAssetFilters.length === 0) return true;
+    const check = (n: RbxInstance): boolean => {
+      if (!n) return false;
+      const assets = n.assets || [];
+      if (assets.some((a) => matchesFilter(a?.type || '') && matchesSearch(a, n))) return true;
+      const children = n.children || [];
+      return children.some((child) => check(child));
+    };
+    return check(node);
+  }, [node, activeAssetFilters, normalizedSearch, lastReplacements]);
+
   const filteredAssets = useMemo(() => {
-    return node.assets.filter((asset) => matchesFilter(asset.type) && matchesSearch(asset));
-  }, [node.assets, activeAssetFilters, normalizedSearch]);
+    return (node?.assets || []).filter(
+      (asset) => matchesFilter(asset?.type || '') && matchesSearch(asset, node),
+    );
+  }, [node?.assets, activeAssetFilters, normalizedSearch, lastReplacements]);
   const visibleAssets = useMemo(
     () => filteredAssets.slice(0, renderLimit),
     [filteredAssets, renderLimit],
   );
-  const hiddenAssetCount = filteredAssets.length - visibleAssets.length;
   const allIds = getAllAssetIds(node);
 
-  const hasMatchingDescendant = useMemo(() => {
-    const check = (n: RbxInstance): boolean => {
-      if (n.assets.some((a) => matchesFilter(a.type) && matchesSearch(a))) return true;
-      return n.children.some((child) => check(child));
-    };
-    return check(node);
-  }, [node, activeAssetFilters, normalizedSearch]);
+  const allKeys = useMemo(
+    () => (getAllAssetKeys ? getAllAssetKeys(node) : allIds),
+    [getAllAssetKeys, node, allIds],
+  );
 
+  // Guard after ALL hooks have executed so hook call count is always constant
   if (!hasMatchingDescendant) return null;
 
-  const selectedCount = allIds.filter((id) => selectedAssetIds.has(id)).length;
-  const isChecked = selectedCount === allIds.length;
+  const hiddenAssetCount = filteredAssets.length - visibleAssets.length;
+  // Force-expand while a search is active so matches are visible without the
+  // user having to click every folder open, but only for branches with matches.
+  const expanded = userExpanded || (Boolean(normalizedSearch) && hasMatchingDescendant);
+
+  const selectedCount = allKeys.filter((k) =>
+    selectedAssetKeys ? selectedAssetKeys.has(k) : selectedAssetIds.has(k),
+  ).length;
+  const isChecked = allKeys.length > 0 && selectedCount === allKeys.length;
 
   const getTypeIconSrc = (asset: ParsedAssetRef) => {
     if (asset.type === 'animation' || asset.type === 'raw_keyframe_sequence')
@@ -184,9 +235,13 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   const renderAssetRow = (asset: ParsedAssetRef) => {
     // Compact single-line row item: [Icon] + [Asset Name] + optional [Lock]
     const assetId = getAssetId(asset);
+    const assetKey = getAssetKey(asset);
     const pinnedPlaceId = assetId ? assetForcePlaceIds[assetId] : undefined;
     const instanceCount = (asset as ParsedAssetRef & { instanceCount?: number }).instanceCount;
     const isInspected = activeInspectAssetId === assetId;
+    const isSelected = selectedAssetKeys
+      ? selectedAssetKeys.has(assetKey)
+      : selectedAssetIds.has(assetId);
 
     const handleRowClick = () => {
       setActiveInspectAsset(asset);
@@ -203,7 +258,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
         onClick={handleRowClick}
         onMouseEnter={() => {
           if (isDragSelecting) {
-            toggleAsset(assetId, dragTargetChecked);
+            toggleAsset(asset, dragTargetChecked);
           }
         }}
       >
@@ -212,19 +267,19 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           onMouseDown={(e: React.MouseEvent) => {
             e.stopPropagation();
             isDragSelecting = true;
-            dragTargetChecked = !selectedAssetIds.has(assetId);
-            toggleAsset(assetId, dragTargetChecked);
+            dragTargetChecked = !isSelected;
+            toggleAsset(asset, dragTargetChecked);
           }}
           onMouseEnter={() => {
             if (isDragSelecting) {
-              toggleAsset(assetId, dragTargetChecked);
+              toggleAsset(asset, dragTargetChecked);
             }
           }}
           onClick={(e: React.MouseEvent) => {
             e.stopPropagation();
           }}
         >
-          <Checkbox checked={selectedAssetIds.has(assetId)} />
+          <Checkbox checked={isSelected} />
         </div>
 
         <div className="w-4 h-4 shrink-0 mr-2 flex items-center justify-center">
@@ -650,16 +705,18 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             </div>
           )}
 
-          {node.children.map((child: RbxInstance) => (
+          {(node.children || []).map((child: RbxInstance) => (
             <ExplorerTreeNode
               key={child.referent}
               node={child}
               level={level + 1}
               config={config}
               selectedAssetIds={selectedAssetIds}
+              selectedAssetKeys={selectedAssetKeys}
               toggleAsset={toggleAsset}
               toggleNode={toggleNode}
               getAllAssetIds={getAllAssetIds}
+              getAllAssetKeys={getAllAssetKeys}
               setEnlargedImage={setEnlargedImage}
               setPreviewingAnimation={setPreviewingAnimation}
               activeAssetFilters={activeAssetFilters}

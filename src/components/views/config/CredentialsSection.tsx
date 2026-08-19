@@ -28,7 +28,8 @@ export default function CredentialsSection() {
   const { config, updateConfig, updateCategory } = useConfig();
   const [manualCookieEdit, setManualCookieEdit] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus>('idle');
-  const [apiKeyStatus, setApiKeyStatus] = useState<AuthStatus>('idle');
+  const [userApiKeyStatus, setUserApiKeyStatus] = useState<AuthStatus>('idle');
+  const [groupApiKeyStatus, setGroupApiKeyStatus] = useState<AuthStatus>('idle');
   const { saveSecrets } = useConfigStore();
 
   const autoDetectEnabled = Boolean(
@@ -36,7 +37,8 @@ export default function CredentialsSection() {
   );
   const cookieReadOnly = autoDetectEnabled && !manualCookieEdit;
   const cookieVal = config.spoofing?.cookie ?? '';
-  const apiKeyVal = config.spoofing?.apiKey ?? '';
+  const userApiKeyVal = config.spoofing?.apiKey ?? '';
+  const groupApiKeyVal = config.spoofing?.groupApiKey ?? '';
 
   const getCookieDetectionMode = () => {
     if (config.advanced?.autoCookieStudio) return 'studio';
@@ -148,34 +150,49 @@ export default function CredentialsSection() {
     return () => window.clearTimeout(timer);
   }, [cookieVal, cookieReadOnly]);
 
-  const handleValidateApiKey = async () => {
-    const key = apiKeyVal.trim();
+  const handleValidateApiKey = async (target: 'user' | 'group') => {
+    const isUser = target === 'user';
+    const key = (isUser ? userApiKeyVal : groupApiKeyVal).trim();
+    const setStatus = isUser ? setUserApiKeyStatus : setGroupApiKeyStatus;
+
     if (key.length < 20) {
-      setApiKeyStatus('error');
-      logIsm('warn', 'Paste an Open Cloud API key before validating.', true);
+      setStatus('error');
+      logIsm(
+        'warn',
+        `Paste a ${isUser ? 'User' : 'Group'} Open Cloud API key before validating.`,
+        true,
+      );
       return;
     }
 
-    setApiKeyStatus('loading');
+    setStatus('loading');
     try {
       const result = await invoke<ApiKeyOwnerDetectResult>('detect_opencloud_api_key_owner', {
         key,
       });
       const message = result.message || 'No validation details returned.';
       if (result.ok) {
-        setApiKeyStatus('success');
-        logIsm('success', message, true);
+        setStatus('success');
+        logIsm('success', `[${isUser ? 'User' : 'Group'} API Key] ${message}`, true);
         void saveSecrets();
       } else if (/invalid|unauthorized/i.test(message)) {
-        setApiKeyStatus('error');
-        logIsm('warn', message, true);
+        setStatus('error');
+        logIsm('warn', `[${isUser ? 'User' : 'Group'} API Key] ${message}`, true);
       } else {
-        setApiKeyStatus('idle');
-        logIsm('warn', `Could not fully verify the Open Cloud API key: ${message}`, true);
+        setStatus('idle');
+        logIsm(
+          'warn',
+          `Could not fully verify the ${isUser ? 'User' : 'Group'} Open Cloud API key: ${message}`,
+          true,
+        );
       }
     } catch (error) {
-      setApiKeyStatus('error');
-      logIsm('warn', `Open Cloud API key validation failed: ${String(error)}`, true);
+      setStatus('error');
+      logIsm(
+        'warn',
+        `${isUser ? 'User' : 'Group'} Open Cloud API key validation failed: ${String(error)}`,
+        true,
+      );
     }
   };
 
@@ -261,21 +278,22 @@ export default function CredentialsSection() {
         />
       </div>
 
-      {/* Open Cloud API Key Row */}
+      {/* User Open Cloud API Key Row */}
       <div className="flex flex-col gap-2 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
         <div className="space-y-0.5">
-          <Label className="text-sm font-semibold text-text-primary">{t('spoof.apiKey')}</Label>
+          <Label className="text-sm font-semibold text-text-primary">User Open Cloud API Key</Label>
           <p className="text-xs text-text-secondary leading-relaxed">
-            Open Cloud API Key with Asset Permissions for uploading animations and audio.
+            API key with Asset Permissions for uploading animations and audio to your personal
+            Roblox account.
           </p>
         </div>
         <div className="relative">
           <Input
             type="password"
-            placeholder={t('spoof.apiKeyPlaceholder')}
-            value={apiKeyVal}
+            placeholder="Paste User Open Cloud API Key..."
+            value={userApiKeyVal}
             onChange={(e) => {
-              setApiKeyStatus('idle');
+              setUserApiKeyStatus('idle');
               updateConfig('spoofing', 'apiKey', e.target.value);
             }}
             className="pr-20 h-8 text-xs bg-bg-base"
@@ -283,21 +301,21 @@ export default function CredentialsSection() {
           <div className="absolute right-1 top-0 h-full flex items-center gap-0.5">
             <button
               type="button"
-              onClick={handleValidateApiKey}
-              className="p-1 rounded text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+              onClick={() => void handleValidateApiKey('user')}
+              className="p-1 rounded text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 cursor-pointer"
               aria-label={t('common.apply')}
               title={t('misc.validateOpenCloudKey')}
-              disabled={apiKeyStatus === 'loading'}
+              disabled={userApiKeyStatus === 'loading'}
             >
-              {apiKeyStatus === 'loading' ? (
+              {userApiKeyStatus === 'loading' ? (
                 <Loader2 size={15} className="animate-spin" />
               ) : (
                 <ShieldCheck
                   size={15}
                   className={
-                    apiKeyStatus === 'success'
+                    userApiKeyStatus === 'success'
                       ? 'text-green-500'
-                      : apiKeyStatus === 'error'
+                      : userApiKeyStatus === 'error'
                         ? 'text-red-500'
                         : undefined
                   }
@@ -307,7 +325,66 @@ export default function CredentialsSection() {
             <button
               type="button"
               onClick={() => void handleOpenApiDashboard()}
-              className="p-1 rounded text-muted-foreground hover:text-primary transition-colors"
+              className="p-1 rounded text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+              aria-label={t('spoof.openApiDashboard')}
+              title={t('spoof.openApiDashboard')}
+            >
+              <ExternalLink size={15} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Group Open Cloud API Key Row */}
+      <div className="flex flex-col gap-2 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
+        <div className="space-y-0.5">
+          <Label className="text-sm font-semibold text-text-primary">
+            Group Open Cloud API Key
+          </Label>
+          <p className="text-xs text-text-secondary leading-relaxed">
+            API key with Asset Permissions created specifically for uploading assets to your Roblox
+            Groups.
+          </p>
+        </div>
+        <div className="relative">
+          <Input
+            type="password"
+            placeholder="Paste Group Open Cloud API Key..."
+            value={groupApiKeyVal}
+            onChange={(e) => {
+              setGroupApiKeyStatus('idle');
+              updateConfig('spoofing', 'groupApiKey', e.target.value);
+            }}
+            className="pr-20 h-8 text-xs bg-bg-base"
+          />
+          <div className="absolute right-1 top-0 h-full flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => void handleValidateApiKey('group')}
+              className="p-1 rounded text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 cursor-pointer"
+              aria-label={t('common.apply')}
+              title={t('misc.validateOpenCloudKey')}
+              disabled={groupApiKeyStatus === 'loading'}
+            >
+              {groupApiKeyStatus === 'loading' ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <ShieldCheck
+                  size={15}
+                  className={
+                    groupApiKeyStatus === 'success'
+                      ? 'text-green-500'
+                      : groupApiKeyStatus === 'error'
+                        ? 'text-red-500'
+                        : undefined
+                  }
+                />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleOpenApiDashboard()}
+              className="p-1 rounded text-muted-foreground hover:text-primary transition-colors cursor-pointer"
               aria-label={t('spoof.openApiDashboard')}
               title={t('spoof.openApiDashboard')}
             >

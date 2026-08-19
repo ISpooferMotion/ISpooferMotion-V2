@@ -33,7 +33,7 @@ struct JobContext {
     batch_urls: HashMap<String, String>,
     batch_metadata: HashMap<String, AssetDetails>,
     enable_archive_recovery: bool,
-    operation_poll_interval_ms: Option<u64>,
+    operation_poll_interval_ms: Option<u32>,
 
     // Shared tracking state
     success_count: AtomicUsize,
