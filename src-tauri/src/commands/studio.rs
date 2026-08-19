@@ -37,7 +37,8 @@ pub(crate) fn parse_replacements_map(
                         (n.to_string(), None)
                     } else if let Some(n) = new_id.as_i64() {
                         (n.to_string(), None)
-                    } else if let Some(obj) = new_id.as_object() {
+                    } else {
+                        let obj = new_id.as_object()?;
                         let new_id_str = if let Some(s) =
                             obj.get("newId").and_then(serde_json::Value::as_str)
                         {
@@ -45,16 +46,12 @@ pub(crate) fn parse_replacements_map(
                         } else if let Some(n) = obj.get("newId").and_then(serde_json::Value::as_u64)
                         {
                             n.to_string()
-                        } else if let Some(n) = obj.get("newId").and_then(serde_json::Value::as_i64)
-                        {
-                            n.to_string()
                         } else {
-                            return None;
+                            let n = obj.get("newId").and_then(serde_json::Value::as_i64)?;
+                            n.to_string()
                         };
                         let targets = obj.get("targetPaths").cloned();
                         (new_id_str, targets)
-                    } else {
-                        return None;
                     };
                     if new_id_str.is_empty() || new_id_str == original_id {
                         return None;
