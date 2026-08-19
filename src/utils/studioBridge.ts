@@ -3,8 +3,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { addDebugLog } from './debugLogger';
 import { DEFAULT_PLUGIN_PORT, findPluginBridgePort } from './pluginBridge';
 
-import { useSpooferStore } from '../stores/spooferStore';
-
 export async function queueStudioReplacements(
   replacements: Record<string, string>,
   targetPathsMap?: Record<string, string[]>,
@@ -14,7 +12,7 @@ export async function queueStudioReplacements(
     return;
   }
   const pluginPort = (await findPluginBridgePort()) || DEFAULT_PLUGIN_PORT;
-  const targets = targetPathsMap ?? useSpooferStore.getState().targetPathsMap ?? {};
+  const targets = targetPathsMap ?? {};
   const hasAnyTargets = Object.values(targets).some((t) => t && t.length > 0);
 
   const replacementsPayload = hasAnyTargets

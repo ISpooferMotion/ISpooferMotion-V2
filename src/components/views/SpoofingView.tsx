@@ -26,7 +26,7 @@ import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
 import { useConfigStore } from '../../stores/configStore';
-import { useSpooferStore } from '../../stores/spooferStore';
+import { applyReplacements, useSpooferStore } from '../../stores/spooferStore';
 import { cn } from '../../utils/cn';
 import { addDebugLog } from '../../utils/debugLogger';
 import { type PendingSpoofRetry, takeSpoofRetry } from '../../utils/jobTypes';
@@ -46,7 +46,6 @@ import {
   validateCookieProfile,
 } from '../../utils/robloxProfiles';
 import { appendSpoofingLog } from '../../utils/spoofingLogs';
-import { queueStudioReplacements } from '../../utils/studioBridge';
 import { triggerStudioScan } from '../../utils/studioScan';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 import PasteIdsModal from '../modals/PasteIdsModal';
@@ -114,12 +113,10 @@ export default function SpoofingView() {
     lastAssetResults,
     setIsSpoofing,
     setSpoofProgress,
-    setReplaceError,
     failedReplacements,
     setFailedReplacements,
     isReplacing,
     replaceError,
-    setIsReplacing,
     activeSpooferJobId,
     isJobPaused,
     setIsJobPaused,
@@ -375,14 +372,21 @@ export default function SpoofingView() {
 
   const buildRetryRunContext = async (retry: PendingSpoofRetry): Promise<SpooferRunContext> => {
     const selectedUserId = retry.selectedUserId || config.spoofing.selectedUser;
+    const selectedGroupId = retry.selectedGroupId ?? config.spoofing.selectedGroup;
     let cookie = config.spoofing.cookie.trim();
-    let apiKey = config.spoofing.apiKey.trim();
+    const isGroupUpload = Boolean(selectedGroupId && selectedGroupId !== 'none');
+    let apiKey =
+      (isGroupUpload
+        ? config.spoofing.groupApiKey?.trim() || config.spoofing.apiKey?.trim()
+        : config.spoofing.apiKey?.trim() || config.spoofing.groupApiKey?.trim()) || '';
 
     try {
       const secrets =
         await invoke<Record<string, Record<string, unknown> | unknown>>('load_profile_secrets');
-      if (typeof secrets?.apiKey === 'string') {
-        apiKey = secrets.apiKey;
+      if (isGroupUpload && typeof secrets?.groupApiKey === 'string' && secrets.groupApiKey.trim()) {
+        apiKey = secrets.groupApiKey.trim();
+      } else if (typeof secrets?.apiKey === 'string' && secrets.apiKey.trim()) {
+        apiKey = secrets.apiKey.trim();
       }
 
       const profileCookies = secrets?.profileCookies;
@@ -417,7 +421,7 @@ export default function SpoofingView() {
 
     return {
       selectedUserId,
-      selectedGroupId: retry.selectedGroupId ?? config.spoofing.selectedGroup,
+      selectedGroupId,
       cookie,
       apiKey,
       spoofSounds: retry.spoofSounds ?? config.spoofing.audio,
@@ -501,20 +505,7 @@ export default function SpoofingView() {
 
   const handleRetryReplacement = async () => {
     if (Object.keys(lastReplacements).length === 0) return;
-
-    setIsReplacing(true);
-    setReplaceError(false);
-    try {
-      await queueStudioReplacements(lastReplacements);
-      setLogs((prev) => appendSpoofingLog(prev, '[SUCCESS] Queued replacements for Studio.\n'));
-    } catch (error) {
-      setLogs((prev) =>
-        appendSpoofingLog(prev, `[WARN] Studio replacement queueing failed: ${String(error)}\n`),
-      );
-      setReplaceError(true);
-    } finally {
-      setIsReplacing(false);
-    }
+    await applyReplacements(lastReplacements);
   };
 
   const validateApiKeyForRun = async (apiKey: string, selectedUser: string): Promise<boolean> => {
@@ -583,11 +574,31 @@ export default function SpoofingView() {
     skipQuotaWarning = false,
     runContext?: SpooferRunContext,
   ) => {
-    const cookie = (runContext?.cookie ?? config.spoofing.cookie).trim();
-    const apiKey = (runContext?.apiKey ?? config.spoofing.apiKey).trim();
+    // Guard: prevent double-start if a job is already running.
+    // This is the root cause of the "button does nothing" bug — isSpoofing
+    // can get stuck true if the spoofer-result Tauri event is never received
+    // (e.g. Rust panic, listener race condition). The force-reset button in the
+    // UI handles recovery without requiring an app restart.
+    if (useSpooferStore.getState().isSpoofing) {
+      logIsm(
+        'warn',
+        'A spoofing job is already running. Wait for it to finish or use Force Reset.',
+        true,
+      );
+      return;
+    }
 
     const selectedUser = runContext?.selectedUserId ?? config.spoofing.selectedUser;
     const selectedGroup = runContext?.selectedGroupId ?? config.spoofing.selectedGroup;
+
+    const isGroupUpload = selectedGroup !== 'none';
+    const effectiveApiKey = isGroupUpload
+      ? config.spoofing.groupApiKey?.trim() || config.spoofing.apiKey?.trim() || ''
+      : config.spoofing.apiKey?.trim() || config.spoofing.groupApiKey?.trim() || '';
+
+    const cookie = (runContext?.cookie ?? config.spoofing.cookie).trim();
+    const apiKey = (runContext?.apiKey ?? effectiveApiKey).trim();
+
     const spoofSounds = runContext?.spoofSounds ?? config.spoofing.audio;
     const uploadTypes = runContext?.uploadTypes ?? config.spoofing.uploadTypes;
     // Emit a persistent log line at every early-return so users can see WHY
@@ -729,19 +740,7 @@ export default function SpoofingView() {
     const apiKeyReady = await validateApiKeyForRun(apiKey, selectedUser);
     if (!apiKeyReady) return;
 
-    // Filter out assets that have already been spoofed unless forced via runContext override
-    const activeReplacements = useSpooferStore.getState().lastReplacements;
-    const idsToSpoof = Array.from(finalAssetIds).filter((id) => {
-      if (runContext?.assetTypes?.[id]) return true; // Explicit retry
-      return !activeReplacements[id];
-    });
-
-    if (idsToSpoof.length === 0) {
-      logIsm('info', 'All selected assets have already been spoofed.', true);
-      return;
-    }
-
-    const finalAssetsPayload = idsToSpoof.map((id) => {
+    const finalAssetsPayload = Array.from(finalAssetIds).map((id) => {
       const info = assetInfoMap.get(id);
       const overrideType = runContext?.assetTypes?.[id];
       const normalizedOverrideType =
@@ -760,8 +759,25 @@ export default function SpoofingView() {
       return { id, type, name, rawValue: info?.rawValue };
     });
 
-    setIsSpoofing(true);
     setSpoofProgress(0);
+    setIsSpoofing(true);
+
+    // Safety net: if spoofer-result Tauri event is never received (Rust panic,
+    // listener race condition, etc.), isSpoofing would stay true forever and
+    // lock the button. Reset after 10 minutes as an absolute last resort.
+    const safetyResetTimer = window.setTimeout(
+      () => {
+        if (useSpooferStore.getState().isSpoofing) {
+          useSpooferStore.getState().setIsSpoofing(false);
+          logIsm(
+            'warn',
+            'Spoofing job timed out after 10 minutes without a result — button reset automatically. Check the Console for errors.',
+            true,
+          );
+        }
+      },
+      10 * 60 * 1000,
+    );
 
     try {
       const currentUser = users.find((user) => String(user.id) === String(selectedUser));
@@ -852,9 +868,15 @@ export default function SpoofingView() {
         },
       });
     } catch (err) {
+      // invoke() threw synchronously (e.g. IPC serialization error)
+      // — reset immediately since spoofer-result will never arrive.
       logIsm('error', 'Failed to start spoofer: ' + err, true);
+      clearTimeout(safetyResetTimer);
       setIsSpoofing(false);
     }
+    // NOTE: no finally setIsSpoofing(false) here — the normal success path
+    // gets reset by the spoofer-result Tauri event in ConfigContext.
+    // The safetyResetTimer above handles the stuck case.
   };
 
   handleRunSpooferRef.current = handleRunSpoofer;

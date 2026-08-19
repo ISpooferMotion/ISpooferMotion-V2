@@ -213,6 +213,16 @@ export const commands = {
     typedError<boolean, AppError>(
       __TAURI_INVOKE('patch_asset_permissions', { assetId, universeId, cookie, csrfToken }),
     ),
+  /**
+   *  Grants access permissions to multiple assets for experiences, users, or groups
+   *  via the Roblox Asset Permissions API (Creator Hub PATCH endpoint).
+   *
+   *  Handles pacing and retry backoff to prevent hitting Roblox rate limits.
+   */
+  batchGrantAssetPermissions: (req: BatchGrantPermissionsRequest) =>
+    typedError<BatchGrantPermissionsResponse, AppError>(
+      __TAURI_INVOKE('batch_grant_asset_permissions', { req }),
+    ),
   setAssetPrivacy: (assetId: string, privacyStatus: string, cookie: string, csrfToken: string) =>
     typedError<boolean, AppError>(
       __TAURI_INVOKE('set_asset_privacy', { assetId, privacyStatus, cookie, csrfToken }),
@@ -323,6 +333,21 @@ export type AssetExplorerItem = {
   creatorType: string;
   creatorId: string;
   isModerated: boolean;
+};
+
+export type BatchGrantPermissionsRequest = {
+  asset_ids: (number | null)[];
+  subject_type: string;
+  subject_ids: string[];
+  action: string;
+  api_key: string | null;
+  cookie: string | null;
+};
+
+export type BatchGrantPermissionsResponse = {
+  success_asset_ids: (number | null)[];
+  failed_asset_ids: (number | null)[];
+  errors: string[];
 };
 
 export type FetchAssetsRequest = {

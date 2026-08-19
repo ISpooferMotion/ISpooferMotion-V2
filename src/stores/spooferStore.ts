@@ -412,7 +412,10 @@ export const useSpooferStore = create<SpooferState>((set) => ({
  * This is the final step of the spoofing pipeline. It translates our successful
  * web API uploads into actual game modifications.
  */
-export const applyReplacements = async (replacements: Record<string, string>) => {
+export const applyReplacements = async (
+  replacements: Record<string, string>,
+  skipPersist = false,
+) => {
   if (!isTauriRuntime()) return;
   const { config } = useConfigStore.getState();
   const { setSpoofingLogs, setLastReplacements, setIsReplacing, setReplaceError } =
@@ -453,12 +456,13 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
     // to the plugin bridge. If memory injection already replaced a value,
     // the plugin's scan will see the new id and plan_patches produces no
     // patch for it -- idempotent, no double work.
-    // The spoof job itself (download + upload) already finished successfully
-    // before we get here -- the replacements map is populated. Persist it
-    // NOW so it survives any subsequent apply-step failures. Otherwise a
-    // user who spoofs without Studio open loses the mapping table entirely
-    // when the apply step throws, even though the assets were uploaded.
-    setLastReplacements(replacements);
+    //
+    // skipPersist=true when called from ConfigContext, which already
+    // persisted the full merged history (including previous runs).
+    // For all other callers (PasteIdsModal, AssetExplorer) persist here.
+    if (!skipPersist) {
+      setLastReplacements(replacements);
+    }
 
     if (config.advanced.memoryInjectionEnabled) {
       setSpoofingLogs((prev) => appendSpoofingLog(prev, 'Starting Memory Injection (Beta)...'));
@@ -494,7 +498,7 @@ export const applyReplacements = async (replacements: Record<string, string>) =>
     }
 
     try {
-      await queueStudioReplacements(replacements);
+      await queueStudioReplacements(replacements, useSpooferStore.getState().targetPathsMap);
       setSpoofingLogs((prev) =>
         appendSpoofingLog(
           prev,

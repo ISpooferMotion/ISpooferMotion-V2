@@ -6,6 +6,7 @@ import {
   Laptop,
   Palette,
   ShieldAlert,
+  ShieldCheck,
   TriangleAlert,
   Wrench,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ import BehaviorCard from './settings/BehaviorCard';
 import CredentialsCard from './settings/CredentialsCard';
 import DangerCard from './settings/DangerCard';
 import DebugCard from './settings/DebugCard';
+import PermissionsCard from './settings/PermissionsCard';
 import ExclusionsSection from './config/ExclusionsSection';
 import RoutingSection from './config/RoutingSection';
 import UploadSection from './config/UploadSection';
@@ -37,6 +39,7 @@ export default function SettingsView() {
 
   const tabs = [
     { id: 'credentials', label: t('spoof.options') || 'Credentials', icon: <KeyRound size={15} /> },
+    { id: 'permissions', label: 'Permissions', icon: <ShieldCheck size={15} /> },
     { id: 'appearance', label: t('settings.appearance'), icon: <Palette size={15} /> },
     { id: 'behavior', label: t('settings.behavior'), icon: <Laptop size={15} /> },
     { id: 'upload', label: t('config.assetProcessing'), icon: <ArrowDownUp size={15} /> },
@@ -151,6 +154,10 @@ export default function SettingsView() {
         >
           <div id="section-credentials" className="scroll-mt-4">
             <CredentialsCard />
+          </div>
+
+          <div id="section-permissions" className="scroll-mt-4">
+            <PermissionsCard />
           </div>
 
           <div id="section-appearance" className="scroll-mt-4">

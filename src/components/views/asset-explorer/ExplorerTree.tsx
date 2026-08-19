@@ -119,9 +119,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   const lastReplacements = useSpooferStore((s) => s.lastReplacements) ?? {};
 
   const [userExpanded, setExpanded] = useState(initialExpanded);
-  // Force-expand while a search is active so matches are visible without the
-  // user having to click every folder open.
-  const expanded = userExpanded || (searchQuery ?? '').trim().length > 0;
   // Cap the initial render to keep expanding huge folders (e.g. thousands of
   // Unverified Script IDs) from freezing the app. User can click 'show more'
   // to reveal the rest in chunks.
@@ -133,49 +130,68 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
     if (type === 'ghost') return true;
     return activeAssetFilters.includes(type);
   };
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-  const matchesSearch = (asset: ParsedAssetRef) => {
+  const normalizedSearch = (searchQuery ?? '').trim().toLowerCase();
+  const matchesSearch = (asset: ParsedAssetRef, targetNode: RbxInstance = node) => {
     if (!normalizedSearch) return true;
-    const id = (asset.assetId || '').toLowerCase();
-    const name = ('instanceName' in asset ? String(asset.instanceName || '') : '').toLowerCase();
-    const path = (asset.path || '').toLowerCase();
-    const propertyName = (asset.propertyName || '').toLowerCase();
-    const rawValue = (asset.rawValue || '').toLowerCase();
-    const nodeNameMatches = node.name.toLowerCase().includes(normalizedSearch);
+    const id = (asset?.assetId || '').toLowerCase();
+    const replacementId = (
+      asset?.assetId ? String(lastReplacements[asset.assetId] || '') : ''
+    ).toLowerCase();
+    const name = (
+      'instanceName' in (asset || {}) ? String(asset.instanceName || '') : ''
+    ).toLowerCase();
+    const path = (asset?.path || '').toLowerCase();
+    const propertyName = (asset?.propertyName || '').toLowerCase();
+    const rawValue = (asset?.rawValue || '').toLowerCase();
+    const nodeNameMatches = (targetNode?.name || '').toLowerCase().includes(normalizedSearch);
 
     return (
       nodeNameMatches ||
       id.includes(normalizedSearch) ||
+      replacementId.includes(normalizedSearch) ||
       name.includes(normalizedSearch) ||
       path.includes(normalizedSearch) ||
       propertyName.includes(normalizedSearch) ||
       rawValue.includes(normalizedSearch)
     );
   };
+
+  const hasMatchingDescendant = useMemo(() => {
+    if (!normalizedSearch && activeAssetFilters.length === 0) return true;
+    const check = (n: RbxInstance): boolean => {
+      if (!n) return false;
+      const assets = n.assets || [];
+      if (assets.some((a) => matchesFilter(a?.type || '') && matchesSearch(a, n))) return true;
+      const children = n.children || [];
+      return children.some((child) => check(child));
+    };
+    return check(node);
+  }, [node, activeAssetFilters, normalizedSearch, lastReplacements]);
+
   const filteredAssets = useMemo(() => {
-    return node.assets.filter((asset) => matchesFilter(asset.type) && matchesSearch(asset));
-  }, [node.assets, activeAssetFilters, normalizedSearch]);
+    return (node?.assets || []).filter(
+      (asset) => matchesFilter(asset?.type || '') && matchesSearch(asset, node),
+    );
+  }, [node?.assets, activeAssetFilters, normalizedSearch, lastReplacements]);
   const visibleAssets = useMemo(
     () => filteredAssets.slice(0, renderLimit),
     [filteredAssets, renderLimit],
   );
-  const hiddenAssetCount = filteredAssets.length - visibleAssets.length;
   const allIds = getAllAssetIds(node);
-
-  const hasMatchingDescendant = useMemo(() => {
-    const check = (n: RbxInstance): boolean => {
-      if (n.assets.some((a) => matchesFilter(a.type) && matchesSearch(a))) return true;
-      return n.children.some((child) => check(child));
-    };
-    return check(node);
-  }, [node, activeAssetFilters, normalizedSearch]);
-
-  if (!hasMatchingDescendant) return null;
 
   const allKeys = useMemo(
     () => (getAllAssetKeys ? getAllAssetKeys(node) : allIds),
     [getAllAssetKeys, node, allIds],
   );
+
+  // Guard after ALL hooks have executed so hook call count is always constant
+  if (!hasMatchingDescendant) return null;
+
+  const hiddenAssetCount = filteredAssets.length - visibleAssets.length;
+  // Force-expand while a search is active so matches are visible without the
+  // user having to click every folder open, but only for branches with matches.
+  const expanded = userExpanded || (Boolean(normalizedSearch) && hasMatchingDescendant);
+
   const selectedCount = allKeys.filter((k) =>
     selectedAssetKeys ? selectedAssetKeys.has(k) : selectedAssetIds.has(k),
   ).length;
@@ -689,7 +705,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             </div>
           )}
 
-          {node.children.map((child: RbxInstance) => (
+          {(node.children || []).map((child: RbxInstance) => (
             <ExplorerTreeNode
               key={child.referent}
               node={child}

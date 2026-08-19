@@ -46,12 +46,23 @@ export const AppConfigSchema = z.object({
     scriptRefs: z.boolean().default(true),
     cookie: z.string().default(''),
     apiKey: z.string().default(''),
+    groupApiKey: z.string().default(''),
     enableSpoofing: z.boolean().default(false),
     uploadTypes: z.array(z.string()).default(['animation', 'audio', 'image', 'mesh', 'script_ref']),
     downloadOnly: z.boolean().default(false),
     downloadPath: z.string().default(''),
     extraAssetIds: z.string().default(''),
     preserveMetadata: z.boolean().default(true),
+  }),
+  permissions: z.object({
+    /** Whether to automatically grant permissions after a successful spoof. */
+    enabled: z.boolean().default(false),
+    /** "experience" = place/universe, "user" = userId, "group" = groupId */
+    subjectType: z.enum(['experience', 'user', 'group']).default('experience'),
+    /** Comma-separated list of IDs to grant access to. */
+    subjectIds: z.string().default(''),
+    /** Roblox Asset Permissions API only supports 'Use' action. */
+    action: z.literal('Use').default('Use'),
   }),
   ui: z.object({
     activeTab: z.string().default('spoofing'),
@@ -121,12 +132,19 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     scriptRefs: true,
     cookie: '',
     apiKey: '',
+    groupApiKey: '',
     enableSpoofing: false,
     uploadTypes: ['animation', 'audio', 'image', 'mesh', 'script_ref'],
     downloadOnly: false,
     downloadPath: '',
     extraAssetIds: '',
     preserveMetadata: true,
+  },
+  permissions: {
+    enabled: false,
+    subjectType: 'experience' as const,
+    subjectIds: '',
+    action: 'Use' as const,
   },
   ui: {
     activeTab: 'spoofing',
@@ -214,6 +232,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
         advanced: mergeKnownKeys(DEFAULT_APP_CONFIG.advanced, p.advanced),
         debug: mergeKnownKeys(DEFAULT_APP_CONFIG.debug, p.debug),
         spoofing: mergeKnownKeys(DEFAULT_APP_CONFIG.spoofing, p.spoofing),
+        permissions: mergeKnownKeys(DEFAULT_APP_CONFIG.permissions, p.permissions),
         ui: {
           ...mergeKnownKeys(DEFAULT_APP_CONFIG.ui, p.ui),
           settingsSections: mergeSections(
@@ -230,6 +249,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
       };
       initConfig.spoofing.cookie = '';
       initConfig.spoofing.apiKey = '';
+      initConfig.spoofing.groupApiKey = '';
       // Clamp concurrency values to the backend's accepted [1, 100] range
       // in case an older build let the user save a larger value (the input
       // was uncapped before we added a max attribute + backend hard-failed
@@ -254,7 +274,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
         'ISpooferMotion_Config',
         JSON.stringify({
           ...c,
-          spoofing: { ...c.spoofing, cookie: '', apiKey: '' },
+          spoofing: { ...c.spoofing, cookie: '', apiKey: '', groupApiKey: '' },
         }),
       );
     }
@@ -273,7 +293,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
         saveToStorage(n);
         return { config: n };
       });
-      if (cat === 'spoofing' && (key === 'cookie' || key === 'apiKey')) {
+      if (cat === 'spoofing' && (key === 'cookie' || key === 'apiKey' || key === 'groupApiKey')) {
         get().saveSecrets();
       }
     },
@@ -290,7 +310,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
         saveToStorage(n);
         return { config: n };
       });
-      if (cat === 'spoofing' && ('cookie' in vals || 'apiKey' in vals)) {
+      if (cat === 'spoofing' && ('cookie' in vals || 'apiKey' in vals || 'groupApiKey' in vals)) {
         get().saveSecrets();
       }
     },
@@ -309,8 +329,12 @@ export const useConfigStore = create<ConfigState>((set, get) => {
         interface ProfileSecrets {
           cookie?: string;
           apiKey?: string;
+          groupApiKey?: string;
           profileCookies?: Record<string, string>;
-          accountSecrets?: Record<string, { cookie?: string; apiKey?: string }>;
+          accountSecrets?: Record<
+            string,
+            { cookie?: string; apiKey?: string; groupApiKey?: string }
+          >;
         }
         const s: ProfileSecrets = await invoke('load_profile_secrets');
         set((state) => {
@@ -330,6 +354,10 @@ export const useConfigStore = create<ConfigState>((set, get) => {
                   profileCookie ||
                   (typeof s.cookie === 'string' ? s.cookie : state.config.spoofing.cookie),
                 apiKey: typeof s.apiKey === 'string' ? s.apiKey : state.config.spoofing.apiKey,
+                groupApiKey:
+                  typeof s.groupApiKey === 'string'
+                    ? s.groupApiKey
+                    : state.config.spoofing.groupApiKey,
               },
             },
           };
@@ -362,6 +390,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
           data: {
             cookie: c.cookie,
             apiKey: c.apiKey,
+            groupApiKey: c.groupApiKey,
             profileCookies,
             accountSecrets: state.accountSecrets,
           },
