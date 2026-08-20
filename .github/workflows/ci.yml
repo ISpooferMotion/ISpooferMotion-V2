@@ -428,7 +428,11 @@ jobs:
         needs: [prepare-release, build-and-release, plugin-release]
         if: >-
             needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
-            && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
+            && (
+                github.ref == 'refs/heads/main'
+                || startsWith(github.ref, 'refs/tags/v')
+                || github.event_name == 'workflow_dispatch'
+            )
         runs-on: ubuntu-latest
 
         steps:
@@ -449,6 +453,7 @@ jobs:
                   python3 <<'PY'
                   import json
                   import os
+                  import urllib.error
                   import urllib.request
 
                   bot_token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
@@ -465,12 +470,12 @@ jobs:
                   release_record_cache = None
 
                   if not bot_token:
-                      print("No Discord bot token configured. Skipping.")
-                      exit(0)
+                      raise RuntimeError(
+                          "Missing GitHub Actions secret DISCORD_BOT_TOKEN."
+                      )
 
                   if not release_tag:
-                      print("Missing release tag. Skipping.")
-                      exit(0)
+                      raise RuntimeError("Missing release tag.")
 
                   def github_api(path):
                       request = urllib.request.Request(
@@ -616,11 +621,17 @@ jobs:
                       method="POST",
                   )
 
-                  with urllib.request.urlopen(request) as response:
-                      if response.status >= 300:
-                          raise RuntimeError(
-                              f"Discord API failed with status {response.status}"
-                          )
+                  try:
+                      with urllib.request.urlopen(request) as response:
+                          if response.status >= 300:
+                              raise RuntimeError(
+                                  f"Discord API failed with status {response.status}"
+                              )
+                  except urllib.error.HTTPError as error:
+                      body = error.read().decode("utf-8", errors="replace")
+                      raise RuntimeError(
+                          f"Discord API failed with status {error.code}: {body}"
+                      ) from error
 
                   print(
                       f"Posted Discord release announcement for {release_tag}."
