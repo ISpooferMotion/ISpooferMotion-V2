@@ -23,6 +23,7 @@ local logCounter = 0
 
 local currentAccentColor = Color3.fromHex("#10b981")
 local activeTabIndicators = {}
+local updateBatchUIFunc = nil
 
 --- Removes every log line from the panel and resets the eviction counter.
 ---
@@ -55,7 +56,6 @@ local function createPluginGui()
 	gui = Instance.new("ScreenGui")
 	gui.Name = "ISpooferMotionPluginGui"
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.Enabled = false
 
 	local success = pcall(function()
 		gui.Parent = CoreGui
@@ -202,7 +202,7 @@ local function createPluginGui()
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
 	title.Size = UDim2.fromOffset(200, 20)
-	title.Position = UDim2.new(0, 64, 0.5, 0)
+	title.Position = UDim2.new(0, 64, 0.5, -8)
 	title.AnchorPoint = Vector2.new(0, 0.5)
 	title.BackgroundTransparency = 1
 	title.Font = Enum.Font.BuilderSansExtraBold
@@ -211,6 +211,19 @@ local function createPluginGui()
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Text = "ISpooferMotion"
 	title.Parent = header
+
+	local versionLabel = Instance.new("TextLabel")
+	versionLabel.Name = "VersionWatermark"
+	versionLabel.Size = UDim2.fromOffset(100, 14)
+	versionLabel.Position = UDim2.new(0, 64, 0.5, 10)
+	versionLabel.AnchorPoint = Vector2.new(0, 0.5)
+	versionLabel.BackgroundTransparency = 1
+	versionLabel.Font = Enum.Font.BuilderSansMedium
+	versionLabel.TextSize = 12
+	versionLabel.TextColor3 = Color3.fromHex("#a1a1aa")
+	versionLabel.TextXAlignment = Enum.TextXAlignment.Left
+	versionLabel.Text = "v" .. (PLUGIN_VERSION or "Unknown")
+	versionLabel.Parent = header
 
 	statusText = Instance.new("TextLabel")
 	statusText.Name = "StatusText"
@@ -520,10 +533,42 @@ local function createPluginGui()
 	manualContainer.Visible = false
 	manualContainer.Parent = contentArea
 
+	-- Scrollable frame wrapping the input box so 4000+ IDs can be scrolled smoothly
+	local manualScroll = Instance.new("ScrollingFrame")
+	manualScroll.Name = "InputScroll"
+	manualScroll.Size = UDim2.new(1, 0, 1, -112)
+	manualScroll.Position = UDim2.new(0, 0, 0, 0)
+	manualScroll.BackgroundColor3 = Color3.fromHex("#0c0c0e")
+	manualScroll.BorderSizePixel = 0
+	manualScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	manualScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	manualScroll.ScrollBarThickness = 6
+	manualScroll.ScrollBarImageColor3 = Color3.fromHex("#52525b")
+	manualScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+	manualScroll.Active = true
+	manualScroll.Parent = manualContainer
+
+	local manualScrollCorner = Instance.new("UICorner")
+	manualScrollCorner.CornerRadius = UDim.new(0, 8)
+	manualScrollCorner.Parent = manualScroll
+
+	local manualScrollStroke = Instance.new("UIStroke")
+	manualScrollStroke.Color = Color3.fromHex("#27272a")
+	manualScrollStroke.Thickness = 1
+	manualScrollStroke.Parent = manualScroll
+
+	local manualScrollPadding = Instance.new("UIPadding")
+	manualScrollPadding.PaddingLeft = UDim.new(0, 8)
+	manualScrollPadding.PaddingRight = UDim.new(0, 8)
+	manualScrollPadding.PaddingTop = UDim.new(0, 8)
+	manualScrollPadding.PaddingBottom = UDim.new(0, 8)
+	manualScrollPadding.Parent = manualScroll
+
 	local manualBox = Instance.new("TextBox")
 	manualBox.Name = "InputBox"
-	manualBox.Size = UDim2.new(1, 0, 1, -44)
-	manualBox.BackgroundColor3 = Color3.fromHex("#0c0c0e")
+	manualBox.Size = UDim2.new(1, -4, 1, 0)
+	manualBox.AutomaticSize = Enum.AutomaticSize.Y
+	manualBox.BackgroundTransparency = 1
 	manualBox.BorderSizePixel = 0
 	manualBox.Font = Enum.Font.RobotoMono
 	manualBox.TextSize = 13
@@ -535,24 +580,163 @@ local function createPluginGui()
 	manualBox.ClearTextOnFocus = false
 	manualBox.MultiLine = true
 	manualBox.Text = ""
-	manualBox.Parent = manualContainer
+	manualBox.Parent = manualScroll
 
-	local manualBoxCorner = Instance.new("UICorner")
-	manualBoxCorner.CornerRadius = UDim.new(0, 8)
-	manualBoxCorner.Parent = manualBox
+	-- SPEED / BATCH SIZE SLIDER SECTION
+	local speedSection = Instance.new("Frame")
+	speedSection.Name = "SpeedSection"
+	speedSection.Size = UDim2.new(1, 0, 0, 58)
+	speedSection.Position = UDim2.new(0, 0, 1, -102)
+	speedSection.BackgroundTransparency = 1
+	speedSection.Parent = manualContainer
 
-	local manualBoxStroke = Instance.new("UIStroke")
-	manualBoxStroke.Color = Color3.fromHex("#27272a")
-	manualBoxStroke.Thickness = 1
-	manualBoxStroke.Parent = manualBox
+	local speedLabel = Instance.new("TextLabel")
+	speedLabel.Name = "SpeedLabel"
+	speedLabel.Size = UDim2.new(0.45, 0, 0, 18)
+	speedLabel.Position = UDim2.new(0, 0, 0, 0)
+	speedLabel.BackgroundTransparency = 1
+	speedLabel.Font = Enum.Font.BuilderSansBold
+	speedLabel.TextSize = 12
+	speedLabel.TextColor3 = Color3.fromHex("#fafafa")
+	speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+	speedLabel.Text = "Batch Size & Speed"
+	speedLabel.Parent = speedSection
 
-	local manualBoxPadding = Instance.new("UIPadding")
-	manualBoxPadding.PaddingLeft = UDim.new(0, 8)
-	manualBoxPadding.PaddingRight = UDim.new(0, 8)
-	manualBoxPadding.PaddingTop = UDim.new(0, 8)
-	manualBoxPadding.PaddingBottom = UDim.new(0, 8)
-	manualBoxPadding.Parent = manualBox
+	local speedValLabel = Instance.new("TextLabel")
+	speedValLabel.Name = "SpeedValLabel"
+	speedValLabel.Size = UDim2.new(0.55, 0, 0, 18)
+	speedValLabel.Position = UDim2.new(0.45, 0, 0, 0)
+	speedValLabel.BackgroundTransparency = 1
+	speedValLabel.Font = Enum.Font.RobotoMono
+	speedValLabel.TextSize = 12
+	speedValLabel.TextColor3 = currentAccentColor
+	speedValLabel.TextXAlignment = Enum.TextXAlignment.Right
+	speedValLabel.Text = "50 / batch (Balanced)"
+	speedValLabel.Parent = speedSection
 
+	local speedTrack = Instance.new("Frame")
+	speedTrack.Name = "SpeedTrack"
+	speedTrack.Size = UDim2.new(1, 0, 0, 6)
+	speedTrack.Position = UDim2.fromOffset(0, 26)
+	speedTrack.BackgroundColor3 = Color3.fromHex("#27272a")
+	speedTrack.BorderSizePixel = 0
+	speedTrack.Active = true
+	speedTrack.Parent = speedSection
+
+	local speedTrackCorner = Instance.new("UICorner")
+	speedTrackCorner.CornerRadius = UDim.new(1, 0)
+	speedTrackCorner.Parent = speedTrack
+
+	local speedFill = Instance.new("Frame")
+	speedFill.Name = "SpeedFill"
+	speedFill.BackgroundColor3 = currentAccentColor
+	speedFill.BorderSizePixel = 0
+	speedFill.Size = UDim2.new(0.1, 0, 1, 0)
+	speedFill.Parent = speedTrack
+
+	local speedFillCorner = Instance.new("UICorner")
+	speedFillCorner.CornerRadius = UDim.new(1, 0)
+	speedFillCorner.Parent = speedFill
+
+	local speedHandle = Instance.new("Frame")
+	speedHandle.Name = "SpeedHandle"
+	speedHandle.Size = UDim2.fromOffset(14, 14)
+	speedHandle.AnchorPoint = Vector2.new(0.5, 0.5)
+	speedHandle.Position = UDim2.new(0.1, 0, 0.5, 0)
+	speedHandle.BackgroundColor3 = Color3.fromHex("#fafafa")
+	speedHandle.BorderSizePixel = 0
+	speedHandle.ZIndex = 2
+	speedHandle.Parent = speedTrack
+
+	local speedHandleCorner = Instance.new("UICorner")
+	speedHandleCorner.CornerRadius = UDim.new(1, 0)
+	speedHandleCorner.Parent = speedHandle
+
+	local minBatch = 10
+	local maxBatch = 500
+	local stepBatch = 5
+	local currentBatchSize = 250
+
+	local savedBatch = plugin:GetSetting("ManualBatchSize")
+	if type(savedBatch) == "number" and savedBatch >= minBatch and savedBatch <= maxBatch then
+		currentBatchSize = savedBatch
+	end
+
+	local function updateBatchUI(v)
+		v = math.clamp(v, minBatch, maxBatch)
+		v = math.floor((v - minBatch) / stepBatch + 0.5) * stepBatch + minBatch
+		currentBatchSize = v
+		plugin:SetSetting("ManualBatchSize", v)
+
+		local alpha = (v - minBatch) / (maxBatch - minBatch)
+		speedHandle.Position = UDim2.new(alpha, 0, 0.5, 0)
+		speedFill.Size = UDim2.new(alpha, 0, 1, 0)
+
+		local desc = "Balanced"
+		if v <= 25 then
+			desc = "Ultra Smooth"
+		elseif v <= 80 then
+			desc = "Balanced"
+		elseif v <= 180 then
+			desc = "Fast"
+		else
+			desc = "Max Speed"
+		end
+		speedValLabel.Text = string.format("%d / batch (%s)", v, desc)
+	end
+
+	updateBatchUIFunc = updateBatchUI
+	updateBatchUI(currentBatchSize)
+
+	local speedDragging = false
+	local function updateSpeedFromInput(inputX)
+		local trackPos = speedTrack.AbsolutePosition.X
+		local trackWidth = speedTrack.AbsoluteSize.X
+		if trackWidth > 0 then
+			local alpha = math.clamp((inputX - trackPos) / trackWidth, 0, 1)
+			updateBatchUI(minBatch + alpha * (maxBatch - minBatch))
+		end
+	end
+
+	speedTrack.InputBegan:Connect(function(input)
+		if
+			input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			speedDragging = true
+			updateSpeedFromInput(input.Position.X)
+		end
+	end)
+	speedHandle.InputBegan:Connect(function(input)
+		if
+			input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			speedDragging = true
+			updateSpeedFromInput(input.Position.X)
+		end
+	end)
+	game:GetService("UserInputService").InputChanged:Connect(function(input)
+		if
+			speedDragging
+			and (
+				input.UserInputType == Enum.UserInputType.MouseMovement
+				or input.UserInputType == Enum.UserInputType.Touch
+			)
+		then
+			updateSpeedFromInput(input.Position.X)
+		end
+	end)
+	game:GetService("UserInputService").InputEnded:Connect(function(input)
+		if
+			input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			speedDragging = false
+		end
+	end)
+
+	-- RUN REPLACEMENTS BUTTON
 	local runManualBtn = Instance.new("TextButton")
 	runManualBtn.Name = "RunButton"
 	runManualBtn.Size = UDim2.new(1, 0, 0, 36)
@@ -598,23 +782,58 @@ local function createPluginGui()
 		local _G_plugin = _G.ISpooferMotionPlugin
 		if _G_plugin and _G_plugin.runManualReplacements then
 			manualRunning = true
-			runManualBtn.Text = "Running..."
+			runManualBtn.Text = "Starting..."
 			tweenBg(runManualBtn, Color3.fromHex("#18181b"))
 
-			local function resetManualButton()
-				manualRunning = false
-				if runManualBtn and runManualBtn.Parent then
-					runManualBtn.Text = "Run Replacements"
-					tweenBg(runManualBtn, Color3.fromHex("#27272a"))
-				end
-			end
+			local startTime = os.clock()
 
-			local accepted = _G_plugin.runManualReplacements(txt, function()
-				resetManualButton()
-			end)
-			if accepted == false then
-				resetManualButton()
-			end
+			_G_plugin.runManualReplacements(txt, function(progress, total, replaced, isDone)
+				if isDone then
+					manualRunning = false
+					if runManualBtn and runManualBtn.Parent then
+						local totalElapsed = os.clock() - startTime
+						local timeStr = totalElapsed >= 60
+								and string.format(
+									"%dm %02ds",
+									math.floor(totalElapsed / 60),
+									math.floor(totalElapsed % 60)
+								)
+							or string.format("%.1fs", totalElapsed)
+						runManualBtn.Text =
+							string.format("Done! (%d swapped • %s)", replaced, timeStr)
+						tweenBg(runManualBtn, Color3.fromHex("#10b981"))
+						task.delay(3.5, function()
+							if runManualBtn and runManualBtn.Parent and not manualRunning then
+								runManualBtn.Text = "Run Replacements"
+								tweenBg(runManualBtn, Color3.fromHex("#27272a"))
+							end
+						end)
+					end
+				else
+					if runManualBtn and runManualBtn.Parent and total > 0 then
+						local elapsed = os.clock() - startTime
+						local etaStr = "calc..."
+						if progress > 0 and elapsed > 0.05 then
+							local rate = progress / elapsed
+							if rate > 0 then
+								local remaining = math.max(0, total - progress)
+								local etaSecs = math.ceil(remaining / rate)
+								if etaSecs < 60 then
+									etaStr = string.format("%ds", etaSecs)
+								else
+									etaStr = string.format(
+										"%dm %02ds",
+										math.floor(etaSecs / 60),
+										etaSecs % 60
+									)
+								end
+							end
+						end
+						runManualBtn.Text =
+							string.format("Swapping (%d/%d ETA: %s)", progress, total, etaStr)
+					end
+				end
+			end, currentBatchSize)
 		else
 			warn(
 				"[ISpooferMotion] Plugin handler not ready yet - wait for the plugin to finish loading."
@@ -1767,6 +1986,19 @@ function setThemeAccent(hex)
 			end
 			if connectionStatusText and string.find(connectionStatusText.Text, "Connected") then
 				connectionStatusText.TextColor3 = c
+			end
+		end)
+	end
+end
+
+--- Updates the current batch size setting and syncs slider UI.
+function setPluginBatchSize(size)
+	if size and tonumber(size) then
+		local num = math.clamp(tonumber(size), 10, 500)
+		pcall(function()
+			plugin:SetSetting("ManualBatchSize", num)
+			if updateBatchUIFunc then
+				updateBatchUIFunc(num)
 			end
 		end)
 	end

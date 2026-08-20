@@ -100,6 +100,7 @@ macro_rules! specta_commands {
             crate::commands::spoofer::place::find_asset_by_name,
             crate::commands::studio::push_to_studio,
             crate::commands::studio::set_plugin_theme_accent,
+            crate::commands::studio::set_plugin_batch_size,
             crate::studio_bridge::set_bridge_skip_owned_check,
             crate::studio_bridge::get_plugin_bridge_port,
             crate::studio_bridge::get_studio_health_status,

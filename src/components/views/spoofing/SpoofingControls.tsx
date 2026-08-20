@@ -130,7 +130,7 @@ export function SpoofingControls({
           {!isSpoofing && !isReplacing && !replaceError && <Play size={16} fill="currentColor" />}
           <span>
             {isReplacing ? (
-              t('spoof.replacingInStudio')
+              <SpoofProgressText />
             ) : replaceError ? (
               t('spoof.retryReplacing')
             ) : isSpoofing ? (

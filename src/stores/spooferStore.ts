@@ -72,6 +72,27 @@ interface SpooferState {
   isReplacing: boolean;
   setIsReplacing: (val: boolean) => void;
 
+  replaceCurrentCount: number;
+  setReplaceCurrentCount: (val: number | ((prev: number) => number)) => void;
+
+  replaceTotalCount: number;
+  setReplaceTotalCount: (val: number) => void;
+
+  replaceStartTime: number | null;
+  setReplaceStartTime: (val: number | null) => void;
+
+  isGrantingPermissions: boolean;
+  setIsGrantingPermissions: (val: boolean) => void;
+
+  permissionsCurrentCount: number;
+  setPermissionsCurrentCount: (val: number | ((prev: number) => number)) => void;
+
+  permissionsTotalCount: number;
+  setPermissionsTotalCount: (val: number) => void;
+
+  permissionsStartTime: number | null;
+  setPermissionsStartTime: (val: number | null) => void;
+
   replaceError: boolean;
   setReplaceError: (val: boolean) => void;
 
@@ -268,6 +289,33 @@ export const useSpooferStore = create<SpooferState>((set) => ({
   isReplacing: false,
   setIsReplacing: (val) => set({ isReplacing: val }),
 
+  replaceCurrentCount: 0,
+  setReplaceCurrentCount: (val) =>
+    set((state) => ({
+      replaceCurrentCount: typeof val === 'function' ? val(state.replaceCurrentCount) : val,
+    })),
+
+  replaceTotalCount: 0,
+  setReplaceTotalCount: (val) => set({ replaceTotalCount: val }),
+
+  replaceStartTime: null,
+  setReplaceStartTime: (val) => set({ replaceStartTime: val }),
+
+  isGrantingPermissions: false,
+  setIsGrantingPermissions: (val) => set({ isGrantingPermissions: val }),
+
+  permissionsCurrentCount: 0,
+  setPermissionsCurrentCount: (val) =>
+    set((state) => ({
+      permissionsCurrentCount: typeof val === 'function' ? val(state.permissionsCurrentCount) : val,
+    })),
+
+  permissionsTotalCount: 0,
+  setPermissionsTotalCount: (val) => set({ permissionsTotalCount: val }),
+
+  permissionsStartTime: null,
+  setPermissionsStartTime: (val) => set({ permissionsStartTime: val }),
+
   replaceError: false,
   setReplaceError: (val) => set({ replaceError: val }),
 
@@ -423,10 +471,14 @@ export const applyReplacements = async (
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
+    const totalCount = Object.keys(replacements).length;
     setIsReplacing(true);
     setReplaceError(false);
+    useSpooferStore.getState().setReplaceTotalCount(totalCount);
+    useSpooferStore.getState().setReplaceCurrentCount(0);
+    useSpooferStore.getState().setReplaceStartTime(Date.now());
 
-    if (Object.keys(replacements).length === 0) {
+    if (totalCount === 0) {
       setSpoofingLogs((prev) =>
         appendSpoofingLog(
           prev,

@@ -762,23 +762,6 @@ export default function SpoofingView() {
     setSpoofProgress(0);
     setIsSpoofing(true);
 
-    // Safety net: if spoofer-result Tauri event is never received (Rust panic,
-    // listener race condition, etc.), isSpoofing would stay true forever and
-    // lock the button. Reset after 10 minutes as an absolute last resort.
-    const safetyResetTimer = window.setTimeout(
-      () => {
-        if (useSpooferStore.getState().isSpoofing) {
-          useSpooferStore.getState().setIsSpoofing(false);
-          logIsm(
-            'warn',
-            'Spoofing job timed out after 10 minutes without a result — button reset automatically. Check the Console for errors.',
-            true,
-          );
-        }
-      },
-      10 * 60 * 1000,
-    );
-
     try {
       const currentUser = users.find((user) => String(user.id) === String(selectedUser));
       const currentGroup = groups.find((group) => String(group.id) === String(selectedGroup));
@@ -871,12 +854,10 @@ export default function SpoofingView() {
       // invoke() threw synchronously (e.g. IPC serialization error)
       // — reset immediately since spoofer-result will never arrive.
       logIsm('error', 'Failed to start spoofer: ' + err, true);
-      clearTimeout(safetyResetTimer);
       setIsSpoofing(false);
     }
     // NOTE: no finally setIsSpoofing(false) here — the normal success path
     // gets reset by the spoofer-result Tauri event in ConfigContext.
-    // The safetyResetTimer above handles the stuck case.
   };
 
   handleRunSpooferRef.current = handleRunSpoofer;

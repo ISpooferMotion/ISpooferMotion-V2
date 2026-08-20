@@ -196,10 +196,29 @@ export function SettingSliderItem({
       </div>
 
       {ticks && (
-        <div className="flex justify-between text-[9px] text-text-muted font-mono px-0.5">
-          {ticks.map((t, i) => (
-            <span key={i}>{t}</span>
-          ))}
+        <div className="relative w-full h-3 text-[9px] text-text-muted font-mono mt-0.5 select-none">
+          {ticks.map((t, i) => {
+            const numVal = typeof t === 'number' ? t : parseFloat(String(t));
+            const tickPct = isNaN(numVal)
+              ? (i / Math.max(1, ticks.length - 1)) * 100
+              : Math.min(100, Math.max(0, ((numVal - min) / (max - min)) * 100));
+
+            const isFirst = i === 0 || tickPct <= 2;
+            const isLast = i === ticks.length - 1 || tickPct >= 98;
+
+            return (
+              <span
+                key={i}
+                className="absolute top-0 pointer-events-none"
+                style={{
+                  left: `${tickPct}%`,
+                  transform: isFirst ? 'none' : isLast ? 'translateX(-100%)' : 'translateX(-50%)',
+                }}
+              >
+                {t}
+              </span>
+            );
+          })}
         </div>
       )}
     </div>

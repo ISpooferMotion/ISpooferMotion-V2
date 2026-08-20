@@ -176,10 +176,15 @@ local function discoverServer(): (boolean, boolean, string?)
 		local changed = BASE_URL ~= best.url
 		BASE_URL = best.url
 
-		-- Update accent color if provided by the health endpoint.
+		-- Update accent color and batch size if provided by the health endpoint.
 		if best.health and best.health.themeAccent then
 			if type(setThemeAccent) == "function" then
 				setThemeAccent(best.health.themeAccent)
+			end
+		end
+		if best.health and best.health.batchSize then
+			if type(setPluginBatchSize) == "function" then
+				setPluginBatchSize(best.health.batchSize)
 			end
 		end
 

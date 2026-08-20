@@ -23,10 +23,21 @@ local function requestPollEndpoint(baseUrl: string, endpoint: string): (boolean,
 	end)
 
 	if not ok or not response then
+		local errStr = string.lower(tostring(response))
+		if
+			string.find(errStr, "limit")
+			or string.find(errStr, "429")
+			or string.find(errStr, "exceed")
+		then
+			return false, "rate_limited", 429
+		end
 		return false, nil, nil
 	end
 
 	if not response.Success then
+		if response.StatusCode == 429 then
+			return false, "rate_limited", 429
+		end
 		return false, nil, response.StatusCode
 	end
 
@@ -360,21 +371,30 @@ function startPolling(): ()
 				local pollOk, decoded, _statusCode = requestPollEndpoint(baseUrl, getPollUrl())
 
 				if not pollOk then
-					pollFailureStreak += 1
-					if pollFailureStreak >= POLL_FAIL_THRESHOLD then
-						markConnectionLost(baseUrl, "poll failed " .. pollFailureStreak .. "x")
+					if decoded == "rate_limited" or _statusCode == 429 then
+						task.wait(5)
+					else
+						pollFailureStreak += 1
+						if pollFailureStreak >= POLL_FAIL_THRESHOLD then
+							markConnectionLost(baseUrl, "poll failed " .. pollFailureStreak .. "x")
+						end
 					end
 				else
 					-- Any successful poll (with or without a scan request) is a heartbeat.
 					pollFailureStreak = 0
-					if type(decoded) == "table" and decoded.requestAssets == true then
-						if operationBusy() then
-							deferredScanRequest = decoded
-							logToPlugin(
-								"[ISpooferMotion] Deferred scan request until the current operation finishes"
-							)
-						else
-							startRequestedScan(decoded)
+					if type(decoded) == "table" then
+						if decoded.batchSize and type(setPluginBatchSize) == "function" then
+							setPluginBatchSize(decoded.batchSize)
+						end
+						if decoded.requestAssets == true then
+							if operationBusy() then
+								deferredScanRequest = decoded
+								logToPlugin(
+									"[ISpooferMotion] Deferred scan request until the current operation finishes"
+								)
+							else
+								startRequestedScan(decoded)
+							end
 						end
 					end
 				end
@@ -399,20 +419,28 @@ function startPolling(): ()
 
 			local baseUrl = BASE_URL
 			if baseUrl then
-				local patchOk, decoded = requestPollEndpoint(baseUrl, "/poll-replacements")
+				local patchOk, decoded, _statusCode =
+					requestPollEndpoint(baseUrl, "/poll-replacements")
 
 				if not patchOk then
-					patchFailureStreak += 1
-					if patchFailureStreak >= POLL_FAIL_THRESHOLD then
-						markConnectionLost(
-							baseUrl,
-							"patch poll failed " .. patchFailureStreak .. "x"
-						)
+					if decoded == "rate_limited" or _statusCode == 429 then
+						task.wait(5)
+					else
+						patchFailureStreak += 1
+						if patchFailureStreak >= POLL_FAIL_THRESHOLD then
+							markConnectionLost(
+								baseUrl,
+								"patch poll failed " .. patchFailureStreak .. "x"
+							)
+						end
 					end
 				else
 					-- Successful patch poll is also a heartbeat.
 					patchFailureStreak = 0
 					if type(decoded) == "table" then
+						if decoded.batchSize and type(setPluginBatchSize) == "function" then
+							setPluginBatchSize(decoded.batchSize)
+						end
 						local patches = decoded.patches
 						local mappings = decoded.mappings
 

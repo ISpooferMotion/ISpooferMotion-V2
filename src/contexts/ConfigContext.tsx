@@ -307,6 +307,11 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                   ),
                 );
 
+                useSpooferStore.getState().setIsGrantingPermissions(true);
+                useSpooferStore.getState().setPermissionsTotalCount(newAssetIds.length);
+                useSpooferStore.getState().setPermissionsCurrentCount(0);
+                useSpooferStore.getState().setPermissionsStartTime(Date.now());
+
                 import('@tauri-apps/api/core')
                   .then(({ invoke }) =>
                     invoke<{
@@ -348,6 +353,9 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     const errMsg = `Failed to auto-grant permissions: ${String(err)}`;
                     setSpoofingLogs((prev) => appendSpoofingLog(prev, `[ERROR] ${errMsg}`));
                     logIsm('error', errMsg, false);
+                  })
+                  .finally(() => {
+                    useSpooferStore.getState().setIsGrantingPermissions(false);
                   });
               }
             }
@@ -409,7 +417,43 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       });
 
-      const uns = await Promise.all([p1, p2, p3, p4, p5]);
+      const p6 = listen<{ current?: number; total?: number }>('patch-progress', (e) => {
+        const { current, total } = e.payload;
+        if (typeof current === 'number') {
+          useSpooferStore.getState().setReplaceCurrentCount(current);
+        }
+        if (typeof total === 'number') {
+          useSpooferStore.getState().setReplaceTotalCount(total);
+        }
+      });
+
+      const p7 = listen<{ succeeded?: number; failed?: number; total?: number }>(
+        'patch-results',
+        () => {
+          useSpooferStore.getState().setIsReplacing(false);
+        },
+      );
+
+      const p8 = listen<{ current?: number; total?: number; assetId?: number }>(
+        'asset-permissions-progress',
+        (e) => {
+          const { current, total } = e.payload;
+          if (typeof current === 'number') {
+            useSpooferStore.getState().setPermissionsCurrentCount(current);
+          }
+          if (typeof total === 'number') {
+            useSpooferStore.getState().setPermissionsTotalCount(total);
+          }
+        },
+      );
+
+      // Initial batch size sync to plugin bridge
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        const currentBatch = useConfigStore.getState().config.advanced.batchSize ?? 50;
+        invoke('set_plugin_batch_size', { batchSize: currentBatch }).catch(() => {});
+      });
+
+      const uns = await Promise.all([p1, p2, p3, p4, p5, p6, p7, p8]);
       if (!isMounted) {
         uns.forEach((u) => u());
       } else {

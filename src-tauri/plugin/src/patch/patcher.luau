@@ -537,11 +537,7 @@ local function applyPatch(patch: Patch): (boolean, string?)
 			return ok, err
 		end
 
-		local replaceOk, replaceErr = applyMeshPartInPlace(
-			meshObj,
-			targetMeshUri,
-			targetTextureUri
-		)
+		local replaceOk, replaceErr = applyMeshPartInPlace(meshObj, targetMeshUri, targetTextureUri)
 		if not replaceOk then
 			return false, replaceErr
 		end
@@ -619,49 +615,109 @@ local function applyPatches(patches: any)
 		patchRunning = false
 	end
 
+	local currentBatchSize = 50
+	pcall(function()
+		local saved = plugin:GetSetting("ManualBatchSize")
+		if type(saved) == "number" and saved >= 10 and saved <= 500 then
+			currentBatchSize = saved
+		end
+	end)
+	local yieldInterval = math.clamp(math.floor(currentBatchSize / 5), 2, 50)
+	local yieldDelay = currentBatchSize >= 150 and 0.01 or 0.02
+
 	local frameStart = os.clock()
+	local lastProgressPost = 0
+
 	local batchOk, batchErr = pcall(function()
 		for index, rawPatch in ipairs(patches) do
-			local ok, patchOk, patchErr = pcall(function()
-				local patch, validationErr = normalizePatch(rawPatch)
-				if not patch then
-					return false, validationErr
-				end
-				return applyPatch(patch)
-			end)
-
-			if ok and patchOk then
-				succeeded += 1
-			else
+			local patch, validationErr = normalizePatch(rawPatch)
+			if not patch then
 				failed += 1
-				local err = if ok then patchErr else patchOk
-				local patchName = if type(rawPatch) == "table"
-					then rawPatch.fullName or rawPatch.token
-					else "unknown patch"
-
-				-- Record the failed patch ID (or token) to send back to the backend
-				local failedId = "unknown"
-				if type(rawPatch) == "table" then
-					failedId = rawPatch.token or rawPatch.id or patchName
-				end
+				local failedId = if type(rawPatch) == "table"
+					then rawPatch.token or rawPatch.id or rawPatch.fullName or "unknown"
+					else "unknown"
 				table.insert(failedPatchesList, failedId)
+				logToPlugin("[Warning] [ISpooferMotion] Invalid patch: " .. tostring(validationErr))
+			else
+				local maxAttempts = 5
+				local attempt = 0
+				local ok, patchOk, patchErr
 
-				logToPlugin(
-					"[Warning] "
-						.. "[ISpooferMotion] Patch failed for "
-						.. tostring(patchName)
-						.. ": "
-						.. tostring(err)
-				)
+				while attempt < maxAttempts do
+					attempt += 1
+					ok, patchOk, patchErr = pcall(function()
+						return applyPatch(patch)
+					end)
+
+					if ok and patchOk then
+						break
+					end
+
+					local err = if ok then patchErr else patchOk
+					local errStr = string.lower(tostring(err))
+					local isRateLimit = string.find(errStr, "limit")
+						or string.find(errStr, "rate")
+						or string.find(errStr, "429")
+						or string.find(errStr, "exceed")
+						or string.find(errStr, "too many")
+						or string.find(errStr, "throttle")
+						or string.find(errStr, "timeout")
+						or string.find(errStr, "timed out")
+
+					if isRateLimit and attempt < maxAttempts then
+						local patchName = patch.fullName or patch.token or "unknown"
+						logToPlugin(
+							string.format(
+								"[Warning] [ISpooferMotion] Rate limit hit applying patch to '%s'. Waiting 5s before retry (%d/%d)...",
+								tostring(patchName),
+								attempt,
+								maxAttempts
+							)
+						)
+						task.wait(5)
+					else
+						break
+					end
+				end
+
+				if ok and patchOk then
+					succeeded += 1
+				else
+					failed += 1
+					local err = if ok then patchErr else patchOk
+					local patchName = patch.fullName or patch.token or "unknown patch"
+					local failedId = patch.token or patch.id or patchName
+					table.insert(failedPatchesList, failedId)
+
+					logToPlugin(
+						"[Warning] "
+							.. "[ISpooferMotion] Patch failed for "
+							.. tostring(patchName)
+							.. ": "
+							.. tostring(err)
+					)
+				end
 			end
 
-			if (index % 5 == 0 or (os.clock() - frameStart) > 0.01) and index < #patches then
+			local now = os.clock()
+			if (now - lastProgressPost) >= 0.5 or index == #patches then
+				lastProgressPost = now
+				pcall(function()
+					postJson("/patch-progress", {
+						current = index,
+						total = #patches,
+					})
+				end)
+			end
+
+			if (index % yieldInterval == 0 or (now - frameStart) > 0.02) and index < #patches then
 				-- Silent=true: transient progress updates should not produce log spam.
 				setPluginGuiStatus(
 					string.format("Applying replacements (%d/%d)...", index, #patches),
 					true
 				)
-				task.wait()
+				frameStart = os.clock()
+				task.wait(yieldDelay)
 			end
 		end
 	end)

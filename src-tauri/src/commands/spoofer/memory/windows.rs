@@ -245,7 +245,7 @@ fn open_process_for_memory(pid: u32) -> Result<ProcessHandle, String> {
 }
 
 // Validate the match is bounded by non-numeric characters to prevent partial replacement.
-fn is_bounded_numeric_match(buffer: &[u8], offset: usize, len: usize) -> bool {
+const fn is_bounded_numeric_match(buffer: &[u8], offset: usize, len: usize) -> bool {
     if len == 0 {
         return false;
     }
@@ -259,20 +259,20 @@ fn is_bounded_numeric_match(buffer: &[u8], offset: usize, len: usize) -> bool {
     true
 }
 
-fn is_bounded_numeric_match_utf16(buffer: &[u8], offset: usize, len: usize) -> bool {
+const fn is_bounded_numeric_match_utf16(buffer: &[u8], offset: usize, len: usize) -> bool {
     if len == 0 {
         return false;
     }
     if offset >= 2 {
         let prev = u16::from_le_bytes([buffer[offset - 2], buffer[offset - 1]]);
-        if prev >= u16::from(b'0') && prev <= u16::from(b'9') {
+        if prev >= b'0' as u16 && prev <= b'9' as u16 {
             return false;
         }
     }
     let after = offset + len;
     if after + 1 < buffer.len() {
         let next = u16::from_le_bytes([buffer[after], buffer[after + 1]]);
-        if next >= u16::from(b'0') && next <= u16::from(b'9') {
+        if next >= b'0' as u16 && next <= b'9' as u16 {
             return false;
         }
     }
