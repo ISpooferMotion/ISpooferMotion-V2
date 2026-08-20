@@ -23,7 +23,6 @@ permissions:
 
 env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    DISCORD_REPORT_API_URL: ${{ vars.DISCORD_REPORT_API_URL }}
 
 jobs:
     # Code Quality Checks
