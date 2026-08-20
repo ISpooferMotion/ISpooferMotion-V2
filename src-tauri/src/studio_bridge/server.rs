@@ -31,7 +31,8 @@ pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> 
         "scanStatus": guard.scan_status,
         "studioPlaceId": guard.studio_place_id,
         "studioPlaceName": guard.studio_place_name,
-        "themeAccent": guard.theme_accent.clone()
+        "themeAccent": guard.theme_accent.clone(),
+        "batchSize": guard.batch_size
     }))
 }
 
@@ -294,16 +295,19 @@ pub async fn handle_poll(
                 let scan_types = guard.scan_types.clone();
                 let script_scan_mode = guard.script_scan_mode.clone();
                 let scan_path = guard.scan_path.take();
+                let batch_size = guard.batch_size;
                 return Json(serde_json::json!({
                     "requestAssets": true,
                     "scanTypes": scan_types,
                     "scriptScanMode": script_scan_mode,
                     "scanPath": scan_path,
+                    "batchSize": batch_size,
                 }));
             }
         }
         if start.elapsed() > timeout {
-            return Json(serde_json::json!({ "requestAssets": false }));
+            let batch_size = state.data.read().await.batch_size;
+            return Json(serde_json::json!({ "requestAssets": false, "batchSize": batch_size }));
         }
         // Wait for a notification OR the heartbeat interval, whichever comes first.
         // This ensures last_plugin_poll_time is refreshed regularly even during a
@@ -327,29 +331,58 @@ pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Val
             guard.last_plugin_poll_time = Some(Instant::now());
             let has_mappings = !guard.stored_mappings.is_empty();
             let has_patches = !guard.stored_patches.is_empty();
+            let batch_size = guard.batch_size;
 
             if has_patches {
                 let mappings = std::mem::take(&mut guard.stored_mappings);
                 let patches = std::mem::take(&mut guard.stored_patches);
-                return Json(serde_json::json!({ "mappings": mappings, "patches": patches }));
+                return Json(serde_json::json!({
+                    "mappings": mappings,
+                    "patches": patches,
+                    "batchSize": batch_size
+                }));
             } else if has_mappings {
-                // Clone -- don't drain -- when patches aren't ready yet. The
-                // plugin doesn't act on mappings-only responses; it waits for
-                // patches. If we drained here, `handle_scan_complete` would
-                // read an empty stored_mappings once the plugin's scan lands
-                // and produce zero patches, silently losing every replacement
-                // from a push-then-scan flow.
                 let mappings = guard.stored_mappings.clone();
-                return Json(serde_json::json!({ "mappings": mappings, "patches": [] }));
+                return Json(serde_json::json!({
+                    "mappings": mappings,
+                    "patches": [],
+                    "batchSize": batch_size
+                }));
             }
         }
         if start.elapsed() > timeout {
-            return Json(serde_json::json!({ "mappings": [], "patches": [] }));
+            let batch_size = state.data.read().await.batch_size;
+            return Json(serde_json::json!({
+                "mappings": [],
+                "patches": [],
+                "batchSize": batch_size
+            }));
         }
         let remaining = timeout.saturating_sub(start.elapsed());
         let wait = remaining.min(heartbeat_interval);
         let _ = tokio::time::timeout(wait, notify.notified()).await;
     }
+}
+
+/// Receives live patch progress updates from the Studio plugin.
+pub async fn handle_patch_progress(
+    State(state): State<AppState>,
+    Json(payload): Json<Value>,
+) -> Json<Value> {
+    if let Err(e) = state.app_handle.emit("patch-progress", &payload) {
+        log::error!("Failed to emit patch-progress event: {}", e);
+    }
+    Json(serde_json::json!({"success": true}))
+}
+
+/// Sets batch size from the desktop application HTTP API.
+pub async fn handle_set_batch_size(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    let size = body.get("batchSize").and_then(Value::as_u64).unwrap_or(50) as u32;
+    state.data.write().await.batch_size = Some(size);
+    Json(serde_json::json!({"success": true}))
 }
 
 /// Queues ID replacement patches for Studio retrieval.

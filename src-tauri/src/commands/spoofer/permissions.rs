@@ -238,6 +238,15 @@ pub async fn batch_grant_asset_permissions(
             }
         }
 
+        let _ = app.emit(
+            "asset-permissions-progress",
+            serde_json::json!({
+                "current": idx + 1,
+                "total": req.asset_ids.len(),
+                "assetId": asset_id
+            }),
+        );
+
         let mut attempts: u64 = 0;
         let max_attempts: u64 = 4;
         let mut succeeded = false;

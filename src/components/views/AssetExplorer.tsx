@@ -290,6 +290,7 @@ export default function AssetExplorer({
   const lastScanTime = useSpooferStore((s) => s.lastScanTime);
   const isSpoofing = useSpooferStore((s) => s.isSpoofing);
   const isReplacing = useSpooferStore((s) => s.isReplacing);
+  const isGrantingPermissions = useSpooferStore((s) => s.isGrantingPermissions);
   const lastReplacements = useSpooferStore((s) => s.lastReplacements) ?? {};
   const storedReplacementsCount = Object.keys(lastReplacements).length;
   const isDiscoveringPlaceIds = useSpooferStore((s) => s.isDiscoveringPlaceIds);
@@ -297,7 +298,75 @@ export default function AssetExplorer({
   const spoofStatusText = useSpooferStore((s) => s.spoofStatusText);
   const spoofCurrentCount = useSpooferStore((s) => s.spoofCurrentCount);
   const spoofTotalCount = useSpooferStore((s) => s.spoofTotalCount);
-  const busy = isScanningStudio || isSpoofing || isReplacing;
+  const spoofStartTime = useSpooferStore((s) => s.spoofStartTime);
+  const replaceCurrentCount = useSpooferStore((s) => s.replaceCurrentCount);
+  const replaceTotalCount = useSpooferStore((s) => s.replaceTotalCount);
+  const replaceStartTime = useSpooferStore((s) => s.replaceStartTime);
+  const permissionsCurrentCount = useSpooferStore((s) => s.permissionsCurrentCount);
+  const permissionsTotalCount = useSpooferStore((s) => s.permissionsTotalCount);
+  const permissionsStartTime = useSpooferStore((s) => s.permissionsStartTime);
+  const busy = isScanningStudio || isSpoofing || isReplacing || isGrantingPermissions;
+
+  const [activeEta, setActiveEta] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isSpoofing && !isReplacing && !isGrantingPermissions) {
+      setActiveEta(null);
+      return;
+    }
+    const computeEta = (
+      startTime: number | null,
+      current: number,
+      total: number,
+    ): string | null => {
+      if (!startTime || total <= 0 || current <= 0) return null;
+      const elapsedMs = Date.now() - startTime;
+      if (elapsedMs < 1000) return null;
+      const rate = current / (elapsedMs / 1000);
+      if (rate <= 0) return null;
+      const remaining = Math.max(0, total - current);
+      if (remaining === 0) return null;
+      const remainingSec = Math.ceil(remaining / rate);
+      if (remainingSec < 60) return `ETA: ${remainingSec}s`;
+      if (remainingSec < 3600) {
+        const mins = Math.floor(remainingSec / 60);
+        const secs = remainingSec % 60;
+        return `ETA: ${mins}m ${secs.toString().padStart(2, '0')}s`;
+      }
+      const hrs = Math.floor(remainingSec / 3600);
+      const mins = Math.floor((remainingSec % 3600) / 60);
+      return `ETA: ${hrs}h ${mins}m`;
+    };
+
+    const updateCurrentEta = () => {
+      if (isSpoofing) {
+        setActiveEta(computeEta(spoofStartTime, spoofCurrentCount, spoofTotalCount));
+      } else if (isReplacing) {
+        setActiveEta(computeEta(replaceStartTime, replaceCurrentCount, replaceTotalCount));
+      } else if (isGrantingPermissions) {
+        setActiveEta(
+          computeEta(permissionsStartTime, permissionsCurrentCount, permissionsTotalCount),
+        );
+      }
+    };
+
+    updateCurrentEta();
+    const interval = setInterval(updateCurrentEta, 1000);
+    return () => clearInterval(interval);
+  }, [
+    isSpoofing,
+    isReplacing,
+    isGrantingPermissions,
+    spoofStartTime,
+    spoofCurrentCount,
+    spoofTotalCount,
+    replaceStartTime,
+    replaceCurrentCount,
+    replaceTotalCount,
+    permissionsStartTime,
+    permissionsCurrentCount,
+    permissionsTotalCount,
+  ]);
 
   const { studioConnected, scanStatus, studioPlaceId, studioPlaceName } =
     useStudioConnectionState();
@@ -418,7 +487,7 @@ export default function AssetExplorer({
                 : []),
             ];
 
-            const rebuiltChildren = buildDataModelTree(allResolvedAssets);
+            let allTreeAssets = [...allResolvedAssets];
             if (includeScripts) {
               const unknownRefs = scriptRefAssets.filter((a) => {
                 if (!a.assetId) return false;
@@ -436,9 +505,11 @@ export default function AssetExplorer({
                   asset: a,
                   type: 'script_ref' as ParsedAssetRef['type'],
                 }));
-                rebuiltChildren.push(...buildDataModelTree(unverifiedAssets));
+                allTreeAssets = [...allTreeAssets, ...unverifiedAssets];
               }
             }
+
+            const rebuiltChildren = buildDataModelTree(allTreeAssets);
 
             if (rebuiltChildren.length === 0) {
               return;
@@ -1120,18 +1191,49 @@ export default function AssetExplorer({
             </motion.div>
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden h-full w-full relative">
-              {/* Global spoofing progress bar as absolute overlay */}
-              {isSpoofing && (
+              {/* Global spoofing / replacing / permissions progress bar as absolute overlay */}
+              {(isSpoofing || isReplacing || isGrantingPermissions) && (
                 <div className="absolute top-0 left-0 right-0 z-50 pointer-events-none">
                   <div className="h-1 bg-bg-base w-full overflow-hidden shadow-md">
                     <div
                       className="h-full bg-primary transition-all duration-300"
-                      style={{ width: `${spoofProgress}%` }}
+                      style={{
+                        width: `${
+                          isSpoofing
+                            ? spoofProgress
+                            : isReplacing
+                              ? replaceTotalCount > 0
+                                ? Math.min(
+                                    100,
+                                    Math.max(5, (replaceCurrentCount / replaceTotalCount) * 100),
+                                  )
+                                : 50
+                              : isGrantingPermissions
+                                ? permissionsTotalCount > 0
+                                  ? Math.min(
+                                      100,
+                                      Math.max(
+                                        5,
+                                        (permissionsCurrentCount / permissionsTotalCount) * 100,
+                                      ),
+                                    )
+                                  : 50
+                                : 0
+                        }%`,
+                      }}
                     />
                   </div>
-                  <div className="absolute top-1.5 right-3 px-2.5 py-0.5 rounded bg-bg-surface/90 border border-border-subtle text-[10px] text-text-primary font-mono shadow-sm pointer-events-auto">
-                    {spoofStatusText}{' '}
-                    {spoofTotalCount > 0 && `· ${spoofCurrentCount}/${spoofTotalCount}`}
+                  <div className="absolute top-1.5 right-3 px-2.5 py-0.5 rounded bg-bg-surface/90 border border-border-subtle text-[10px] text-text-primary font-mono shadow-sm pointer-events-auto flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                    <span>
+                      {isSpoofing
+                        ? `${spoofStatusText || 'Initializing...'}${spoofTotalCount > 0 ? ` · ${spoofCurrentCount}/${spoofTotalCount}` : ''}${activeEta ? ` · ${activeEta}` : ''}`
+                        : isReplacing
+                          ? `Replacing${replaceTotalCount > 0 ? ` · ${replaceCurrentCount}/${replaceTotalCount}` : '...'}${activeEta ? ` · ${activeEta}` : ''}`
+                          : isGrantingPermissions
+                            ? `Asset Permissions${permissionsTotalCount > 0 ? ` · ${permissionsCurrentCount}/${permissionsTotalCount}` : '...'}${activeEta ? ` · ${activeEta}` : ''}`
+                            : ''}
+                    </span>
                   </div>
                 </div>
               )}

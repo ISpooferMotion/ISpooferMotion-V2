@@ -32,12 +32,12 @@ use server::{
     get_last_animations, get_last_images, get_last_meshes, get_last_script_refs, get_last_sounds,
     handle_animations_complete, handle_api_dump, handle_assets_animations, handle_assets_images,
     handle_assets_meshes, handle_assets_script_refs, handle_assets_sounds, handle_images_complete,
-    handle_meshes_complete, handle_patch_results, handle_poll, handle_poll_animations,
-    handle_poll_images, handle_poll_replacements, handle_poll_sounds, handle_replace_ids,
-    handle_scan_abort, handle_scan_complete, handle_scan_progress, handle_scan_records,
-    handle_scan_start, handle_script_refs_complete, handle_sounds_complete, handle_studio_health,
-    request_animations, request_images, request_meshes, request_script_refs, request_sounds,
-    set_scan_options,
+    handle_meshes_complete, handle_patch_progress, handle_patch_results, handle_poll,
+    handle_poll_animations, handle_poll_images, handle_poll_replacements, handle_poll_sounds,
+    handle_replace_ids, handle_scan_abort, handle_scan_complete, handle_scan_progress,
+    handle_scan_records, handle_scan_start, handle_script_refs_complete, handle_set_batch_size,
+    handle_sounds_complete, handle_studio_health, request_animations, request_images,
+    request_meshes, request_script_refs, request_sounds, set_scan_options,
 };
 
 const PLUGIN_PORT_START: u16 = 14285;
@@ -262,6 +262,8 @@ pub async fn start_server(app_handle: AppHandle) {
         .route("/request-images", post(request_images))
         .route("/request-meshes", post(request_meshes))
         .route("/request-script-refs", post(request_script_refs))
+        .route("/patch-progress", post(handle_patch_progress))
+        .route("/batch-size", post(handle_set_batch_size))
         .route("/scan-options", post(set_scan_options))
         .layer(axum_middleware::from_fn(require_json_for_post))
         .layer(RequestBodyLimitLayer::new(64 * 1024 * 1024))
@@ -533,5 +535,12 @@ pub async fn get_studio_asset_snapshots() -> AnyValue {
 pub async fn set_theme_accent(color: String) {
     if let Some(data) = bridge_data() {
         data.write().await.theme_accent = Some(color);
+    }
+}
+
+/// Sets the replacement batch size so the plugin can adopt it.
+pub async fn set_batch_size(size: u32) {
+    if let Some(data) = bridge_data() {
+        data.write().await.batch_size = Some(size);
     }
 }

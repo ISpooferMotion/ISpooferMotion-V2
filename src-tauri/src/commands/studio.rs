@@ -122,6 +122,13 @@ pub async fn set_plugin_theme_accent(color: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+#[specta::specta]
+pub async fn set_plugin_batch_size(batch_size: u32) -> Result<(), String> {
+    crate::studio_bridge::set_batch_size(batch_size).await;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

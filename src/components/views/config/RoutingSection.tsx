@@ -80,6 +80,30 @@ export default function RoutingSection() {
             max={1000}
             ticks={[100, 250, 500, 1000]}
           />
+
+          <SettingSliderItem
+            label="Batch Size & Speed"
+            description={
+              (config.advanced.batchSize ?? 50) <= 25
+                ? 'Ultra Smooth — lower CPU load & smoother viewport rendering during replacement.'
+                : (config.advanced.batchSize ?? 50) <= 80
+                  ? 'Balanced — standard replacement throughput and stability.'
+                  : (config.advanced.batchSize ?? 50) <= 180
+                    ? 'Fast — accelerated replacement batches with shorter yields.'
+                    : 'Max Speed — highest replacement speed.'
+            }
+            value={config.advanced.batchSize ?? 50}
+            onChange={(val) => {
+              updateConfig('advanced', 'batchSize', val);
+              import('@tauri-apps/api/core').then(({ invoke }) => {
+                invoke('set_plugin_batch_size', { batchSize: val }).catch(console.error);
+              });
+            }}
+            min={10}
+            max={500}
+            step={5}
+            ticks={[10, 50, 100, 180, 250, 350, 425, 500]}
+          />
         </>
       )}
     </SettingCard>

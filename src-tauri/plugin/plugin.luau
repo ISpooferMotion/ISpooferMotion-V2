@@ -13,6 +13,7 @@ local logToPlugin: any
 local polling: any
 local BASE_URL: any
 
+--#include "src/version/version.luau"
 --#include "src/config/runtime.luau"
 --#include "src/ui/gui.luau"
 --#include "src/types/assets.luau"
@@ -36,15 +37,25 @@ assert(getMaxRecordValueBytes ~= nil, "Include order violation: scan/properties.
 assert(applyPatch ~= nil, "Include order violation: patch/patcher.luau not loaded")
 
 --- Manual Replacement Handler (declared before _G registration so the table is valid at load time)
-local function runManualReplacementsCore(text: string)
-	local mappings = {}
+local function runManualReplacements(
+	text: string,
+	progressCallback: ((number, number, number, boolean) -> ())?,
+	customBatchSize: number?
+)
+	local mappings: { [string]: string } = {}
 	local count = 0
 	for line in string.gmatch(text, "[^\n\r]+") do
 		local oldId, newId = string.match(line, "(%d+)%s*[-=]>%s*(%d+)")
 		if not oldId then
 			oldId, newId = string.match(line, "(%d+)%s*:%s*(%d+)")
 		end
-		if oldId and newId then
+		if not oldId then
+			oldId, newId = string.match(line, "(%d+)%s*,%s*(%d+)")
+		end
+		if not oldId then
+			oldId, newId = string.match(line, "(%d+)%s+(%d+)")
+		end
+		if oldId and newId and oldId ~= newId then
 			mappings[oldId] = newId
 			count += 1
 		end
@@ -52,18 +63,38 @@ local function runManualReplacementsCore(text: string)
 
 	if count == 0 then
 		warn("[ISpooferMotion] No valid mappings found. Format should be: 1234 -> 5678")
-		return false
+		if progressCallback then
+			progressCallback(0, 0, 0, true)
+		end
+		return
 	end
 
-	print(string.format("[ISpooferMotion] Starting manual replacement with %d mappings...", count))
-	-- Record the whole run as ONE undo step (the daemon patcher already does
-	-- this). If a replacement ever misbehaves, the user can Ctrl+Z the entire
-	-- batch instead of losing objects permanently.
+	local resolvedBatchSize = customBatchSize
+	if not resolvedBatchSize then
+		pcall(function()
+			local saved = plugin:GetSetting("ManualBatchSize")
+			if type(saved) == "number" and saved >= 10 and saved <= 500 then
+				resolvedBatchSize = saved
+			end
+		end)
+	end
+	resolvedBatchSize = math.clamp(tonumber(resolvedBatchSize) or 50, 5, 1000)
+
+	logToPlugin(
+		string.format(
+			"[ISpooferMotion] Starting batched manual replacement with %d mappings (batch size: %d)...",
+			count,
+			resolvedBatchSize
+		)
+	)
+	setPluginGuiStatus(string.format("Starting manual replacement (%d mappings)...", count), true)
+
 	local recording = nil
 	pcall(function()
 		recording = ChangeHistoryService:TryBeginRecording("ISpooferMotion Manual Replace")
 	end)
 	local replacedCount = 0
+
 	--- Coerces a raw numeric id into a rbxassetid:// URI; leaves URIs untouched.
 	local function toAssetUriString(v)
 		if
@@ -99,102 +130,210 @@ local function runManualReplacementsCore(text: string)
 			strVal = tostring(val)
 		end
 
-		if not strVal or not string.find(strVal, "%d") then
+		if not strVal or strVal == "" then
 			return
 		end
 
-		for oldId, newId in pairs(mappings) do
-			-- Digit-boundary match: a plain substring find() also matched oldId
-			-- INSIDE a longer id (e.g. "123" inside "51236"), corrupting unrelated
-			-- assets and triggering spurious MeshPart rebuilds. %f frontiers pin
-			-- the match to whole digit runs.
-			local idPattern = "%f[%d]" .. oldId .. "%f[%D]"
-			if string.find(strVal, idPattern) then
-				local newVal = string.gsub(strVal, idPattern, newId)
+		-- O(1) Fast lookup path: check if any numeric ID in the property exists in mappings
+		local oldId = string.match(strVal, "%d+")
+		if not oldId or not mappings[oldId] then
+			return
+		end
 
-				if obj:IsA("MeshPart") and (prop == "MeshId" or prop == "TextureID") then
-					if prop == "TextureID" then
-						local assignOk = pcall(function()
-							(obj :: MeshPart).TextureID = toAssetUriString(newVal)
-						end)
-						if assignOk then
-							replacedCount += 1
-							print(
-								string.format(
-									"[ISpooferMotion] Manual Swap: %s.TextureID (%s -> %s)",
-									obj.Name,
-									oldId,
-									newId
-								)
-							)
-						end
-						break
-					end
+		local newId = mappings[oldId]
+		local idPattern = "%f[%d]" .. oldId .. "%f[%D]"
+		local newVal = string.gsub(strVal, idPattern, newId)
 
-					local targetMeshUri = toAssetUriString(newVal)
-					local targetTextureUri = nil
-					pcall(function()
-						local texture = (obj :: MeshPart).TextureID
-						if texture and texture ~= "" then
-							for texOld, texNew in pairs(mappings) do
-								local texPattern = "%f[%d]" .. texOld .. "%f[%D]"
-								if string.find(texture, texPattern) then
-									targetTextureUri = toAssetUriString(
-										string.gsub(texture, texPattern, texNew)
-									)
-									break
-								end
-							end
-						end
-					end)
-
-					local replaceOk, replaceErr = applyMeshPartInPlace(
-						obj :: MeshPart,
-						targetMeshUri,
-						targetTextureUri
+		if obj:IsA("MeshPart") and (prop == "MeshId" or prop == "TextureID") then
+			if prop == "TextureID" then
+				local assignOk = pcall(function()
+					(obj :: any).TextureID = toAssetUriString(newVal)
+				end)
+				if assignOk then
+					replacedCount += 1
+					logToPlugin(
+						string.format(
+							"[ISpooferMotion] Manual Swap: %s.TextureID (%s -> %s)",
+							obj.Name,
+							oldId,
+							newId
+						)
 					)
-					if replaceOk then
-						replacedCount += 1
-						print(
-							string.format(
-								"[ISpooferMotion] Manual Swap: Updated MeshPart %s in place",
-								obj.Name
-							)
-						)
-					else
-						warn(
-							"[ISpooferMotion] Manual Swap: MeshPart update failed for "
-								.. obj.Name
-								.. ": "
-								.. tostring(replaceErr)
-						)
-					end
-					break
-				else
-					local assignOk, err = pcall(function()
-						-- For standard properties, just assign the new string
-						-- Roblox engine handles string -> Content coercion automatically
-						(obj :: any)[prop] = newVal
-					end)
-					if assignOk then
-						replacedCount += 1
-						print(
-							string.format(
-								"[ISpooferMotion] Manual Swap: %s.%s (%s -> %s)",
-								obj.Name,
-								prop,
-								oldId,
-								newId
-							)
+				end
+				return
+			end
+
+			-- prop == "MeshId": MeshId cannot be assigned directly, recreate MeshPart
+			local targetMeshUri = toAssetUriString(newVal)
+			local targetTextureUri = nil
+			pcall(function()
+				local tex = (obj :: any).TextureID
+				if tex and tex ~= "" then
+					local texOld = string.match(tex, "%d+")
+					if texOld and mappings[texOld] then
+						targetTextureUri = toAssetUriString(
+							string.gsub(tex, "%f[%d]" .. texOld .. "%f[%D]", mappings[texOld])
 						)
 					end
 				end
+			end)
+
+			local oldParent = obj.Parent
+			if not oldParent then
+				return
+			end
+
+			local maxAttempts = 5
+			local attempt = 0
+			local createOk = false
+			local createdPart = nil
+
+			while attempt < maxAttempts do
+				attempt += 1
+				createOk, createdPart = pcall(function()
+					return AssetService:CreateMeshPartAsync(targetMeshUri, {
+						CollisionFidelity = obj.CollisionFidelity,
+						RenderFidelity = obj.RenderFidelity,
+					})
+				end)
+				if createOk and createdPart and createdPart:IsA("BasePart") then
+					break
+				end
+
+				local errStr = string.lower(tostring(createdPart))
+				local isRateLimit = string.find(errStr, "limit")
+					or string.find(errStr, "rate")
+					or string.find(errStr, "429")
+					or string.find(errStr, "exceed")
+					or string.find(errStr, "too many")
+					or string.find(errStr, "throttle")
+					or string.find(errStr, "timeout")
+					or string.find(errStr, "timed out")
+
+				if isRateLimit and attempt < maxAttempts then
+					logToPlugin(
+						string.format(
+							"[Warning] [ISpooferMotion] Manual swap rate limit hit on '%s'. Waiting 5s before retry (%d/%d)...",
+							obj.Name,
+							attempt,
+							maxAttempts
+						)
+					)
+					task.wait(5)
+				else
+					break
+				end
+			end
+
+			local objStillValid = pcall(function()
+				return obj.Parent
+			end)
+			if not objStillValid or obj.Parent == nil then
+				if createOk and createdPart then
+					pcall(function()
+						createdPart:Destroy()
+					end)
+				end
+				return
+			end
+
+			oldParent = obj.Parent
+			local newPart: BasePart
+			if createOk and createdPart and createdPart:IsA("BasePart") then
+				newPart = createdPart
+			else
+				warn(
+					"[ISpooferMotion] Manual Swap: Failed to create MeshPart asynchronously. Falling back to Part+SpecialMesh."
+				)
+				local fallbackPart = Instance.new("Part")
+				local specialMesh = Instance.new("SpecialMesh")
+				specialMesh.MeshId = targetMeshUri
+				specialMesh.Scale = Vector3.new(1, 1, 1)
+				local tId = targetTextureUri or toAssetUriString((obj :: any).TextureID)
+				if tId and tId ~= "" then
+					specialMesh.TextureId = tId
+				end
+				specialMesh.Parent = fallbackPart
+				newPart = fallbackPart
+			end
+
+			local copyOk, copyErr = pcall(function()
+				copyMeshPartPropertiesInto(obj, newPart, targetTextureUri)
+				pcall(function()
+					newPart.Color = obj.Color
+					newPart.Material = obj.Material
+					newPart.Transparency = obj.Transparency
+					newPart.Reflectance = obj.Reflectance
+				end)
+			end)
+			if not copyOk then
+				pcall(function()
+					newPart:Destroy()
+				end)
+				warn(
+					"[ISpooferMotion] Manual Swap: property copy failed for "
+						.. obj.Name
+						.. ": "
+						.. tostring(copyErr)
+				)
+				return
+			end
+
+			local parentOk = pcall(function()
+				newPart.Parent = oldParent
+			end)
+			if not parentOk or newPart.Parent ~= oldParent then
+				pcall(function()
+					newPart:Destroy()
+				end)
+				warn("[ISpooferMotion] Manual Swap: could not parent replacement for " .. obj.Name)
+				return
+			end
+
+			local moveOk, moveErr = pcall(function()
+				moveMeshPartContentsInto(obj, newPart)
+			end)
+			if not moveOk then
+				pcall(function()
+					obj.Parent = oldParent
+				end)
+				warn(
+					"[ISpooferMotion] Manual Swap: content move failed for "
+						.. obj.Name
+						.. ": "
+						.. tostring(moveErr)
+				)
+				return
+			end
+
+			pcall(function()
+				obj:Destroy()
+			end)
+			replacedCount += 1
+			logToPlugin(
+				string.format("[ISpooferMotion] Manual Swap: Recreated MeshPart %s", newPart.Name)
+			)
+			return
+		else
+			local assignOk, _ = pcall(function()
+				(obj :: any)[prop] = newVal
+			end)
+			if assignOk then
+				replacedCount += 1
+				logToPlugin(
+					string.format(
+						"[ISpooferMotion] Manual Swap: %s.%s (%s -> %s)",
+						obj.Name,
+						prop,
+						oldId,
+						newId
+					)
+				)
 			end
 		end
 	end
 
 	local function processInstance(obj: Instance)
-		-- Check all known asset properties using the API dump maps
 		local props = ASSET_PROPERTIES[obj.ClassName]
 		if props then
 			for _, prop in ipairs(props) do
@@ -209,41 +348,24 @@ local function runManualReplacementsCore(text: string)
 			end
 		end
 
-		-- Handle Script source replacement safely
+		-- Handle Script source replacement safely with single-pass substitution
 		if obj:IsA("LuaSourceContainer") and obj.ClassName ~= "CoreScript" then
 			local ok, src = pcall(function()
 				return (obj :: any).Source
 			end)
-			if ok and src and type(src) == "string" then
-				local newSrc = src
+			if ok and src and type(src) == "string" and #src > 0 then
 				local modified = false
-				for oldId, newId in pairs(mappings) do
-					-- Use safer patterns to avoid corrupting variable names
-
-					-- Replace plain numbers only if preceded by assignment, table syntax, or comma
-					local safePattern = "([=:{,]%s*)" .. oldId .. "(%f[%D])"
-					if string.find(newSrc, safePattern) then
-						newSrc = string.gsub(newSrc, safePattern, "%1" .. newId .. "%2")
+				local newSrc = string.gsub(src, "%d+", function(digitRun)
+					local mapped = mappings[digitRun]
+					if mapped then
 						modified = true
+						return mapped
 					end
-
-					-- Explicit rbxassetid:// URI replacement
-					local rbxUriPattern = "rbxassetid://" .. oldId
-					if string.find(newSrc, rbxUriPattern, 1, true) then
-						newSrc = string.gsub(newSrc, rbxUriPattern, "rbxassetid://" .. newId)
-						modified = true
-					end
-
-					-- Explicit web URL replacement
-					local rbxUrlPattern = "(roblox%.com/[Aa]sset/%?[Ii][Dd]=)" .. oldId
-					if string.find(newSrc, rbxUrlPattern) then
-						newSrc = string.gsub(newSrc, rbxUrlPattern, "%1" .. newId)
-						modified = true
-					end
-				end
+					return nil
+				end)
 
 				if modified then
-					local assignOk, err = pcall(function()
+					local assignOk, _ = pcall(function()
 						if ScriptEditorService then
 							ScriptEditorService:UpdateSourceAsync(obj :: any, function()
 								return newSrc
@@ -254,94 +376,125 @@ local function runManualReplacementsCore(text: string)
 					end)
 					if assignOk then
 						replacedCount += 1
-						print("[ISpooferMotion] Manual Swap: Updated Source in " .. obj.Name)
+						logToPlugin("[ISpooferMotion] Manual Swap: Updated Source in " .. obj.Name)
 					end
 				end
 			end
 		end
 	end
 
-	local roots = {
+	local candidateRoots = {
 		workspace,
-		game:GetService("StarterPlayer"),
-		game:GetService("StarterGui"),
 		game:GetService("ReplicatedStorage"),
+		game:GetService("ReplicatedFirst"),
+		game:GetService("ServerStorage"),
+		game:GetService("ServerScriptService"),
+		game:GetService("StarterGui"),
+		game:GetService("StarterPack"),
+		game:GetService("StarterPlayer"),
+		game:GetService("SoundService"),
 		game:GetService("Lighting"),
+		game:GetService("MaterialService"),
 	}
 
-	-- pcall so an unexpected error can never leave the ChangeHistory recording
-	-- open (an open recording breaks Studio undo until restart).
-	local lastYieldTime = os.clock()
-	local runOk, runErr = pcall(function()
-		for _, root in ipairs(roots) do
-			for _, descendant in ipairs(root:GetDescendants()) do
-				processInstance(descendant)
-				if os.clock() - lastYieldTime > 0.012 then
-					task.wait()
-					lastYieldTime = os.clock()
+	-- Collect all instances first into a flat array
+	local allInstances: { Instance } = {}
+	for _, root in ipairs(candidateRoots) do
+		if root then
+			pcall(function()
+				table.insert(allInstances, root)
+				for _, desc in ipairs(root:GetDescendants()) do
+					table.insert(allInstances, desc)
 				end
+			end)
+		end
+	end
+
+	local totalInstances = #allInstances
+	local BATCH_SIZE = resolvedBatchSize
+	local YIELD_TIME = BATCH_SIZE >= 150 and 0.01 or 0.02
+
+	logToPlugin(
+		string.format(
+			"[ISpooferMotion] Scanning %d instances across the game in batches of %d (speed configured)...",
+			totalInstances,
+			BATCH_SIZE
+		)
+	)
+
+	local startTime = os.clock()
+	local runOk, runErr = pcall(function()
+		for i = 1, totalInstances do
+			local inst = allInstances[i]
+			if inst and inst.Parent ~= nil then
+				processInstance(inst)
+			end
+
+			-- Yield every BATCH_SIZE items to allow Roblox Studio to render frames and prevent freezes
+			if i % BATCH_SIZE == 0 or i == totalInstances then
+				local elapsed = os.clock() - startTime
+				local etaStr = "calc..."
+				if i > 0 and elapsed > 0.05 then
+					local rate = i / elapsed
+					local remaining = math.max(0, totalInstances - i)
+					local etaSecs = math.ceil(remaining / rate)
+					if etaSecs < 60 then
+						etaStr = string.format("%ds", etaSecs)
+					else
+						etaStr = string.format("%dm %02ds", math.floor(etaSecs / 60), etaSecs % 60)
+					end
+				end
+
+				setPluginGuiStatus(
+					string.format(
+						"Manual Replace: (%d/%d ETA: %s) - %d replaced...",
+						i,
+						totalInstances,
+						etaStr,
+						replacedCount
+					),
+					true
+				)
+				if progressCallback then
+					progressCallback(i, totalInstances, replacedCount, false)
+				end
+				task.wait(YIELD_TIME)
 			end
 		end
 	end)
+
 	if recording then
 		pcall(function()
 			ChangeHistoryService:FinishRecording(recording, Enum.FinishRecordingOperation.Commit)
 		end)
 	end
+
 	if not runOk then
-		warn("[ISpooferMotion] Manual replacement stopped early: " .. tostring(runErr))
-		return false
+		warn("[ISpooferMotion] Manual replacement error: " .. tostring(runErr))
 	end
 
-	print(
-		string.format(
-			"[ISpooferMotion] Manual replacement complete! Modified %d properties.",
-			replacedCount
-		)
+	local completionMsg = string.format(
+		"[ISpooferMotion] Manual replacement complete! Modified %d properties across %d instances (batch: %d).",
+		replacedCount,
+		totalInstances,
+		BATCH_SIZE
 	)
-	return true
+	logToPlugin(completionMsg)
+	setPluginGuiStatus(string.format("Manual Replace Complete! (%d replaced)", replacedCount))
+
+	if progressCallback then
+		progressCallback(totalInstances, totalInstances, replacedCount, true)
+	end
 end
 
-local function manualReplacementBusy(): boolean
-	return manualReplaceRunning or scanRunning or patchRunning
-end
-
-local function runManualReplacements(text: string): boolean
-	if manualReplacementBusy() then
-		warn("[ISpooferMotion] Another scan or replacement operation is already running.")
-		return false
-	end
-
-	manualReplaceRunning = true
-	local ok, result = pcall(runManualReplacementsCore, text)
-	manualReplaceRunning = false
-	if not ok then
-		warn("[ISpooferMotion] Manual replacement failed: " .. tostring(result))
-		return false
-	end
-	return result == true
-end
-
---- Runs manual replacement off the GUI event thread and reports real completion.
-local function runManualReplacementsAsync(text: string, onComplete: any?): boolean
-	if manualReplacementBusy() then
-		warn("[ISpooferMotion] Another scan or replacement operation is already running.")
-		return false
-	end
-
-	manualReplaceRunning = true
-	task.spawn(function()
-		local ok, result = pcall(runManualReplacementsCore, text)
-		manualReplaceRunning = false
-		local success = ok and result == true
-		if not ok then
-			warn("[ISpooferMotion] Manual replacement failed: " .. tostring(result))
-		end
-		if type(onComplete) == "function" then
-			pcall(onComplete, success)
-		end
-	end)
-	return true
+--- Spawns runManualReplacements in a task so GUI click handlers (which cannot yield)
+--- don't block and can receive live progress.
+local function runManualReplacementsAsync(
+	text: string,
+	progressCallback: ((number, number, number, boolean) -> ())?,
+	customBatchSize: number?
+)
+	task.spawn(runManualReplacements, text, progressCallback, customBatchSize)
 end
 
 -- Register the plugin API table BEFORE startPolling() and GUI creation so any button

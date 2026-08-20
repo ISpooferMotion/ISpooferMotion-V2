@@ -287,6 +287,8 @@ export const commands = {
     typedError<string, AppError>(__TAURI_INVOKE('push_to_studio', { replacementsMap, pluginPort })),
   setPluginThemeAccent: (color: string) =>
     typedError<null, string>(__TAURI_INVOKE('set_plugin_theme_accent', { color })),
+  setPluginBatchSize: (batchSize: number) =>
+    typedError<null, string>(__TAURI_INVOKE('set_plugin_batch_size', { batchSize })),
   /**
    *  Toggles whether the plugin should skip checking if the user actually owns the assets.
    *

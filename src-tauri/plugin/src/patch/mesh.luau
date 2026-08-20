@@ -42,9 +42,46 @@ local function applyMeshPartInPlace(
 	-- CreateMeshPartAsync yields. Yield once before it as well so bulk replacements
 	-- cannot hammer Studio's mesh creation path in a single scheduler slice.
 	task.wait()
-	local createOk, createdOrErr = pcall(function()
-		return AssetService:CreateMeshPartAsync(meshContent, options)
-	end)
+	local maxAttempts = 5
+	local attempt = 0
+	local createOk = false
+	local createdOrErr = nil
+
+	while attempt < maxAttempts do
+		attempt += 1
+		createOk, createdOrErr = pcall(function()
+			return AssetService:CreateMeshPartAsync(meshContent, options)
+		end)
+		if createOk and createdOrErr and createdOrErr:IsA("MeshPart") then
+			break
+		end
+
+		local errStr = string.lower(tostring(createdOrErr))
+		local isRateLimit = string.find(errStr, "limit")
+			or string.find(errStr, "rate")
+			or string.find(errStr, "429")
+			or string.find(errStr, "exceed")
+			or string.find(errStr, "too many")
+			or string.find(errStr, "throttle")
+			or string.find(errStr, "timeout")
+			or string.find(errStr, "timed out")
+			or string.find(errStr, "curlinfo")
+
+		if isRateLimit and attempt < maxAttempts then
+			logToPlugin(
+				string.format(
+					"[Warning] [ISpooferMotion] MeshPart rate limit hit on '%s'. Waiting 5s before retry (%d/%d)...",
+					meshObj.Name,
+					attempt,
+					maxAttempts
+				)
+			)
+			task.wait(5)
+		else
+			break
+		end
+	end
+
 	if not createOk or not createdOrErr or not createdOrErr:IsA("MeshPart") then
 		if createOk and createdOrErr then
 			pcall(function()

@@ -73,6 +73,7 @@ pub struct AssetServerStateData {
     pub scan_types: Vec<String>,
     pub script_scan_mode: String,
     pub scan_path: Option<String>,
+    pub batch_size: Option<u32>,
 }
 
 impl Default for AssetServerStateData {
@@ -110,6 +111,7 @@ impl Default for AssetServerStateData {
             ],
             script_scan_mode: "assetIds".into(),
             scan_path: None,
+            batch_size: None,
         }
     }
 }
