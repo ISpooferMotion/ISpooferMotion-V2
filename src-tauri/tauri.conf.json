@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ISpooferMotion",
-  "version": "2.6.2",
+  "version": "2.6.3",
   "identifier": "ISpooferMotion-V2",
   "build": {
     "frontendDist": "../dist",
@@ -50,7 +50,9 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "resources": ["../dist-plugin/ISpooferMotion.rbxmx"],
+    "resources": [
+      "../dist-plugin/ISpooferMotion.rbxmx"
+    ],
     "windows": {
       "nsis": {
         "installerIcon": "assets/app_icon.ico",
@@ -68,7 +70,9 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["ispoofermotion"]
+        "schemes": [
+          "ispoofermotion"
+        ]
       }
     },
     "updater": {

@@ -12,7 +12,6 @@ pub mod jobs;
 pub mod place_parser;
 pub mod resolver;
 pub mod roblox_status;
-pub mod screenshot_monitor;
 pub mod session;
 pub mod spoofer;
 pub mod startup;

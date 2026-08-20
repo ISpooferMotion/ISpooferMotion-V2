@@ -219,6 +219,47 @@ end
 local POLL_FAIL_THRESHOLD = 4
 local pollFailureStreak = 0
 local patchFailureStreak = 0
+local deferredScanRequest = nil
+local deferredPatchBatches = {}
+
+local function operationBusy(): boolean
+	return scanRunning or patchRunning or manualReplaceRunning
+end
+
+local function startRequestedScan(decoded: any)
+	if type(decoded.scanTypes) == "table" then
+		activeScanTypes = decoded.scanTypes
+	end
+	if type(decoded.scriptScanMode) == "string" then
+		activeScriptScanMode = decoded.scriptScanMode
+	end
+	if type(decoded.scanPath) == "string" and decoded.scanPath ~= "" then
+		activeScanPath = decoded.scanPath
+	else
+		activeScanPath = nil
+	end
+	logToPlugin("Scan requested by Desktop App")
+	autoReplaceEnabled = true
+	setPluginGuiStatus("Scanning Assets...")
+	task.spawn(scan)
+end
+
+local function queuePatchBatch(patches: any)
+	table.insert(deferredPatchBatches, patches)
+	logToPlugin(
+		string.format(
+			"[ISpooferMotion] Deferred %d replacement(s) until the current operation finishes",
+			#patches
+		)
+	)
+end
+
+local function startPatchBatch(patches: any)
+	logToPlugin("Received " .. #patches .. " replacements from Desktop App")
+	autoReplaceEnabled = false
+	setPluginGuiStatus("Applying " .. #patches .. " targeted replacements...")
+	task.spawn(applyPatches, patches)
+end
 
 local function markConnectionLost(baseUrl: string, reason: string)
 	logToPlugin(
@@ -306,6 +347,14 @@ function startPolling(): ()
 
 	task.spawn(function()
 		while polling do
+			if deferredScanRequest and not operationBusy() then
+				local request = deferredScanRequest
+				deferredScanRequest = nil
+				startRequestedScan(request)
+				task.wait(0.5)
+				continue
+			end
+
 			local baseUrl = BASE_URL
 			if baseUrl then
 				local pollOk, decoded, _statusCode = requestPollEndpoint(baseUrl, getPollUrl())
@@ -319,27 +368,13 @@ function startPolling(): ()
 					-- Any successful poll (with or without a scan request) is a heartbeat.
 					pollFailureStreak = 0
 					if type(decoded) == "table" and decoded.requestAssets == true then
-						if scanRunning then
-							logToPlugin("[Warning] Scan already running, ignoring poll request")
-						elseif patchRunning then
-							logToPlugin("[Warning] Patch already running, ignoring poll request")
+						if operationBusy() then
+							deferredScanRequest = decoded
+							logToPlugin(
+								"[ISpooferMotion] Deferred scan request until the current operation finishes"
+							)
 						else
-							-- Pick up scan options pushed from the desktop app.
-							if type(decoded.scanTypes) == "table" then
-								activeScanTypes = decoded.scanTypes
-							end
-							if type(decoded.scriptScanMode) == "string" then
-								activeScriptScanMode = decoded.scriptScanMode
-							end
-							if type(decoded.scanPath) == "string" and decoded.scanPath ~= "" then
-								activeScanPath = decoded.scanPath
-							else
-								activeScanPath = nil
-							end
-							logToPlugin("Scan requested by Desktop App")
-							autoReplaceEnabled = true
-							setPluginGuiStatus("Scanning Assets...")
-							task.spawn(scan)
+							startRequestedScan(decoded)
 						end
 					end
 				end
@@ -355,6 +390,13 @@ function startPolling(): ()
 	task.spawn(function()
 		task.wait(0.25)
 		while polling do
+			if #deferredPatchBatches > 0 and not operationBusy() then
+				local patches = table.remove(deferredPatchBatches, 1)
+				startPatchBatch(patches)
+				task.wait(0.5)
+				continue
+			end
+
 			local baseUrl = BASE_URL
 			if baseUrl then
 				local patchOk, decoded = requestPollEndpoint(baseUrl, "/poll-replacements")
@@ -375,19 +417,10 @@ function startPolling(): ()
 						local mappings = decoded.mappings
 
 						if type(patches) == "table" and #patches > 0 then
-							if scanRunning then
-								logToPlugin("[Warning] Scan running, ignoring patches")
-							elseif patchRunning then
-								logToPlugin("[Warning] Patch already running, ignoring patches")
+							if operationBusy() then
+								queuePatchBatch(patches)
 							else
-								logToPlugin(
-									"Received " .. #patches .. " replacements from Desktop App"
-								)
-								autoReplaceEnabled = false
-								setPluginGuiStatus(
-									"Applying " .. #patches .. " targeted replacements..."
-								)
-								task.spawn(applyPatches, patches)
+								startPatchBatch(patches)
 							end
 						elseif type(mappings) == "table" and #mappings > 0 then
 							-- Do nothing, wait for patches to arrive on next poll cycle.

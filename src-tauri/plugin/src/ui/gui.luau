@@ -202,7 +202,7 @@ local function createPluginGui()
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
 	title.Size = UDim2.fromOffset(200, 20)
-	title.Position = UDim2.new(0, 64, 0.5, -8)
+	title.Position = UDim2.new(0, 64, 0.5, 0)
 	title.AnchorPoint = Vector2.new(0, 0.5)
 	title.BackgroundTransparency = 1
 	title.Font = Enum.Font.BuilderSansExtraBold
@@ -211,19 +211,6 @@ local function createPluginGui()
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Text = "ISpooferMotion"
 	title.Parent = header
-
-	local versionLabel = Instance.new("TextLabel")
-	versionLabel.Name = "VersionWatermark"
-	versionLabel.Size = UDim2.fromOffset(100, 14)
-	versionLabel.Position = UDim2.new(0, 64, 0.5, 10)
-	versionLabel.AnchorPoint = Vector2.new(0, 0.5)
-	versionLabel.BackgroundTransparency = 1
-	versionLabel.Font = Enum.Font.BuilderSansMedium
-	versionLabel.TextSize = 12
-	versionLabel.TextColor3 = Color3.fromHex("#a1a1aa")
-	versionLabel.TextXAlignment = Enum.TextXAlignment.Left
-	versionLabel.Text = "v" .. (PLUGIN_VERSION or "Unknown")
-	versionLabel.Parent = header
 
 	statusText = Instance.new("TextLabel")
 	statusText.Name = "StatusText"
@@ -613,20 +600,21 @@ local function createPluginGui()
 			manualRunning = true
 			runManualBtn.Text = "Running..."
 			tweenBg(runManualBtn, Color3.fromHex("#18181b"))
-			-- runManualReplacements is async (task.spawn internally) so we use a
-			-- separate task to poll for completion via a brief delay heuristic.
-			-- We reset the button after a generous timeout rather than hooking into
-			-- the Luau coroutine (click handler cannot yield).
-			_G_plugin.runManualReplacements(txt)
-			task.delay(0.5, function()
-				-- Reset after all spawned work has had time to kick off.
-				-- The actual replacement task runs independently; this just unblocks the button.
+
+			local function resetManualButton()
 				manualRunning = false
 				if runManualBtn and runManualBtn.Parent then
 					runManualBtn.Text = "Run Replacements"
 					tweenBg(runManualBtn, Color3.fromHex("#27272a"))
 				end
+			end
+
+			local accepted = _G_plugin.runManualReplacements(txt, function()
+				resetManualButton()
 			end)
+			if accepted == false then
+				resetManualButton()
+			end
 		else
 			warn(
 				"[ISpooferMotion] Plugin handler not ready yet - wait for the plugin to finish loading."

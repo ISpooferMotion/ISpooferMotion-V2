@@ -1,499 +1,628 @@
 name: CI & Release
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
-  pull_request:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag to create or update (example: v2.1.8)'
-        required: true
-        type: string
+    push:
+        branches:
+            - main
+        tags:
+            - "v*"
+    pull_request:
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: "Release tag to create or update (example: v2.1.8)"
+                required: true
+                type: string
 
 concurrency:
-  group: ci-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
-  cancel-in-progress: true
+    group: ci-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+    cancel-in-progress: true
 
 permissions:
-  contents: read
+    contents: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  DISCORD_REPORT_API_URL: ${{ vars.DISCORD_REPORT_API_URL }}
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    DISCORD_REPORT_API_URL: ${{ vars.DISCORD_REPORT_API_URL }}
 
 jobs:
-  # Code Quality Checks
-  js-lua-checks:
-    name: JS/TS/Lua Checks (Type & Lint)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-      - uses: oven-sh/setup-bun@v2
-      - name: Cache bun modules
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-      - run: bun run typecheck
-      - run: bun run lint
-      - name: Install Selene
-        run: cargo install selene
-      - name: Run Selene
-        run: cd src-tauri/plugin && selene .
+    # Code Quality Checks
 
-  rust-check:
-    name: Rust Check & Lint
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-      - uses: oven-sh/setup-bun@v2
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
-          components: rustfmt, clippy
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-          cache-on-failure: true
-      - run: bun install --frozen-lockfile
-      - run: bun run build:plugin
-      - run: bun run rust:check
-      - run: bun run rust:lint
-      - run: bun run rust:test
+    js-lua-checks:
+        name: JS/TS/Lua Checks (Type & Lint)
+        runs-on: ubuntu-latest
 
-  # Prepare Release (runs after checks pass)
-  prepare-release:
-    name: Prepare Release
-    needs: [js-lua-checks, rust-check]
-    if: >
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
-      || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    outputs:
-      RELEASE_TAG: ${{ steps.set_tag.outputs.RELEASE_TAG }}
-      SHOULD_RELEASE: ${{ steps.check_tag.outputs.SHOULD_RELEASE }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Get tag from package.json or inputs
-        id: set_tag
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "RELEASE_TAG=${{ inputs.tag }}" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            echo "RELEASE_TAG=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          else
-            VERSION=$(jq -r .version package.json)
-            echo "RELEASE_TAG=v$VERSION" >> $GITHUB_OUTPUT
-          fi
-      - name: Check if release already exists
-        id: check_tag
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ steps.set_tag.outputs.RELEASE_TAG }}"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
-              echo "Release $TAG already exists and this is a push to main. Skipping release build."
-              echo "SHOULD_RELEASE=false" >> $GITHUB_OUTPUT
-            else
-              echo "SHOULD_RELEASE=true" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "SHOULD_RELEASE=true" >> $GITHUB_OUTPUT
-          fi
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  submodules: recursive
 
-  create-release:
-    name: Create GitHub Release
-    needs: prepare-release
-    if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-      - name: Check for Changelog
-        id: changelog
-        run: |
-          if [ -f "changelogs/${{ needs.prepare-release.outputs.RELEASE_TAG }}.md" ]; then
-            echo "path=changelogs/${{ needs.prepare-release.outputs.RELEASE_TAG }}.md" >> $GITHUB_OUTPUT
-            echo "has_changelog=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_changelog=false" >> $GITHUB_OUTPUT
-          fi
+            - uses: oven-sh/setup-bun@v2
 
-      - name: Create or Update Release (with changelog)
-        if: steps.changelog.outputs.has_changelog == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
-          BODY_PATH: ${{ steps.changelog.outputs.path }}
-        run: |
-          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
-            gh release edit "$TAG_NAME" --notes-file "$BODY_PATH" --title "ISpooferMotion $TAG_NAME"
-          else
-            gh release create "$TAG_NAME" --notes-file "$BODY_PATH" --title "ISpooferMotion $TAG_NAME"
-          fi
+            - name: Cache bun modules
+              uses: actions/cache@v6
+              with:
+                  path: ~/.bun/install/cache
+                  key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+                  restore-keys: bun-${{ runner.os }}-
 
-      - name: Create or Update Release (auto-generate notes)
-        if: steps.changelog.outputs.has_changelog != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
-        run: |
-          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
-            gh release edit "$TAG_NAME" --title "ISpooferMotion $TAG_NAME"
-          else
-            gh release create "$TAG_NAME" --generate-notes --title "ISpooferMotion $TAG_NAME"
-          fi
+            - run: bun install --frozen-lockfile
+            - run: bun run typecheck
+            - run: bun run lint
 
-  # Platform Builds (all run in parallel once release is created)
-  build-and-release:
-    name: Build & Release (${{ matrix.os }})
-    needs: [prepare-release, create-release]
-    if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
-    runs-on: ${{ matrix.platform }}
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows-latest
-            os: windows
-            bundles: nsis
-            args: ''
-          - platform: macos-latest
-            os: macos
-            bundles: dmg
-            args: '--target universal-apple-darwin'
-          - platform: ubuntu-22.04
-            os: linux
-            bundles: appimage
-            args: ''
+            - name: Install Selene
+              run: cargo install selene
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
+            - name: Run Selene
+              run: cd src-tauri/plugin && selene .
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup
-        with:
-          os: ${{ matrix.os }}
+    rust-check:
+        name: Rust Check & Lint
+        runs-on: windows-latest
 
-      - name: Cache bun modules
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
-          restore-keys: bun-${{ runner.os }}-
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  submodules: recursive
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-          cache-on-failure: true
+            - uses: oven-sh/setup-bun@v2
 
-      - name: Normalize Tauri signing key
-        shell: bash
-        env:
-          RAW_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          RAW_TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs');
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: x86_64-pc-windows-msvc
+                  components: rustfmt, clippy
 
-          const normalizeNewlines = (value) => value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
-          const fail = (message) => {
-            console.error(`::error::${message}`);
-            process.exit(1);
-          };
+            - name: Rust Cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: src-tauri
+                  cache-on-failure: true
 
-          const rawKey = normalizeNewlines(process.env.RAW_TAURI_SIGNING_PRIVATE_KEY || '');
-          if (!rawKey) {
-            fail('Missing GitHub secret TAURI_PRIVATE_KEY. Set it to the full Tauri updater private key.');
-          }
+            - run: bun install --frozen-lockfile
+            - run: bun run build:plugin
+            - run: bun run rust:check
+            - run: bun run rust:lint
+            - run: bun run rust:test
 
-          const decodedKey = rawKey.startsWith('untrusted comment:')
-            ? rawKey
-            : normalizeNewlines(Buffer.from(rawKey, 'base64').toString('utf8'));
-          const keyForTauri = rawKey.startsWith('untrusted comment:')
-            ? Buffer.from(`${decodedKey}\n`, 'utf8').toString('base64')
-            : rawKey;
+    # Prepare Release
 
-          const keyLines = decodedKey.split('\n').filter(Boolean);
-          if (!keyLines[0]?.startsWith('untrusted comment:') || keyLines.length < 2) {
-            fail('TAURI_PRIVATE_KEY must be the full base64 private key generated by "tauri signer generate". A raw full key with the first "untrusted comment:" line is also accepted.');
-          }
+    prepare-release:
+        name: Prepare Release
+        needs: [js-lua-checks, rust-check]
+        if: >
+            (github.event_name == 'push' &&
+            (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+            || github.event_name == 'workflow_dispatch'
+        runs-on: ubuntu-latest
 
-          if (!/secret key/i.test(keyLines[0]) || /public key/i.test(keyLines[0])) {
-            fail('TAURI_PRIVATE_KEY contains a public key. Use the generated private key instead.');
-          }
+        outputs:
+            RELEASE_TAG: ${{ steps.set_tag.outputs.RELEASE_TAG }}
+            SHOULD_RELEASE: ${{ steps.check_tag.outputs.SHOULD_RELEASE }}
 
-          if (!/^[A-Za-z0-9+/=]+$/.test(keyLines[1])) {
-            fail('TAURI_PRIVATE_KEY does not look like a valid Tauri/minisign private key.');
-          }
+        steps:
+            - uses: actions/checkout@v7
 
-          const password = process.env.RAW_TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '';
-          const keyDelimiter = `TAURI_SIGNING_KEY_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-          const passwordDelimiter = `TAURI_SIGNING_PASSWORD_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+            - name: Get tag from package.json or inputs
+              id: set_tag
+              run: |
+                  if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+                    echo "RELEASE_TAG=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+                  elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+                    echo "RELEASE_TAG=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+                  else
+                    VERSION=$(jq -r .version package.json)
+                    echo "RELEASE_TAG=v$VERSION" >> "$GITHUB_OUTPUT"
+                  fi
 
-          fs.appendFileSync(
-            process.env.GITHUB_ENV,
-            [
-              `TAURI_SIGNING_PRIVATE_KEY<<${keyDelimiter}`,
-              keyForTauri,
-              keyDelimiter,
-              `TAURI_SIGNING_PRIVATE_KEY_PASSWORD<<${passwordDelimiter}`,
-              password,
-              passwordDelimiter,
-              '',
-            ].join('\n'),
-          );
-          NODE
+            - name: Check if release already exists
+              id: check_tag
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  TAG="${{ steps.set_tag.outputs.RELEASE_TAG }}"
 
-      - name: Build app
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          args: --bundles ${{ matrix.bundles }} ${{ matrix.args }}
-          tagName: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
+                  if gh release view "$TAG" > /dev/null 2>&1; then
+                    if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
+                      echo "Release $TAG already exists and this is a push to main. Skipping release build."
+                      echo "SHOULD_RELEASE=false" >> "$GITHUB_OUTPUT"
+                    else
+                      echo "SHOULD_RELEASE=true" >> "$GITHUB_OUTPUT"
+                    fi
+                  else
+                    echo "SHOULD_RELEASE=true" >> "$GITHUB_OUTPUT"
+                  fi
 
-  # Plugin Build (runs in parallel with platform builds)
-  plugin-release:
-    name: Build & Release Plugin
-    needs: [prepare-release, create-release]
-    if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
+    create-release:
+        name: Create GitHub Release
+        needs: prepare-release
+        if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
+        runs-on: ubuntu-latest
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup
+        permissions:
+            contents: write
 
-      - name: Cache bun modules
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
-          restore-keys: bun-${{ runner.os }}-
+        steps:
+            - uses: actions/checkout@v7
 
-      - name: Build plugin
-        run: bun run build:plugin
+            - name: Create or Update Release
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TAG_NAME: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
+              run: |
+                  if gh release view "$TAG_NAME" > /dev/null 2>&1; then
+                    gh release edit "$TAG_NAME" \
+                      --title "ISpooferMotion $TAG_NAME"
+                  else
+                    gh release create "$TAG_NAME" \
+                      --generate-notes \
+                      --title "ISpooferMotion $TAG_NAME"
+                  fi
 
-      - name: Upload plugin to release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
-          files: dist-plugin/ISpooferMotion.rbxmx
-          fail_on_unmatched_files: true
-  # Discord Announcement
-  announce-release:
-    name: Announce on Discord
-    needs: [prepare-release, build-and-release, plugin-release]
-    # Only announce on tag pushes and manual dispatches. Main pushes also
-    # trigger SHOULD_RELEASE=true when the version bump lands, which used to
-    # cause a double announce (once on the main push, once on the follow-up
-    # tag push). The tag push is the canonical release trigger.
-    if: >-
-      needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
-      && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Post to Discord
-        env:
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          RELEASE_TAG: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
-          RELEASE_NAME: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
-          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare-release.outputs.RELEASE_TAG }}
-          RELEASE_PRERELEASE: false
-          RELEASE_EVENT_ACTION: published
-          DISCORD_RELEASE_ROLE_ID: '1457029900291670210'
-        run: |
-          python3 <<'PY'
-          import json
-          import os
-          import re
-          import urllib.request
+    # Platform Builds
 
-          bot_token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
-          github_token = os.environ.get("GITHUB_TOKEN", "").strip()
-          repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
-          release_tag = os.environ.get("RELEASE_TAG", "").strip()
-          release_name = os.environ.get("RELEASE_NAME", "").strip() or release_tag
-          release_url = os.environ.get("RELEASE_URL", "").strip()
-          prerelease = os.environ.get("RELEASE_PRERELEASE") == "true"
-          event_action = os.environ.get("RELEASE_EVENT_ACTION", "").strip()
-          is_release_edit = event_action == "edited"
-          role_id = os.environ.get("DISCORD_RELEASE_ROLE_ID", "").strip()
-          channel_id = "1400781818780717056"
-          release_record_cache = None
+    build-and-release:
+        name: Build & Release (${{ matrix.os }})
+        needs: [prepare-release, create-release]
+        if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
+        runs-on: ${{ matrix.platform }}
 
-          if not bot_token:
-              print("No Discord bot token configured. Skipping.")
-              exit(0)
+        permissions:
+            contents: write
 
-          if not release_tag:
-              print("Missing release tag. Skipping.")
-              exit(0)
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - platform: windows-latest
+                      os: windows
+                      bundles: nsis
+                      args: ""
 
-          def github_api(path):
-              request = urllib.request.Request(
-                  f"https://api.github.com{path}",
-                  headers={
-                      "Accept": "application/vnd.github+json",
-                      "Authorization": f"Bearer {github_token}",
-                      "X-GitHub-Api-Version": "2022-11-28",
-                      "User-Agent": "ISpooferMotion-Release-Bot",
-                  },
-              )
-              with urllib.request.urlopen(request) as response:
-                  return json.loads(response.read().decode("utf-8"))
+                    - platform: macos-latest
+                      os: macos
+                      bundles: dmg
+                      args: "--target universal-apple-darwin"
 
-          def get_release_by_tag():
-              global release_record_cache
-              if release_record_cache is not None:
-                  return release_record_cache
-              if not repo or not release_tag or not github_token:
-                  return {}
-              try:
-                  release_record_cache = github_api(f"/repos/{repo}/releases/tags/{release_tag}")
-                  return release_record_cache
-              except Exception:
-                  return {}
+                    - platform: ubuntu-22.04
+                      os: linux
+                      bundles: appimage
+                      args: ""
 
-          def read_version_changelog():
-              changelog_path = f"changelogs/{release_tag}.md"
-              if os.path.exists(changelog_path):
-                  with open(changelog_path, "r", encoding="utf-8") as file:
-                      return file.read().strip()
-              return "No changelog entries were found for this version."
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v7
+              with:
+                  submodules: recursive
 
-          def sanitize_release_changes(text):
-              lines = text.splitlines()
-              kept = []
-              skipping = False
-              saw_content = False
-              release_title_pattern = rf"^\s{{0,3}}#{{1,6}}\s+ISpooferMotion\s+{re.escape(release_tag)}\s*$"
-              for line in lines:
-                  if not saw_content and not line.strip():
-                      continue
-                  if not saw_content and re.match(release_title_pattern, line, flags=re.IGNORECASE):
-                      saw_content = True
-                      continue
-                  saw_content = True
-                  if re.match(r"^\s{0,3}#{1,6}\s+.*VirusTotal\b", line, flags=re.IGNORECASE):
-                      skipping = True
-                      continue
-                  if skipping and re.match(r"^\s{0,3}#{1,6}\s+", line):
-                      skipping = False
-                  if not skipping:
-                      kept.append(line)
-              return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+            - name: Setup Environment
+              uses: ./.github/actions/setup
+              with:
+                  os: ${{ matrix.os }}
 
-          def read_release_changes():
-              try:
-                  changelog_section = sanitize_release_changes(read_version_changelog())
-                  if changelog_section:
-                      return changelog_section
-              except Exception:
-                  pass
+            - name: Cache bun modules
+              uses: actions/cache@v6
+              with:
+                  path: ~/.bun/install/cache
+                  key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+                  restore-keys: bun-${{ runner.os }}-
 
-              release = get_release_by_tag()
-              release_body = sanitize_release_changes(release.get("body") or "")
-              if release_body:
-                  return release_body
-              return "No changelog entries were found for this version."
+            - name: Rust Cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: src-tauri
+                  cache-on-failure: true
 
-          def fit_embed_description(text):
-              max_chars = 3800
-              if len(text) <= max_chars:
-                  return text
+            - name: Normalize Tauri signing key
+              shell: bash
+              env:
+                  RAW_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+                  RAW_TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+              run: |
+                  node <<'NODE'
+                  const fs = require('node:fs');
 
-              suffix = f"\n\n[Read the full release notes]({release_url})"
-              available = max_chars - len(suffix) - 1
-              clipped = text[:available].rsplit("\n", 1)[0].rstrip() or text[:available].rstrip()
-              return f"{clipped}…{suffix}"
+                  const normalizeNewlines = (value) =>
+                    value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
 
-          def get_commit_author():
-              fallback = {"name": "GitHub", "url": release_url, "avatar": None}
-              if not repo or not github_token:
-                  return fallback
-              try:
-                  commit = github_api(f"/repos/{repo}/commits/{release_tag}")
-              except Exception:
-                  return fallback
+                  const fail = (message) => {
+                    console.error(`::error::${message}`);
+                    process.exit(1);
+                  };
 
-              github_author = commit.get("author") or {}
-              commit_author = (commit.get("commit") or {}).get("author") or {}
-              return {
-                  "name": github_author.get("login") or commit_author.get("name") or "GitHub",
-                  "url": github_author.get("html_url") or release_url,
-                  "avatar": github_author.get("avatar_url"),
-              }
+                  const rawKey = normalizeNewlines(
+                    process.env.RAW_TAURI_SIGNING_PRIVATE_KEY || ''
+                  );
 
-          changelog_text = read_release_changes()
-          author = get_commit_author()
+                  if (!rawKey) {
+                    fail(
+                      'Missing GitHub secret TAURI_PRIVATE_KEY. Set it to the full Tauri updater private key.'
+                    );
+                  }
 
-          changelog_field = fit_embed_description(changelog_text)
-          color = 3447003 if is_release_edit else (16753920 if prerelease else 5763719)
+                  const decodedKey = rawKey.startsWith('untrusted comment:')
+                    ? rawKey
+                    : normalizeNewlines(
+                        Buffer.from(rawKey, 'base64').toString('utf8')
+                      );
 
-          embed = {
-              "author": {"name": "ISpooferMotion Updates", "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"},
-              "title": f"🚀 ISpooferMotion {release_tag} is now available!",
-              "url": release_url,
-              "description": f"{changelog_field}",
-              "color": color,
-              "fields": [
-                  {"name": "📥 Download", "value": f"**[Get it on GitHub]({release_url})**", "inline": False},
-              ],
-              "footer": {"text": f"Released by {author['name']} • The auto-updater will prompt you on next launch.", "icon_url": author["avatar"] if author["avatar"] else None},
-          }
+                  const keyForTauri = rawKey.startsWith('untrusted comment:')
+                    ? Buffer.from(`${decodedKey}\n`, 'utf8').toString('base64')
+                    : rawKey;
 
-          payload = {
-              "content": (
-                  f"<@&{role_id}> ISpooferMotion release notes were updated.\n\n"
-                  if is_release_edit
-                  else f"<@&{role_id}> ISpooferMotion has updated!\n\n"
-              ),
-              "allowed_mentions": {"roles": [role_id]},
-              "embeds": [embed],
-          }
+                  const keyLines = decodedKey.split('\n').filter(Boolean);
 
-          request = urllib.request.Request(
-              f"https://discord.com/api/v10/channels/{channel_id}/messages",
-              data=json.dumps(payload).encode("utf-8"),
-              headers={
-                  "Content-Type": "application/json", 
-                  "Authorization": f"Bot {bot_token}",
-                  "User-Agent": "ISpooferMotion-Discord-Release-Bot"
-              },
-              method="POST",
-          )
-          with urllib.request.urlopen(request) as response:
-              if response.status >= 300:
-                  raise RuntimeError(f"Discord API failed with status {response.status}")
+                  if (
+                    !keyLines[0]?.startsWith('untrusted comment:') ||
+                    keyLines.length < 2
+                  ) {
+                    fail(
+                      'TAURI_PRIVATE_KEY must be the full base64 private key generated by "tauri signer generate". A raw full key with the first "untrusted comment:" line is also accepted.'
+                    );
+                  }
 
-          print(f"Posted Discord release announcement for {release_tag}.")
-          PY
+                  if (
+                    !/secret key/i.test(keyLines[0]) ||
+                    /public key/i.test(keyLines[0])
+                  ) {
+                    fail(
+                      'TAURI_PRIVATE_KEY contains a public key. Use the generated private key instead.'
+                    );
+                  }
+
+                  if (!/^[A-Za-z0-9+/=]+$/.test(keyLines[1])) {
+                    fail(
+                      'TAURI_PRIVATE_KEY does not look like a valid Tauri/minisign private key.'
+                    );
+                  }
+
+                  const password =
+                    process.env.RAW_TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '';
+
+                  const keyDelimiter =
+                    `TAURI_SIGNING_KEY_${Date.now()}_${Math.random()
+                      .toString(36)
+                      .slice(2)}`;
+
+                  const passwordDelimiter =
+                    `TAURI_SIGNING_PASSWORD_${Date.now()}_${Math.random()
+                      .toString(36)
+                      .slice(2)}`;
+
+                  fs.appendFileSync(
+                    process.env.GITHUB_ENV,
+                    [
+                      `TAURI_SIGNING_PRIVATE_KEY<<${keyDelimiter}`,
+                      keyForTauri,
+                      keyDelimiter,
+                      `TAURI_SIGNING_PRIVATE_KEY_PASSWORD<<${passwordDelimiter}`,
+                      password,
+                      passwordDelimiter,
+                      '',
+                    ].join('\n')
+                  );
+                  NODE
+
+            - name: Build app
+              uses: tauri-apps/tauri-action@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  args: --bundles ${{ matrix.bundles }} ${{ matrix.args }}
+                  tagName: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
+                  uploadUpdaterJson: true
+                  uploadUpdaterSignatures: true
+
+    verify-updater-release:
+        name: Verify updater artifacts
+        needs: [prepare-release, build-and-release]
+        if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
+        runs-on: ubuntu-22.04
+
+        permissions:
+            contents: read
+
+        steps:
+            - name: Verify release updater metadata and macOS signature
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TAG_NAME: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  mkdir updater-check
+
+                  gh release download "$TAG_NAME" \
+                    --repo "$GITHUB_REPOSITORY" \
+                    --dir updater-check \
+                    --pattern latest.json
+
+                  gh api \
+                    "repos/$GITHUB_REPOSITORY/releases/tags/$TAG_NAME" \
+                    --jq '.assets[].name' \
+                    > updater-check/assets.txt
+
+                  grep -Eq '\.app\.tar\.gz$' updater-check/assets.txt
+                  grep -Eq '\.app\.tar\.gz\.sig$' updater-check/assets.txt
+
+                  node <<'NODE'
+                  const fs = require('node:fs');
+
+                  const latest = JSON.parse(
+                    fs.readFileSync('updater-check/latest.json', 'utf8')
+                  );
+
+                  const platforms = latest.platforms || {};
+
+                  const macEntries = Object.entries(platforms).filter(([key]) =>
+                    key.startsWith('darwin-') || key.includes('apple-darwin')
+                  );
+
+                  if (macEntries.length === 0) {
+                    throw new Error('latest.json has no macOS updater entry');
+                  }
+
+                  for (const [key, value] of macEntries) {
+                    if (
+                      !value ||
+                      typeof value.signature !== 'string' ||
+                      value.signature.trim() === ''
+                    ) {
+                      throw new Error(
+                        `latest.json macOS entry ${key} has no updater signature`
+                      );
+                    }
+
+                    if (
+                      typeof value.url !== 'string' ||
+                      !value.url.includes('.app.tar.gz')
+                    ) {
+                      throw new Error(
+                        `latest.json macOS entry ${key} does not target an .app.tar.gz updater bundle`
+                      );
+                    }
+                  }
+                  NODE
+
+    # Plugin Build
+
+    plugin-release:
+        name: Build & Release Plugin
+        needs: [prepare-release, create-release]
+        if: needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
+        runs-on: ubuntu-22.04
+
+        permissions:
+            contents: write
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v7
+              with:
+                  submodules: recursive
+
+            - name: Setup Environment
+              uses: ./.github/actions/setup
+
+            - name: Cache bun modules
+              uses: actions/cache@v6
+              with:
+                  path: ~/.bun/install/cache
+                  key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+                  restore-keys: bun-${{ runner.os }}-
+
+            - name: Build plugin
+              run: bun run build:plugin
+
+            - name: Upload plugin to release
+              uses: softprops/action-gh-release@v3
+              with:
+                  tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
+                  files: dist-plugin/ISpooferMotion.rbxmx
+                  fail_on_unmatched_files: true
+
+    # Discord Announcement
+
+    announce-release:
+        name: Announce on Discord
+        needs: [prepare-release, build-and-release, plugin-release]
+        if: >-
+            needs.prepare-release.outputs.SHOULD_RELEASE == 'true'
+            && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v7
+
+            - name: Post to Discord
+              env:
+                  DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_REPOSITORY: ${{ github.repository }}
+                  RELEASE_TAG: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
+                  RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare-release.outputs.RELEASE_TAG }}
+                  RELEASE_PRERELEASE: false
+                  RELEASE_EVENT_ACTION: published
+                  DISCORD_RELEASE_ROLE_ID: "1457029900291670210"
+
+              run: |
+                  python3 <<'PY'
+                  import json
+                  import os
+                  import urllib.request
+
+                  bot_token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
+                  github_token = os.environ.get("GITHUB_TOKEN", "").strip()
+                  repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
+                  release_tag = os.environ.get("RELEASE_TAG", "").strip()
+                  release_url = os.environ.get("RELEASE_URL", "").strip()
+                  prerelease = os.environ.get("RELEASE_PRERELEASE") == "true"
+                  event_action = os.environ.get("RELEASE_EVENT_ACTION", "").strip()
+                  is_release_edit = event_action == "edited"
+                  role_id = os.environ.get("DISCORD_RELEASE_ROLE_ID", "").strip()
+                  channel_id = "1400781818780717056"
+
+                  release_record_cache = None
+
+                  if not bot_token:
+                      print("No Discord bot token configured. Skipping.")
+                      exit(0)
+
+                  if not release_tag:
+                      print("Missing release tag. Skipping.")
+                      exit(0)
+
+                  def github_api(path):
+                      request = urllib.request.Request(
+                          f"https://api.github.com{path}",
+                          headers={
+                              "Accept": "application/vnd.github+json",
+                              "Authorization": f"Bearer {github_token}",
+                              "X-GitHub-Api-Version": "2022-11-28",
+                              "User-Agent": "ISpooferMotion-Release-Bot",
+                          },
+                      )
+
+                      with urllib.request.urlopen(request) as response:
+                          return json.loads(response.read().decode("utf-8"))
+
+                  def get_release_by_tag():
+                      global release_record_cache
+
+                      if release_record_cache is not None:
+                          return release_record_cache
+
+                      if not repo or not release_tag or not github_token:
+                          return {}
+
+                      try:
+                          release_record_cache = github_api(
+                              f"/repos/{repo}/releases/tags/{release_tag}"
+                          )
+                          return release_record_cache
+                      except Exception:
+                          return {}
+
+                  def read_release_notes():
+                      release = get_release_by_tag()
+                      release_body = (release.get("body") or "").strip()
+
+                      if release_body:
+                          return release_body
+
+                      return "No release notes were provided for this version."
+
+                  def fit_embed_description(text):
+                      max_chars = 3800
+
+                      if len(text) <= max_chars:
+                          return text
+
+                      suffix = f"\n\n[Read the full release notes]({release_url})"
+                      available = max_chars - len(suffix) - 1
+
+                      clipped = (
+                          text[:available].rsplit("\n", 1)[0].rstrip()
+                          or text[:available].rstrip()
+                      )
+
+                      return f"{clipped}…{suffix}"
+
+                  def get_commit_author():
+                      fallback = {
+                          "name": "GitHub",
+                          "url": release_url,
+                          "avatar": None,
+                      }
+
+                      if not repo or not github_token:
+                          return fallback
+
+                      try:
+                          commit = github_api(
+                              f"/repos/{repo}/commits/{release_tag}"
+                          )
+                      except Exception:
+                          return fallback
+
+                      github_author = commit.get("author") or {}
+                      commit_author = (commit.get("commit") or {}).get("author") or {}
+
+                      return {
+                          "name": (
+                              github_author.get("login")
+                              or commit_author.get("name")
+                              or "GitHub"
+                          ),
+                          "url": github_author.get("html_url") or release_url,
+                          "avatar": github_author.get("avatar_url"),
+                      }
+
+                  release_notes = read_release_notes()
+                  author = get_commit_author()
+                  release_notes_field = fit_embed_description(release_notes)
+
+                  color = (
+                      3447003
+                      if is_release_edit
+                      else (16753920 if prerelease else 5763719)
+                  )
+
+                  embed = {
+                      "author": {
+                          "name": "ISpooferMotion Updates",
+                          "icon_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+                      },
+                      "title": f"🚀 ISpooferMotion {release_tag} is now available!",
+                      "url": release_url,
+                      "description": release_notes_field,
+                      "color": color,
+                      "fields": [
+                          {
+                              "name": "📥 Download",
+                              "value": f"**[Get it on GitHub]({release_url})**",
+                              "inline": False,
+                          },
+                      ],
+                      "footer": {
+                          "text": (
+                              f"Released by {author['name']} • "
+                              "The auto-updater will prompt you on next launch."
+                          ),
+                          "icon_url": author["avatar"] if author["avatar"] else None,
+                      },
+                  }
+
+                  payload = {
+                      "content": (
+                          f"<@&{role_id}> ISpooferMotion release notes were updated.\n\n"
+                          if is_release_edit
+                          else f"<@&{role_id}> ISpooferMotion has updated!\n\n"
+                      ),
+                      "allowed_mentions": {
+                          "roles": [role_id],
+                      },
+                      "embeds": [embed],
+                  }
+
+                  request = urllib.request.Request(
+                      f"https://discord.com/api/v10/channels/{channel_id}/messages",
+                      data=json.dumps(payload).encode("utf-8"),
+                      headers={
+                          "Content-Type": "application/json",
+                          "Authorization": f"Bot {bot_token}",
+                          "User-Agent": "ISpooferMotion-Discord-Release-Bot",
+                      },
+                      method="POST",
+                  )
+
+                  with urllib.request.urlopen(request) as response:
+                      if response.status >= 300:
+                          raise RuntimeError(
+                              f"Discord API failed with status {response.status}"
+                          )
+
+                  print(
+                      f"Posted Discord release announcement for {release_tag}."
+                  )
+                  PY

@@ -172,9 +172,10 @@ pub fn run() {
     }
 
     app_builder
-        .on_window_event(|_window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                // When any main window closes, clean up the Roblox plugin
+        .on_window_event(|window, event| {
+            if window.label() == "main"
+                && matches!(event, tauri::WindowEvent::CloseRequested { .. })
+            {
                 crate::commands::startup::uninstall_roblox_plugin();
             }
         })
@@ -189,17 +190,8 @@ pub fn run() {
                 tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build(),
             )?;
 
-            // Automatically install / sync Roblox plugin on backend startup.
-            let sync_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = crate::commands::startup::sync_roblox_plugin(sync_handle).await;
-            });
-
             // Initialize the bridge server asynchronously.
             tauri::async_runtime::spawn(crate::studio_bridge::start_server(app.handle().clone()));
-
-            // Initialize capture detection
-            crate::commands::screenshot_monitor::spawn_capture_monitor(app.handle().clone());
 
             // Initialize system tray icon.
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};

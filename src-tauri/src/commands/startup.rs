@@ -1,6 +1,7 @@
 //! Lifecycle commands invoked when the Tauri app boots up.
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
 
 /// Destroys the splashscreen window and spawns the main frameless React window.
@@ -75,6 +76,10 @@ fn roblox_plugins_dirs() -> Vec<PathBuf> {
 #[tauri::command]
 #[specta::specta]
 pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
+    static SYNC_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+    let sync_lock = SYNC_LOCK.get_or_init(|| tokio::sync::Mutex::new(()));
+    let _guard = sync_lock.lock().await;
+
     log::info!("Starting Roblox plugin sync...");
 
     // The bundled resource path varies between installed (NSIS) and standalone
@@ -150,21 +155,51 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
             let _ = tokio::fs::create_dir_all(&dest_dir).await;
         }
 
+        let dest_path = dest_dir.join("ISpooferMotion.rbxmx");
+        let temp_path = dest_dir.join(".ISpooferMotion.rbxmx.tmp");
+        let copied = match tokio::fs::copy(&resource_path, &temp_path).await {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                log::error!("Failed to stage Roblox plugin update in {:?}: {error}", dest_dir);
+                continue;
+            }
+        };
+
+        // Keep the previous plugin intact until the replacement has been copied fully.
+        // POSIX rename replaces the destination atomically, so macOS/Linux never have a window
+        // where the canonical plugin is missing. Windows cannot rename over an existing file.
+        #[cfg(target_os = "windows")]
+        let install_result = {
+            let _ = tokio::fs::remove_file(&dest_path).await;
+            tokio::fs::rename(&temp_path, &dest_path).await
+        };
+
+        #[cfg(not(target_os = "windows"))]
+        let install_result = tokio::fs::rename(&temp_path, &dest_path).await;
+
+        if let Err(error) = install_result {
+            log::error!("Failed to install Roblox plugin at {:?}: {error}", dest_path);
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            continue;
+        }
+
+        // Clean up older/duplicate plugin filenames only after the canonical copy exists.
         if let Ok(mut entries) = tokio::fs::read_dir(&dest_dir).await {
             while let Ok(Some(entry)) = entries.next_entry().await {
+                let path = entry.path();
+                if path == dest_path {
+                    continue;
+                }
                 if let Some(file_name) = entry.file_name().to_str() {
                     if file_name.contains("ISpooferMotion") {
-                        let _ = tokio::fs::remove_file(entry.path()).await;
+                        let _ = tokio::fs::remove_file(path).await;
                     }
                 }
             }
         }
 
-        let dest_path = dest_dir.join("ISpooferMotion.rbxmx");
-        if let Ok(n) = tokio::fs::copy(&resource_path, &dest_path).await {
-            log::info!("Copied plugin ({} bytes) to {:?}", n, dest_path);
-            any_copied = true;
-        }
+        log::info!("Copied plugin ({} bytes) to {:?}", copied, dest_path);
+        any_copied = true;
     }
 
     Ok(any_copied)

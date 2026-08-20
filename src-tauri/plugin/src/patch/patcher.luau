@@ -537,105 +537,25 @@ local function applyPatch(patch: Patch): (boolean, string?)
 			return ok, err
 		end
 
-		local oldParent = meshObj.Parent
-		if not oldParent then
-			return false, "MeshPart has no parent"
+		local replaceOk, replaceErr = applyMeshPartInPlace(
+			meshObj,
+			targetMeshUri,
+			targetTextureUri
+		)
+		if not replaceOk then
+			return false, replaceErr
 		end
 
-		-- Yield briefly before creating MeshPart to prevent Studio crashing from rapid mesh creation calls
-		task.wait()
-		local createOk, createdPart = pcall(function()
-			return AssetService:CreateMeshPartAsync(targetMeshUri, {
-				CollisionFidelity = meshObj.CollisionFidelity,
-				RenderFidelity = meshObj.RenderFidelity,
-			})
-		end)
-
-		local objStillValid = pcall(function()
-			return meshObj.Parent
-		end)
-		if not objStillValid or meshObj.Parent == nil then
-			if createOk and createdPart then
-				pcall(function()
-					createdPart:Destroy()
-				end)
-			end
-			return false, "Original MeshPart was destroyed while waiting for CreateMeshPartAsync"
-		end
-
-		local newPart: BasePart
-		if createOk and createdPart and createdPart:IsA("BasePart") then
-			newPart = createdPart :: BasePart
-		else
-			logToPlugin(
-				"[Warning] [ISpooferMotion] AssetService:CreateMeshPartAsync failed for "
-					.. meshObj.Name
-					.. ". Falling back to Part+SpecialMesh (note: mesh physics/collisions will be degraded)."
-			)
-			local fallbackPart = Instance.new("Part")
-			local specialMesh = Instance.new("SpecialMesh")
-			specialMesh.MeshId = targetMeshUri
-			specialMesh.Scale = Vector3.new(1, 1, 1)
-			if targetTextureUri then
-				specialMesh.TextureId = targetTextureUri
-			end
-			specialMesh.Parent = fallbackPart
-			newPart = fallbackPart
-		end
-
-		local copyOk, copyErr = pcall(function()
-			copyMeshPartPropertiesInto(meshObj, newPart, targetTextureUri)
-			-- Explicitly re-apply color after CreateMeshPartAsync since the engine
-			-- may reset it to default white during async mesh loading
-			pcall(function()
-				newPart.Color = meshObj.Color
-				newPart.Material = meshObj.Material
-				newPart.Transparency = meshObj.Transparency
-				newPart.Reflectance = meshObj.Reflectance
-			end)
-		end)
-		if not copyOk then
-			pcall(function()
-				newPart:Destroy()
-			end)
-			return false, copyErr
-		end
-
-		local parentOk, parentErr = pcall(function()
-			newPart.Parent = oldParent
-		end)
-		if not parentOk or newPart.Parent ~= oldParent then
-			pcall(function()
-				newPart:Destroy()
-			end)
-			return false, parentErr or "Could not parent replacement MeshPart"
-		end
-
-		local moveOk, moveErr = pcall(function()
-			moveMeshPartContentsInto(meshObj, newPart)
-		end)
-		if not moveOk then
-			return false, moveErr
-		end
-
-		local destroyOk, destroyErr = pcall(function()
-			meshObj:Destroy()
-		end)
-		if not destroyOk then
-			return false, destroyErr
-		end
-
-		replaceRegisteredObject(patch.token, newPart)
 		local objFullName = "?"
 		pcall(function()
-			objFullName = newPart:GetFullName()
+			objFullName = meshObj:GetFullName()
 		end)
 		logToPlugin(
 			string.format(
-				"[ISpooferMotion] Replaced MeshPart '%s': mesh=%s texture=%s",
+				"[ISpooferMotion] Replaced MeshPart '%s' in place: mesh=%s texture=%s",
 				objFullName,
-				targetMeshUri or "(unchanged)",
-				targetTextureUri or "(unchanged)"
+				targetMeshUri,
+				targetTextureUri or "(preserved)"
 			)
 		)
 		return true, nil
@@ -666,6 +586,10 @@ local function applyPatches(patches: any)
 	end
 	if scanRunning then
 		logToPlugin("[Warning] Scan already running; skipping patch batch")
+		return
+	end
+	if manualReplaceRunning then
+		logToPlugin("[Warning] Manual replacement is running; skipping patch batch")
 		return
 	end
 

@@ -117,7 +117,6 @@ local logToPlugin: any
 local polling: any
 local BASE_URL: any
 
---#include "../src/version/version.luau"
 --#include "../src/config/runtime.luau"
 --#include "../src/ui/gui.luau"
 --#include "../src/types/assets.luau"

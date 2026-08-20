@@ -503,8 +503,6 @@ local function scanAssets(): ()
 		-- Clear records after sending
 		table.clear(records)
 		setPluginGuiStatus("Waiting for new scan or replacements...")
-		-- wait for GUI update
-		task.wait(1)
 	end
 end
 
@@ -517,6 +515,10 @@ local function scan(): ()
 
 	if patchRunning then
 		logToPlugin("[Warning] Patch already running, cannot scan")
+		return
+	end
+	if manualReplaceRunning then
+		logToPlugin("[Warning] Manual replacement already running, cannot scan")
 		return
 	end
 

@@ -22,12 +22,6 @@ export function useAppInitialization() {
   });
   const [isRobloxApiDown, setIsRobloxApiDown] = useState(false);
 
-  // Auto-install / sync Roblox plugin on frontend mount
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-    void invoke('sync_roblox_plugin').catch(console.warn);
-  }, []);
-
   // Check Roblox API Status
   useEffect(() => {
     if (!isTauriRuntime()) return;

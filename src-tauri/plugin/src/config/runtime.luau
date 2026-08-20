@@ -53,6 +53,7 @@ local polling = false
 --- State flags to prevent multiple scans or patch batches from overlapping.
 local scanRunning = false
 local patchRunning = false
+local manualReplaceRunning = false
 local autoReplaceEnabled = false
 local lastDiscovery = 0
 

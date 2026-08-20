@@ -2,147 +2,86 @@
 --!nolint
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
---- MeshPart replacement logic.
+--- MeshPart replacement helpers.
 ---
---- MeshParts cannot have their MeshId changed at runtime. To spoof them, we have to
---- create an entirely new MeshPart (or a fallback Part with a SpecialMesh), copy all
---- the properties over, move all children and joints, and then destroy the original.
+--- MeshId cannot be assigned directly, but Roblox supports replacing the mesh data
+--- on an existing MeshPart via CreateMeshPartAsync + ApplyMesh. Keeping the original
+--- instance avoids breaking joints, children, references, attributes, tags, and physics
+--- state by destroying and recreating the part.
 
---- Copies all visual, physical, and behavioral properties from one part to another.
-local function copyMeshPartPropertiesInto(src: MeshPart, dst: BasePart, overrideTextureId: string?)
-	pcall(function()
-		dst.Name = src.Name
-		dst.CFrame = src.CFrame
-		dst.Size = src.Size
-		dst.Anchored = src.Anchored
-		dst.Archivable = src.Archivable
-		dst.PivotOffset = src.PivotOffset
+--- Replaces a MeshPart's mesh data without replacing the Instance itself.
+---
+--- targetMeshUri must be a normalized asset URI. targetTextureUri is optional; if it
+--- is omitted, the existing texture is restored after ApplyMesh copies the temporary
+--- part's texture data.
+local function applyMeshPartInPlace(
+	meshObj: MeshPart,
+	targetMeshUri: string,
+	targetTextureUri: string?
+): (boolean, string?)
+	local contentOk, meshContent = pcall(function()
+		return Content.fromUri(targetMeshUri)
 	end)
-	pcall(function()
-		dst.CanCollide = src.CanCollide
-		dst.CanTouch = src.CanTouch
-		dst.CanQuery = src.CanQuery
-		dst.CastShadow = src.CastShadow
-		dst.CollisionGroup = src.CollisionGroup
-	end)
-	pcall(function()
-		dst.Color = src.Color
-		dst.Material = src.Material
-		dst.Transparency = src.Transparency
-		dst.Reflectance = src.Reflectance
-	end)
-	pcall(function()
-		dst.MaterialVariant = src.MaterialVariant
-	end)
-	pcall(function()
-		dst.Locked = src.Locked
-		dst.Massless = src.Massless
-		dst.RootPriority = src.RootPriority
-		dst.CustomPhysicalProperties = src.CustomPhysicalProperties
-	end)
-	pcall(function()
-		dst.AssemblyLinearVelocity = src.AssemblyLinearVelocity
-		dst.AssemblyAngularVelocity = src.AssemblyAngularVelocity
-	end)
-	if dst:IsA("MeshPart") then
-		local meshDst = dst :: MeshPart
-		pcall(function()
-			meshDst.TextureID = overrideTextureId or src.TextureID
-		end)
-		pcall(function()
-			meshDst.CollisionFidelity = src.CollisionFidelity
-		end)
-		pcall(function()
-			meshDst.RenderFidelity = src.RenderFidelity
-		end)
-		pcall(function()
-			(meshDst :: any).DoubleSided = (src :: any).DoubleSided
-		end)
+	if not contentOk then
+		return false, "Could not create mesh Content: " .. tostring(meshContent)
 	end
+
+	local options: any = {
+		CollisionFidelity = meshObj.CollisionFidelity,
+		RenderFidelity = meshObj.RenderFidelity,
+	}
 	pcall(function()
-		for key, value in pairs(src:GetAttributes()) do
+		options.FluidFidelity = (meshObj :: any).FluidFidelity
+	end)
+
+	local originalTexture = ""
+	pcall(function()
+		originalTexture = meshObj.TextureID
+	end)
+
+	-- CreateMeshPartAsync yields. Yield once before it as well so bulk replacements
+	-- cannot hammer Studio's mesh creation path in a single scheduler slice.
+	task.wait()
+	local createOk, createdOrErr = pcall(function()
+		return AssetService:CreateMeshPartAsync(meshContent, options)
+	end)
+	if not createOk or not createdOrErr or not createdOrErr:IsA("MeshPart") then
+		if createOk and createdOrErr then
 			pcall(function()
-				dst:SetAttribute(key, value)
+				createdOrErr:Destroy()
 			end)
 		end
-	end)
-	pcall(function()
-		for _, tag in ipairs(CollectionService:GetTags(src)) do
-			pcall(function()
-				CollectionService:AddTag(dst, tag)
-			end)
-		end
-	end)
-end
+		return false, "CreateMeshPartAsync failed: " .. tostring(createdOrErr)
+	end
 
---- Re-wires a joint (like a Motor6D or Weld) to point to the new replacement part.
-local function rewritePartReference(obj: Instance, src: BasePart, dst: BasePart)
-	pcall(function()
-		local anyObj = obj :: any
-		if anyObj.Part0 == src then
-			anyObj.Part0 = dst
-		end
+	local temporaryMesh = createdOrErr :: MeshPart
+	local stillValid = pcall(function()
+		return meshObj.Parent
 	end)
-	pcall(function()
-		local anyObj = obj :: any
-		if anyObj.Part1 == src then
-			anyObj.Part1 = dst
-		end
-	end)
-end
-
---- Moves all children and descendants from the old part to the new part.
----
---- Also scans for any joints that were connected to the old part and re-wires them.
-local function moveMeshPartContentsInto(src: BasePart, dst: BasePart)
-	pcall(function()
-		src.Parent = nil
-	end)
-
-	for _, child in ipairs(src:GetChildren()) do
+	if not stillValid or meshObj.Parent == nil then
 		pcall(function()
-			child.Parent = dst
+			temporaryMesh:Destroy()
 		end)
+		return false, "Original MeshPart was destroyed while loading replacement mesh"
 	end
 
-	local seen: { [Instance]: boolean } = {}
-	for _, joint in ipairs(src:GetJoints()) do
-		seen[joint] = true
-		rewritePartReference(joint, src, dst)
-	end
-	for _, descendant in ipairs(dst:GetDescendants()) do
-		if not seen[descendant] then
-			seen[descendant] = true
-			rewritePartReference(descendant, src, dst)
-		end
-	end
-
-	local externalRefsDetected = false
-	pcall(function()
-		for _, part in ipairs(src:GetConnectedParts()) do
-			if
-				part ~= src
-				and part ~= dst
-				and not part:IsDescendantOf(dst)
-				and not part:IsDescendantOf(src)
-			then
-				externalRefsDetected = true
-				break
-			end
-		end
+	local applyOk, applyErr = pcall(function()
+		meshObj:ApplyMesh(temporaryMesh)
 	end)
-
-	if externalRefsDetected then
-		logToPlugin(
-			"[Warning] [ISpooferMotion] MeshPart replacement detected external constraints pointing to "
-				.. src.Name
-				.. ". Other external references (e.g. ObjectValues, Scripts) may also be broken."
-		)
+	pcall(function()
+		temporaryMesh:Destroy()
+	end)
+	if not applyOk then
+		return false, tostring(applyErr)
 	end
-end
 
---- Fully replaces a MeshPart's properties and contents into a destination part.
-local function copyMeshPartInto(src: MeshPart, dst: BasePart, overrideTextureId: string?)
-	copyMeshPartPropertiesInto(src, dst, overrideTextureId)
-	moveMeshPartContentsInto(src, dst)
+	local textureToApply = targetTextureUri or originalTexture
+	local textureOk, textureErr = pcall(function()
+		meshObj.TextureID = textureToApply
+	end)
+	if not textureOk then
+		return false, "Mesh applied but texture update failed: " .. tostring(textureErr)
+	end
+
+	return true, nil
 end

@@ -1,7 +1,6 @@
 {
   "languageMode": "nonstrict",
   "globals": [
-    "PLUGIN_VERSION",
     "EMBEDDED_ASSET_PROPS",
     "SERVICES_TO_SCAN",
     "SEND_CHUNK_SIZE",
