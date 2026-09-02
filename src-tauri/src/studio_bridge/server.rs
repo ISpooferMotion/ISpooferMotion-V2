@@ -222,8 +222,22 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
     ) = stores;
     guard.scan_status = None;
     if !mappings.is_empty() {
-        guard.stored_patches = patches;
-        guard.notify.notify_waiters();
+        if patches.is_empty() {
+            let _ = state.app_handle.emit(
+                "patch-results",
+                serde_json::json!({
+                    "failedPatches": [],
+                    "succeeded": 0,
+                    "failed": 0,
+                    "total": 0
+                }),
+            );
+            guard.stored_mappings.clear();
+            guard.stored_patches.clear();
+        } else {
+            guard.stored_patches = patches;
+            guard.notify.notify_waiters();
+        }
     }
     let kf_warnings = count_keyframe_warnings(&guard.last_script_refs);
     guard.keyframe_warning_count = kf_warnings;
@@ -404,16 +418,39 @@ pub async fn handle_replace_ids(
             Vec::new()
         });
     let mut guard = state.data.write().await;
-    guard.stored_mappings = mappings;
-    guard.stored_patches = patches;
     if records.is_empty() {
+        guard.stored_mappings = mappings;
+        guard.stored_patches = patches;
         guard.request_sounds = true;
         guard.request_animations = true;
         guard.request_images = true;
         guard.request_meshes = true;
         guard.request_script_refs = true;
+        guard.notify.notify_waiters();
+    } else {
+        if patches.is_empty() {
+            let _ = state.app_handle.emit(
+                "spoofer-log",
+                serde_json::json!({
+                    "level": "warn",
+                    "message": "0 patches could be planned from the current scan data. Nothing to replace."
+                }),
+            );
+            let _ = state.app_handle.emit(
+                "patch-results",
+                serde_json::json!({
+                    "failedPatches": [],
+                    "succeeded": 0,
+                    "failed": 0,
+                    "total": 0
+                }),
+            );
+        } else {
+            guard.stored_mappings = mappings;
+            guard.stored_patches = patches;
+            guard.notify.notify_waiters();
+        }
     }
-    guard.notify.notify_waiters();
     Json(serde_json::json!({ "ok": true, "truncated": over_limit }))
 }
 
