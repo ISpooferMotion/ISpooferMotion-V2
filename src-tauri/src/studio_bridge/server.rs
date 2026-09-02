@@ -265,6 +265,21 @@ pub async fn handle_scan_abort(State(state): State<AppState>) -> Json<Value> {
     guard.last_images.scanning = false;
     guard.last_meshes.scanning = false;
     guard.last_script_refs.scanning = false;
+
+    if !guard.stored_mappings.is_empty() {
+        let _ = state.app_handle.emit(
+            "patch-results",
+            serde_json::json!({
+                "failedPatches": [],
+                "succeeded": 0,
+                "failed": 0,
+                "total": 0
+            }),
+        );
+        guard.stored_mappings.clear();
+        guard.stored_patches.clear();
+    }
+
     Json(serde_json::json!({"success": true}))
 }
 
