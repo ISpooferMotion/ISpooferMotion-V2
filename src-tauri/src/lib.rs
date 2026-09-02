@@ -59,6 +59,7 @@ macro_rules! specta_commands {
             crate::commands::ipc::job::spoofer_pause,
             crate::commands::ipc::job::spoofer_resume,
             crate::commands::ipc::job::spoofer_cancel,
+            crate::commands::ipc::job::force_reset_spoofer_job,
             crate::commands::ipc::job::check_session,
             crate::commands::ipc::logging::append_debug_log,
             crate::commands::ipc::logging::open_logs_folder,

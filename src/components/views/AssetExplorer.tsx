@@ -2162,6 +2162,14 @@ export default function AssetExplorer({
                           useSpooferStore.getState().setIsSpoofing(false);
                           useSpooferStore.getState().setIsReplacing(false);
                           useSpooferStore.getState().setIsScanningStudio(false);
+                          useSpooferStore.getState().setIsDiscoveringPlaceIds(false);
+                          // Also clear the Rust-side job lock. If a panic orphaned
+                          // SPOOFER_CONTROL (finish_spoofer_job was never called),
+                          // future run_spoofer_action calls would fail with
+                          // "A spoofing job is already running" until app restart.
+                          import('@tauri-apps/api/core')
+                            .then(({ invoke }) => invoke('force_reset_spoofer_job'))
+                            .catch(() => {});
                           showToast('info', 'Button state reset. You can start a new spoof.');
                         }}
                         className="flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors text-red-400 hover:text-red-300 hover:bg-red-500/10"

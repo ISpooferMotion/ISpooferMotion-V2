@@ -472,11 +472,6 @@ export const applyReplacements = async (
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     const totalCount = Object.keys(replacements).length;
-    setIsReplacing(true);
-    setReplaceError(false);
-    useSpooferStore.getState().setReplaceTotalCount(totalCount);
-    useSpooferStore.getState().setReplaceCurrentCount(0);
-    useSpooferStore.getState().setReplaceStartTime(Date.now());
 
     if (totalCount === 0) {
       setSpoofingLogs((prev) =>
@@ -494,6 +489,12 @@ export const applyReplacements = async (
       }
       return;
     }
+
+    setIsReplacing(true);
+    setReplaceError(false);
+    useSpooferStore.getState().setReplaceTotalCount(totalCount);
+    useSpooferStore.getState().setReplaceCurrentCount(0);
+    useSpooferStore.getState().setReplaceStartTime(Date.now());
 
     setSpoofingLogs((prev) => appendSpoofingLog(prev, '\nApplying replacements to Studio...'));
 

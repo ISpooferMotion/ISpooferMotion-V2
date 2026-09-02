@@ -46,6 +46,20 @@ pub fn spoofer_cancel(job_id: String) -> bool {
     update_spoofer_control(&job_id, |control| control.cancelled = true)
 }
 
+/// Force-clears the global spoofer job lock even if the active job_id doesn't match.
+///
+/// Normally only `finish_spoofer_job` should clear this, which requires matching the
+/// active job_id. This command exists as an escape hatch for the "Force Reset (Stuck?)"
+/// button: if a Rust panic orphaned the lock (job finished abnormally and never called
+/// finish_spoofer_job), the user can clear it without restarting the app.
+#[tauri::command]
+#[specta::specta]
+pub fn force_reset_spoofer_job() {
+    if let Ok(mut control) = state::spoofer_control().lock() {
+        *control = state::SpooferControl::default();
+    }
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn check_session(app: AppHandle) -> crate::error::Result<AnyValue> {
