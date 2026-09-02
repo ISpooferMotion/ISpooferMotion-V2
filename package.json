@@ -30,7 +30,7 @@
     "rust:test": "cargo test --manifest-path src-tauri/Cargo.toml --lib",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
-    "check": "run-s typecheck rust:check rust:lint rust:test lint test build"
+    "check": "run-s build:plugin typecheck rust:check rust:lint rust:test lint test build"
   },
   "lint-staged": {
     "*.{js,ts,jsx,tsx}": [

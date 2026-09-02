@@ -317,7 +317,7 @@ pub async fn download_animation_asset_with_progress(
             let mut this_url_was_perm_failure = false;
             let is_cdn_url = download_url.contains("rbxcdn.com");
 
-            let resume_offset = if is_first_url {
+            let mut resume_offset = if is_first_url {
                 if let Ok(meta) = tokio::fs::metadata(&file_path).await {
                     meta.len()
                 } else {
@@ -332,6 +332,11 @@ pub async fn download_animation_asset_with_progress(
             // retry-on-403 turned every dead URL into ~40s of wall time before we
             // moved to the next candidate. Restore the tighter V1 budget.
             for attempt in 0..3u64 {
+                if attempt > 0 {
+                    if let Ok(meta) = tokio::fs::metadata(&file_path).await {
+                        resume_offset = meta.len();
+                    }
+                }
                 let ua = user_agents[attempt as usize % user_agents.len()];
                 let request_place_id =
                     extract_place_id_from_url(download_url).or_else(|| place_ids.first().cloned());
