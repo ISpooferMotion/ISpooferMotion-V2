@@ -435,6 +435,10 @@ pub async fn scan_and_replace_multiple_strings(
             });
         }
 
+        if data_items.is_empty() {
+            return Ok(results);
+        }
+
         let utf8_patterns: Vec<&[u8]> =
             data_items.iter().map(|item| item.target_bytes.as_slice()).collect();
         let utf16_patterns: Vec<&[u8]> =
