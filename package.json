@@ -63,7 +63,7 @@
     "framer-motion": "12.42.2",
     "lucide-react": "1.25.0",
     "react": "19.2.7",
-    "react-colorful": "5.8.0",
+    "react-colorful": "5.8.1",
     "react-dom": "19.2.7",
     "react-resizable-panels": "^4.12.2",
     "shadcn": "^4.13.0",
