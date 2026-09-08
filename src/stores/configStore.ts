@@ -403,11 +403,17 @@ export const useConfigStore = create<ConfigState>((set, get) => {
     },
     updateAccountSecret: async (accountId: string, cookie?: string, apiKey?: string) => {
       set((state) => {
-        const newSecrets = { ...state.accountSecrets };
-        if (!newSecrets[accountId]) newSecrets[accountId] = {};
-        if (cookie !== undefined) newSecrets[accountId].cookie = cookie;
-        if (apiKey !== undefined) newSecrets[accountId].apiKey = apiKey;
-        return { accountSecrets: newSecrets };
+        const currentAccount = state.accountSecrets[accountId] ?? {};
+        return {
+          accountSecrets: {
+            ...state.accountSecrets,
+            [accountId]: {
+              ...currentAccount,
+              ...(cookie !== undefined ? { cookie } : {}),
+              ...(apiKey !== undefined ? { apiKey } : {}),
+            },
+          },
+        };
       });
       await get().saveSecrets();
     },

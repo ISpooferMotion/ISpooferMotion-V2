@@ -54,7 +54,7 @@ pub async fn play_roblox_audio(
 ) -> crate::error::Result<String> {
     let asset_id = asset_id.trim();
     if asset_id.is_empty() || !asset_id.chars().all(|c| c.is_ascii_digit()) {
-        return Err("Invalid Roblox audio asset id.".into());
+        return Err("Please provide a valid numeric Roblox audio asset ID.".into());
     }
 
     let cache_enabled = enable_cache.unwrap_or(true);
@@ -104,7 +104,14 @@ async fn download_roblox_audio(
 
     let response = request.send().await?;
     if !response.status().is_success() {
-        return Err(format!("Roblox audio download failed with HTTP {}.", response.status()).into());
+        let code = response.status().as_u16();
+        let message = match code {
+            401 | 403 => "Unable to download audio: you do not have permission to access this asset, or your cookie has expired.".to_string(),
+            404 => format!("Audio asset {asset_id} was not found on Roblox."),
+            429 => "Roblox rate limit reached while downloading audio. Please wait a moment before trying again.".to_string(),
+            _ => format!("Roblox audio download failed with HTTP {code}."),
+        };
+        return Err(message.into());
     }
 
     // Infer file extension from Content-Type, defaulting to ogg.
@@ -168,9 +175,12 @@ pub async fn open_dev_console(app: AppHandle) -> crate::error::Result<bool> {
         // Open a native terminal window tailing the log file.
         #[cfg(target_os = "windows")]
         {
+            let script = format!(
+                "Get-Content -LiteralPath '{}' -Wait",
+                path.to_string_lossy().replace('\'', "''")
+            );
             let mut cmd = Command::new("powershell.exe");
-            cmd.args(["-NoExit", "-Command", "Get-Content -LiteralPath $args[0] -Wait"]);
-            cmd.arg(path.as_os_str());
+            cmd.args(["-NoExit", "-Command", &script]);
             cmd.creation_flags(DETACHED_PROCESS);
             let _ = cmd.spawn();
         }

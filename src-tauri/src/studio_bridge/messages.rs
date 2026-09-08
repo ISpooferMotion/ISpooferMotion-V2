@@ -441,7 +441,7 @@ fn extract_table_block_ids_with_context(
                             && seen.insert(asset_id.as_str().to_string())
                         {
                             let Some(full_match) = id_cap.get(0) else { continue };
-                            let id_start = match_whole.start() + full_match.start();
+                            let id_start = match_whole.end() + full_match.start();
                             let line = find_line_containing(source, id_start);
                             let var_name = extract_variable_name(line);
                             results.push((asset_id.as_str().to_string(), hint, var_name));

@@ -119,27 +119,30 @@ pub async fn get_authenticated_user_id(
     let mut headers = HeaderMap::new();
     headers.insert(
         COOKIE,
-        HeaderValue::from_str(&cookie_header_str)
-            .map_err(|e| crate::error::AppError::Custom(format!("Invalid cookie header: {e}")))?,
+        HeaderValue::from_str(&cookie_header_str).map_err(|e| {
+            crate::error::AppError::Custom(format!(
+                "The provided cookie contains invalid characters: {e}"
+            ))
+        })?,
     );
     headers.insert(USER_AGENT, HeaderValue::from_static(ROBLOX_USER_AGENT));
 
-    let res = client
-        .get(url)
-        .headers(headers)
-        .send()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Network error: {e}")))?;
+    let res = client.get(url).headers(headers).send().await.map_err(|e| {
+        crate::error::AppError::Custom(format!(
+            "Could not reach Roblox authentication servers: {e}"
+        ))
+    })?;
 
     check_for_roblosecurity_update(&app, &res, &cookie_header_str);
 
     if !res.status().is_success() {
-        return Err(format!("Failed to get authenticated user ID ({})", res.status()).into());
+        return Err(format!("Unable to authenticate with Roblox (HTTP {}). Please check that your .ROBLOSECURITY cookie is active.", res.status()).into());
     }
-    let data: AuthResponse = res
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
+    let data: AuthResponse = res.json().await.map_err(|e| {
+        crate::error::AppError::Custom(format!(
+            "Unexpected response format from Roblox authentication: {e}"
+        ))
+    })?;
     Ok(data.id.to_string())
 }
 
@@ -148,24 +151,27 @@ pub async fn get_authenticated_user_id(
 pub async fn get_roblox_user_info(user_id: String) -> crate::error::Result<RobloxUserInfo> {
     let trimmed = user_id.trim();
     if !trimmed.chars().all(|c| c.is_ascii_digit()) {
-        return Err("Invalid user_id".into());
+        return Err("Please enter a valid numeric user ID.".into());
     }
     let url = format!("https://users.roblox.com/v1/users/{trimmed}");
     let client = crate::utils::get_http_client();
-    let res = client
-        .get(&url)
-        .header("User-Agent", ROBLOX_USER_AGENT)
-        .send()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Network error: {e}")))?;
+    let res =
+        client.get(&url).header("User-Agent", ROBLOX_USER_AGENT).send().await.map_err(|e| {
+            crate::error::AppError::Custom(format!(
+                "Could not reach Roblox to fetch profile details: {e}"
+            ))
+        })?;
 
     if !res.status().is_success() {
-        return Err(format!("Failed to get user info ({})", res.status()).into());
+        return Err(format!(
+            "Could not retrieve profile information for this user (HTTP {}).",
+            res.status()
+        )
+        .into());
     }
-    let data: RobloxUserInfo = res
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
+    let data: RobloxUserInfo = res.json().await.map_err(|e| {
+        crate::error::AppError::Custom(format!("Could not parse profile response: {e}"))
+    })?;
     Ok(data)
 }
 
@@ -174,32 +180,30 @@ pub async fn get_roblox_user_info(user_id: String) -> crate::error::Result<Roblo
 pub async fn get_roblox_user_avatar(user_id: String) -> crate::error::Result<String> {
     let trimmed = user_id.trim();
     if !trimmed.chars().all(|c| c.is_ascii_digit()) {
-        return Err("Invalid user_id".into());
+        return Err("Please enter a valid numeric user ID.".into());
     }
     let url = format!(
         "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={trimmed}&size=150x150&format=Png&isCircular=true"
     );
     let client = crate::utils::get_http_client();
-    let res = client
-        .get(&url)
-        .header("User-Agent", ROBLOX_USER_AGENT)
-        .send()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Network error: {e}")))?;
+    let res =
+        client.get(&url).header("User-Agent", ROBLOX_USER_AGENT).send().await.map_err(|e| {
+            crate::error::AppError::Custom(format!("Could not reach Roblox thumbnail servers: {e}"))
+        })?;
 
     if !res.status().is_success() {
-        return Err(format!("Failed to get avatar thumbnail ({})", res.status()).into());
+        return Err(format!("Could not retrieve avatar thumbnail (HTTP {}).", res.status()).into());
     }
 
-    let json: AvatarResponse = res
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
+    let json: AvatarResponse = res.json().await.map_err(|e| {
+        crate::error::AppError::Custom(format!("Could not parse avatar thumbnail response: {e}"))
+    })?;
 
-    let image_url =
-        json.data.into_iter().next().map(|item| item.image_url).ok_or_else(|| {
-            crate::error::AppError::Custom("No avatar image URL found".to_string())
-        })?;
+    let image_url = json.data.into_iter().next().map(|item| item.image_url).ok_or_else(|| {
+        crate::error::AppError::Custom(
+            "Roblox did not return an avatar image for this user.".to_string(),
+        )
+    })?;
 
     Ok(image_url)
 }
@@ -223,28 +227,27 @@ pub async fn get_manageable_groups(
     let mut headers = HeaderMap::new();
     headers.insert(
         COOKIE,
-        HeaderValue::from_str(&cookie_header_str)
-            .map_err(|e| crate::error::AppError::Custom(format!("Invalid cookie header: {e}")))?,
+        HeaderValue::from_str(&cookie_header_str).map_err(|e| {
+            crate::error::AppError::Custom(format!(
+                "The provided cookie contains invalid characters: {e}"
+            ))
+        })?,
     );
     headers.insert(USER_AGENT, HeaderValue::from_static(ROBLOX_USER_AGENT));
 
-    let res = client
-        .get(url)
-        .headers(headers)
-        .send()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Network error: {e}")))?;
+    let res = client.get(url).headers(headers).send().await.map_err(|e| {
+        crate::error::AppError::Custom(format!("Could not reach Roblox group servers: {e}"))
+    })?;
 
     check_for_roblosecurity_update(&app, &res, &cookie_header_str);
 
     if !res.status().is_success() {
-        return Err(format!("Failed to get manageable groups ({})", res.status()).into());
+        return Err(format!("Could not retrieve manageable groups (HTTP {}). Please check that your account has group management rights.", res.status()).into());
     }
 
-    let json: GroupResponse = res
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
+    let json: GroupResponse = res.json().await.map_err(|e| {
+        crate::error::AppError::Custom(format!("Could not parse manageable groups response: {e}"))
+    })?;
 
     Ok(json.data)
 }
@@ -254,34 +257,30 @@ pub async fn get_manageable_groups(
 pub async fn get_group_icon(group_id: String) -> crate::error::Result<String> {
     let trimmed = group_id.trim();
     if !trimmed.chars().all(|c| c.is_ascii_digit()) {
-        return Err("Invalid group_id".into());
+        return Err("Please enter a valid numeric group ID.".into());
     }
     let url = format!(
         "https://thumbnails.roblox.com/v1/groups/icons?groupIds={trimmed}&size=150x150&format=Png&isCircular=true"
     );
     let client = crate::utils::get_http_client();
-    let res = client
-        .get(&url)
-        .header("User-Agent", ROBLOX_USER_AGENT)
-        .send()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Network error: {e}")))?;
+    let res =
+        client.get(&url).header("User-Agent", ROBLOX_USER_AGENT).send().await.map_err(|e| {
+            crate::error::AppError::Custom(format!(
+                "Could not reach Roblox group icon servers: {e}"
+            ))
+        })?;
 
     if !res.status().is_success() {
-        return Err(format!("Failed to get group icon ({})", res.status()).into());
+        return Err(format!("Could not retrieve group icon (HTTP {}).", res.status()).into());
     }
 
-    let json: GroupIconsResponse = res
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
+    let json: GroupIconsResponse = res.json().await.map_err(|e| {
+        crate::error::AppError::Custom(format!("Could not parse group icon response: {e}"))
+    })?;
 
-    let image_url = json
-        .data
-        .into_iter()
-        .next()
-        .map(|item| item.image_url)
-        .ok_or_else(|| crate::error::AppError::Custom("No group icon URL found".to_string()))?;
+    let image_url = json.data.into_iter().next().map(|item| item.image_url).ok_or_else(|| {
+        crate::error::AppError::Custom("Roblox did not return an icon for this group.".to_string())
+    })?;
 
     Ok(image_url)
 }
@@ -312,21 +311,20 @@ pub async fn get_group_icons_batch(
     );
 
     let client = crate::utils::get_http_client();
-    let res = client
-        .get(&url)
-        .header("User-Agent", ROBLOX_USER_AGENT)
-        .send()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Network error: {e}")))?;
+    let res =
+        client.get(&url).header("User-Agent", ROBLOX_USER_AGENT).send().await.map_err(|e| {
+            crate::error::AppError::Custom(format!(
+                "Could not reach Roblox group icon servers: {e}"
+            ))
+        })?;
 
     if !res.status().is_success() {
-        return Err(format!("Failed to get group icons batch ({})", res.status()).into());
+        return Err(format!("Could not retrieve group icons batch (HTTP {}).", res.status()).into());
     }
 
-    let json: GroupIconsResponse = res
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
+    let json: GroupIconsResponse = res.json().await.map_err(|e| {
+        crate::error::AppError::Custom(format!("Could not parse group icons response: {e}"))
+    })?;
 
     for item in json.data {
         map.insert(item.target_id.to_string(), item.image_url);
@@ -353,7 +351,7 @@ pub async fn detect_opencloud_api_key_owner(
         return Ok(ApiKeyOwnerDetectResult {
             ok: false,
             owner_user_id: None,
-            message: "API key is required to detect owner.".to_string(),
+            message: "Please enter an OpenCloud API key to detect its owner.".to_string(),
         });
     }
 
@@ -385,7 +383,9 @@ pub async fn detect_opencloud_api_key_owner(
         .multipart(form)
         .send()
         .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Network error: {e}")))?;
+        .map_err(|e| {
+            crate::error::AppError::Custom(format!("Could not reach Roblox Open Cloud API: {e}"))
+        })?;
 
     let status = res.status();
     let text = res.text().await.unwrap_or_default();
@@ -394,7 +394,8 @@ pub async fn detect_opencloud_api_key_owner(
         return Ok(ApiKeyOwnerDetectResult {
             ok: false,
             owner_user_id: None,
-            message: "API key is invalid or unauthorized.".to_string(),
+            message: "The provided OpenCloud API key is invalid, inactive, or unauthorized."
+                .to_string(),
         });
     }
 
@@ -404,7 +405,10 @@ pub async fn detect_opencloud_api_key_owner(
             return Ok(ApiKeyOwnerDetectResult {
                 ok: true,
                 owner_user_id: Some(owner.as_str().to_string()),
-                message: format!("Detected API key owner: user {}.", owner.as_str()),
+                message: format!(
+                    "Successfully identified API key owner (user ID {}).",
+                    owner.as_str()
+                ),
             });
         }
     }
@@ -412,7 +416,7 @@ pub async fn detect_opencloud_api_key_owner(
     Ok(ApiKeyOwnerDetectResult {
         ok: false,
         owner_user_id: None,
-        message: "Could not detect owner from response.".to_string(),
+        message: "Unable to determine the owner of this API key. Ensure the key has permissions to create assets in your Creator Hub.".to_string(),
     })
 }
 
@@ -430,21 +434,24 @@ pub async fn get_auth_metadata() -> crate::error::Result<crate::commands::AnyVal
     let url = "https://auth.roblox.com/v2/metadata";
     let client = crate::utils::get_http_client();
 
-    let res = client
-        .get(url)
-        .header("User-Agent", ROBLOX_USER_AGENT)
-        .send()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Network error: {e}")))?;
+    let res =
+        client.get(url).header("User-Agent", ROBLOX_USER_AGENT).send().await.map_err(|e| {
+            crate::error::AppError::Custom(format!(
+                "Could not reach Roblox auth metadata service: {e}"
+            ))
+        })?;
 
     if !res.status().is_success() {
-        return Err(format!("Failed to get auth metadata ({})", res.status()).into());
+        return Err(format!(
+            "Could not retrieve authentication metadata from Roblox (HTTP {}).",
+            res.status()
+        )
+        .into());
     }
 
-    let json: serde_json::Value = res
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Custom(format!("Invalid JSON: {e}")))?;
+    let json: serde_json::Value = res.json().await.map_err(|e| {
+        crate::error::AppError::Custom(format!("Could not parse auth metadata response: {e}"))
+    })?;
 
     Ok(crate::commands::AnyValue(json))
 }

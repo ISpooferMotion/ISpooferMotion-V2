@@ -112,16 +112,16 @@ pub async fn batch_grant_asset_permissions(
         emit_perm_log(
             &app,
             "error",
-            "No valid Subject IDs (Place / User / Group IDs) provided for permissions grant.",
+            "Please specify at least one valid Subject ID (Place, User, or Group ID) to grant permissions.",
         );
         return Err(
-            "No valid Subject IDs (Place / User / Group IDs) provided for permissions grant."
+            "Please specify at least one valid Subject ID (Place, User, or Group ID) to grant permissions."
                 .into(),
         );
     }
 
     if req.asset_ids.is_empty() {
-        emit_perm_log(&app, "info", "Asset IDs list is empty, skipping permissions grant.");
+        emit_perm_log(&app, "info", "No asset IDs were provided to grant permissions for.");
         return Ok(BatchGrantPermissionsResponse {
             success_asset_ids: Vec::new(),
             failed_asset_ids: Vec::new(),
@@ -298,8 +298,7 @@ pub async fn batch_grant_asset_permissions(
                             &app,
                             "warn",
                             &format!(
-                                "Rate limited (429) on asset {}, sleeping {}ms before retry...",
-                                asset_id, retry_after_ms
+                                "Roblox rate limited permission updates on asset {asset_id}; waiting {retry_after_ms}ms before retrying...",
                             ),
                         );
                         tokio::time::sleep(Duration::from_millis(retry_after_ms)).await;
@@ -320,7 +319,9 @@ pub async fn batch_grant_asset_permissions(
                     emit_perm_log(
                         &app,
                         "error",
-                        &format!("Network error for asset {asset_id}: {e}"),
+                        &format!(
+                            "Connection error while updating permissions for asset {asset_id}: {e}"
+                        ),
                     );
                     if attempts >= max_attempts {
                         failed_ids_set.insert(*asset_id);
@@ -340,15 +341,17 @@ pub async fn batch_grant_asset_permissions(
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    let success_asset_ids: Vec<u64> = success_ids_set.into_iter().collect();
-    let failed_asset_ids: Vec<u64> =
+    let mut success_asset_ids: Vec<u64> = success_ids_set.into_iter().collect();
+    success_asset_ids.sort_unstable();
+    let mut failed_asset_ids: Vec<u64> =
         failed_ids_set.into_iter().filter(|id| !success_asset_ids.contains(id)).collect();
+    failed_asset_ids.sort_unstable();
 
     emit_perm_log(
         &app,
         if failed_asset_ids.is_empty() { "info" } else { "warn" },
         &format!(
-            "Asset permissions grant finished: {} succeeded, {} failed",
+            "Asset permissions grant completed: {} succeeded, {} failed.",
             success_asset_ids.len(),
             failed_asset_ids.len()
         ),
@@ -409,7 +412,7 @@ pub async fn patch_asset_permissions(
                     current_csrf = new_csrf.to_string();
                     continue;
                 }
-                return Err("Permission patch failed: 403 Forbidden".into());
+                return Err("Unable to update asset permissions (HTTP 403 Forbidden). You may not have edit rights for this universe or asset.".into());
             }
             Ok(r) if r.status().is_server_error() => {
                 if attempt < 2 {
@@ -417,7 +420,11 @@ pub async fn patch_asset_permissions(
                 }
             }
             Ok(r) => {
-                return Err(format!("Permission patch failed: {}", r.status()).into());
+                return Err(format!(
+                    "Failed to update asset permissions with HTTP {}.",
+                    r.status()
+                )
+                .into());
             }
             Err(e) => {
                 return Err(e.into());
@@ -462,7 +469,7 @@ pub async fn set_asset_privacy(
         } else {
             format!("HTTP {}: {}", status.as_u16(), text)
         };
-        return Err(format!("Failed to update asset privacy: {parsed_err}").into());
+        return Err(format!("Could not update asset privacy: {parsed_err}").into());
     }
 
     Ok(true)

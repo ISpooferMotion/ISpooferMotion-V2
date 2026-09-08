@@ -72,9 +72,9 @@ export default function CredentialsSection() {
         setAuthStatus('idle');
         const extraMsg =
           mode === 'browser'
-            ? ' (Chromium v127+ cookies are encrypted and cannot be auto-detected, please add manually)'
-            : ' (Please add it manually)';
-        logIsm('info', `No Roblox cookie was found.${extraMsg}`);
+            ? ' (Chrome and Edge 127+ protect cookies with app-bound encryption. Please paste your .ROBLOSECURITY cookie manually)'
+            : ' (Please paste your .ROBLOSECURITY cookie manually)';
+        logIsm('info', `Could not find an active Roblox cookie.${extraMsg}`);
         updateCategory('advanced', {
           autoCookieStudio: false,
           autoCookieBrowser: false,
@@ -102,14 +102,14 @@ export default function CredentialsSection() {
         setManualCookieEdit(true);
         logIsm(
           'warn',
-          'Auto-detected cookie was invalid or expired. Please add it manually.',
+          'The detected Roblox cookie has expired. Please sign in to Roblox again or paste a fresh cookie manually.',
           true,
         );
       } else {
         setAuthStatus('idle');
         logIsm(
           'warn',
-          `Auto-detect encountered a temporary error (${errStr}). Keeping the existing cookie. It will retry on next launch.`,
+          `Could not check for a Roblox cookie right now (${errStr}). Keeping your existing credentials.`,
         );
       }
     }

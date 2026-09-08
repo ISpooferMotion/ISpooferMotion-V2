@@ -175,16 +175,16 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         let message: string;
         if (e.payload.error) {
           level = 'error';
-          message = `Job failed: ${e.payload.error}`;
+          message = `Spoofing job stopped: ${e.payload.error}`;
         } else if (failed === 0 && total > 0) {
           level = 'success';
-          message = `Spoofing complete for ${total} asset(s) in ${durationSec}s (${avgMsPerAsset}ms/asset, ${ok}/${total} succeeded${skipped ? `, ${skipped} skipped` : ''}).`;
+          message = `Spoofing finished! All ${total} asset(s) were successfully uploaded in ${durationSec}s (${avgMsPerAsset}ms/asset${skipped ? `, ${skipped} skipped` : ''}).`;
         } else if (ok === 0) {
           level = 'error';
-          message = `Spoofing failed: all ${total} asset(s) failed. See the Console for details.`;
+          message = `None of the ${total} asset(s) could be spoofed. Check the Console tab for detailed error logs.`;
         } else {
           level = 'info';
-          message = `Spoofing finished for ${total} asset(s) in ${durationSec}s (${avgMsPerAsset}ms/asset, ${ok}/${total} succeeded, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}).`;
+          message = `Spoofing complete: ${ok} succeeded, ${failed} failed${skipped ? `, ${skipped} skipped` : ''} out of ${total} asset(s) in ${durationSec}s (${avgMsPerAsset}ms/asset).`;
         }
         useSpooferStore.getState().showToast(level, message, 6000);
         logIsm(
@@ -333,7 +333,10 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     console.log('[AssetPermissions] Response:', res);
                     const okCount = res.success_asset_ids.length;
                     const failCount = res.failed_asset_ids.length;
-                    const logMsg = `Permissions auto-grant complete: ${okCount} succeeded${failCount > 0 ? `, ${failCount} failed` : ''}`;
+                    const logMsg =
+                      failCount > 0
+                        ? `Permissions auto-grant completed with warnings: ${okCount} updated, ${failCount} failed.`
+                        : `Permissions auto-grant completed successfully: ${okCount} asset(s) updated.`;
                     setSpoofingLogs((prev) =>
                       appendSpoofingLog(
                         prev,
@@ -350,7 +353,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                   })
                   .catch((err) => {
                     console.error('[AssetPermissions] Fatal error granting permissions:', err);
-                    const errMsg = `Failed to auto-grant permissions: ${String(err)}`;
+                    const errMsg = `Could not auto-grant permissions: ${String(err)}`;
                     setSpoofingLogs((prev) => appendSpoofingLog(prev, `[ERROR] ${errMsg}`));
                     logIsm('error', errMsg, false);
                   })

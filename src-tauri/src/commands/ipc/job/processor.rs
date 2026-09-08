@@ -1111,7 +1111,6 @@ pub async fn process_spoofer_action(
         skipped,
         failed
     );
-    ctx.log(&summary, if failed == 0 { "success" } else { "warn" });
     ctx.log(&summary, if completed_successfully { "success" } else { "warn" });
 
     // If the job effectively failed across the board, surface the most likely

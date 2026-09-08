@@ -79,10 +79,12 @@ export default function AccountsView() {
           name = `API Key Owner (${userId})`;
           apiKeyValidated = true;
         } else {
-          throw new Error('API Key is invalid or owner could not be determined.');
+          throw new Error(
+            'The Open Cloud API key is invalid or unauthorized. Please verify the key and its permissions in Creator Hub.',
+          );
         }
       } else {
-        throw new Error('You must provide either a Cookie or an API Key.');
+        throw new Error('Please enter a Roblox cookie (.ROBLOSECURITY) or an Open Cloud API key.');
       }
 
       // If both were supplied, validate the API key too even though we
@@ -141,9 +143,9 @@ export default function AccountsView() {
       setIsAddOpen(false);
       setNewCookie('');
       setNewApiKey('');
-      logIsm('success', 'Account added successfully!', true);
+      logIsm('success', 'Roblox account added.', true);
     } catch (e: any) {
-      logIsm('error', `Failed to add account: ${e.message || String(e)}`, true);
+      logIsm('error', `Could not add account: ${e.message || String(e)}`, true);
     } finally {
       setIsAdding(false);
     }
@@ -199,7 +201,11 @@ export default function AccountsView() {
 
     updateAccountsList(updated);
     setIsValidatingAll(false);
-    logIsm('info', `Validation complete. Valid: ${validCount}, Invalid: ${invalidCount}`, true);
+    logIsm(
+      'info',
+      `Account validation finished: ${validCount} valid, ${invalidCount} invalid.`,
+      true,
+    );
   };
 
   const handleSelectAccount = async (acc: (typeof config.accounts)[0]) => {

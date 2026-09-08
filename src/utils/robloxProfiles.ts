@@ -119,7 +119,7 @@ const hydrateUserProfile = async (
 export const validateCookieProfile = async (cookie: string): Promise<CookieValidationResult> => {
   const trimmedCookie = cookie.trim();
   if (!trimmedCookie) {
-    throw new Error('No cookie was provided.');
+    throw new Error('Please provide a valid Roblox .ROBLOSECURITY cookie.');
   }
 
   const userId = await invoke<string>('get_authenticated_user_id', {

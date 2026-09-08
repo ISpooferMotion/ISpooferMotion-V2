@@ -190,7 +190,7 @@ pub fn parse_place_file(file_path: String) -> Result<PlaceParseResult, String> {
     } else if ext == "rbxlx" || ext == "rbxmx" {
         rbx_xml::from_reader_default(&mut reader).map_err(|e| e.to_string())?
     } else {
-        return Err("Unsupported file extension. Must be .rbxl or .rbxlx".into());
+        return Err("Unsupported file extension. Must be .rbxl, .rbxlx, .rbxm, or .rbxmx".into());
     };
 
     let mut root_instances = Vec::new();

@@ -116,7 +116,9 @@ describe('robloxProfiles', () => {
 
   describe('validateCookieProfile', () => {
     it('throws error if cookie is empty', async () => {
-      await expect(validateCookieProfile('   ')).rejects.toThrow('No cookie was provided');
+      await expect(validateCookieProfile('   ')).rejects.toThrow(
+        'Please provide a valid Roblox .ROBLOSECURITY cookie.',
+      );
     });
 
     it('fetches user info and merges to cache', async () => {

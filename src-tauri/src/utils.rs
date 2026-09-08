@@ -505,7 +505,9 @@ fn extract_human_error_inner(
         if let Some(obj) = err_val.as_object() {
             for (_, value) in obj {
                 let nested = extract_human_error_inner(value, None, depth + 1);
-                if !nested.starts_with("HTTP ") && nested != "Unknown error occurred" {
+                if !nested.starts_with("HTTP ")
+                    && nested != "An unexpected error occurred. Please verify your connection and try again."
+                {
                     return nested;
                 }
             }
@@ -513,10 +515,17 @@ fn extract_human_error_inner(
     }
 
     if let Some(code) = status {
-        return format!("HTTP {code}");
+        return match code {
+            401 => "Your Roblox session or cookie has expired. Please sign in again or update your .ROBLOSECURITY cookie.".to_string(),
+            403 => "Access denied (HTTP 403). You do not have permission to access or modify this asset, or your credentials lack required scopes.".to_string(),
+            404 => "Asset or endpoint not found (HTTP 404). Please verify that the asset ID exists and is accessible.".to_string(),
+            429 => "Roblox rate limit reached (HTTP 429). Please wait a moment before retrying.".to_string(),
+            500..=599 => format!("Roblox servers encountered a temporary issue (HTTP {code}). Please try again shortly."),
+            _ => format!("Request failed with HTTP {code}."),
+        };
     }
 
-    "Unknown error occurred".to_string()
+    "An unexpected error occurred. Please verify your connection and try again.".to_string()
 }
 
 #[cfg(test)]
@@ -543,6 +552,31 @@ mod tests {
         assert_eq!(
             normalize_roblox_cookie("'_|WARNING:-DO-NOT-SHARE-THIS|_'"),
             "_|WARNING:-DO-NOT-SHARE-THIS|_"
+        );
+    }
+
+    #[test]
+    fn test_extract_human_error() {
+        let json_with_message = serde_json::json!({ "message": "Asset is not found." });
+        assert_eq!(extract_human_error(&json_with_message, Some(404)), "Asset is not found.");
+
+        let json_with_errors = serde_json::json!({
+            "errors": [{ "userFacingMessage": "You do not own this asset." }]
+        });
+        assert_eq!(extract_human_error(&json_with_errors, Some(403)), "You do not own this asset.");
+
+        let empty_json = serde_json::json!({});
+        assert_eq!(
+            extract_human_error(&empty_json, Some(401)),
+            "Your Roblox session or cookie has expired. Please sign in again or update your .ROBLOSECURITY cookie."
+        );
+        assert_eq!(
+            extract_human_error(&empty_json, Some(429)),
+            "Roblox rate limit reached (HTTP 429). Please wait a moment before retrying."
+        );
+        assert_eq!(
+            extract_human_error(&empty_json, None),
+            "An unexpected error occurred. Please verify your connection and try again."
         );
     }
 }

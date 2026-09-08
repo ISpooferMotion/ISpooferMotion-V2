@@ -95,7 +95,7 @@ export default function PasteIdsModal({
       } catch (e: unknown) {
         logIsm(
           'error',
-          `Could not send replacements to Studio: ${e instanceof Error ? e.message : String(e)}`,
+          `Could not send replacements to Studio: ${e instanceof Error ? e.message : String(e)}. Make sure Roblox Studio is open and the ISpooferMotion plugin is running.`,
           true,
         );
       } finally {
@@ -246,7 +246,8 @@ export default function PasteIdsModal({
                   )}
                   {badReplaceLines > 0 && (
                     <span className="text-yellow-500">
-                      {badReplaceLines} line{badReplaceLines === 1 ? '' : 's'} skipped (bad format)
+                      {badReplaceLines} line{badReplaceLines === 1 ? '' : 's'} skipped (need two IDs
+                      per line)
                     </span>
                   )}
                 </>

@@ -131,22 +131,25 @@ pub async fn download_animation_asset_with_progress(
     proxy_url: Option<String>,
 ) -> crate::error::Result<DownloadResult> {
     if !is_valid_numeric_id(&asset_id) {
-        return Err("Invalid Roblox asset id.".into());
+        return Err("Invalid Roblox asset ID: IDs must contain only numeric digits.".into());
     }
     let file_path_buf = std::path::PathBuf::from(&file_path);
     if file_path_buf.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
-        return Err("Invalid file path: path traversal detected.".into());
+        return Err("Invalid target destination: path traversal is not permitted.".into());
     }
 
     if let Some(parent) = file_path_buf.parent() {
         tokio::fs::create_dir_all(parent)
             .await
-            .map_err(|_| "Download output directory is unavailable.")?;
+            .map_err(|_| "Could not create or access the download destination folder.")?;
     }
 
     let mut cookie_header = build_roblox_cookie_header(&cookie);
     if cookie_header.is_empty() {
-        return Err("Missing or invalid ROBLOSECURITY cookie".into());
+        return Err(
+            "Missing or invalid .ROBLOSECURITY cookie. Please check your account in Settings."
+                .into(),
+        );
     }
 
     emit_transfer_update(
@@ -433,7 +436,7 @@ pub async fn download_animation_asset_with_progress(
 
                 let mut status_reason = status.to_string();
                 if status == reqwest::StatusCode::UNAUTHORIZED {
-                    let error_msg = "Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".to_string();
+                    let error_msg = "Your Roblox session cookie is invalid or expired. Please sign in again or update your .ROBLOSECURITY cookie.".to_string();
                     emit_transfer_update(
                         &app,
                         TransferUpdate {
@@ -456,12 +459,13 @@ pub async fn download_animation_asset_with_progress(
                     });
                 } else if status == reqwest::StatusCode::FORBIDDEN {
                     status_reason =
-                        "Permission Denied: Asset is private, copylocked, or from a deleted place."
+                        "Permission Denied: Asset is private, copylocked, or belongs to a restricted universe."
                             .to_string();
                 } else if status == reqwest::StatusCode::NOT_FOUND {
-                    status_reason = "Not Found: Asset or place is deleted or invalid.".to_string();
+                    status_reason = "Not Found: The asset or referenced place does not exist or has been removed.".to_string();
                 } else if status == reqwest::StatusCode::CONFLICT {
-                    status_reason = "Conflict: Asset delivery blocked.".to_string();
+                    status_reason =
+                        "Conflict: Roblox asset delivery was blocked for this asset.".to_string();
                 }
 
                 let _ = crate::commands::ipc::append_log_entry(
@@ -639,7 +643,7 @@ pub async fn download_animation_asset_with_progress(
             {
                 Ok(recovered_place_ids) => {
                     if recovered_place_ids.is_empty() {
-                        "Wayback Discovery found no place IDs.".to_string()
+                        "Wayback Archive discovery could not find any archived place IDs for this asset.".to_string()
                     } else {
                         let _ = crate::commands::ipc::append_log_entry(&app, "info", "spoofer", &format!("Wayback Discovery found {} candidate Place ID(s). Retrying download...", recovered_place_ids.len()));
 
@@ -661,14 +665,14 @@ pub async fn download_animation_asset_with_progress(
                     }
                 }
                 Err(e) => {
-                    format!("Wayback Discovery error: {e}")
+                    format!("Wayback Archive search encountered an error: {e}")
                 }
             };
             last_error.push_str(&format!(" {recovery_error}"));
         }
 
         last_error.push_str(
-            " No Place ID was available for place-scoped asset delivery; set Force Place ID(s) or scan a published Studio place.",
+            " No Place ID was found for place-scoped asset delivery. Try providing a published Place ID under 'Force Place ID(s)' or scanning directly from Studio.",
         );
     }
     let failure_stage =

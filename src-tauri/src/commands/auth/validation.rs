@@ -41,7 +41,9 @@ pub async fn fetch_csrf_token_internal(
     headers.insert(USER_AGENT, HeaderValue::from_static(ROBLOX_USER_AGENT));
 
     let res = client.post(url).headers(headers).send().await.map_err(|e| {
-        crate::error::AppError::Custom(format!("Network error fetching CSRF token: {e}"))
+        crate::error::AppError::Custom(format!(
+            "Could not reach Roblox to obtain a security token (CSRF): {e}"
+        ))
     })?;
 
     if let Some(app) = app {
@@ -51,7 +53,7 @@ pub async fn fetch_csrf_token_internal(
     if let Some(token) = res.headers().get("x-csrf-token") {
         Ok(token.to_str().unwrap_or("").to_string())
     } else {
-        Err(crate::error::AppError::Custom("No X-CSRF-TOKEN in response header.".to_string()))
+        Err(crate::error::AppError::Custom("Roblox did not return a security verification token (X-CSRF-Token). Your session cookie may be invalid or expired.".to_string()))
     }
 }
 

@@ -590,9 +590,9 @@ export const applyReplacements = async (
       );
     } else {
       setReplaceError(true);
-      notifyError('Replacement Error', errorStr);
+      notifyError('Could Not Apply Replacements', errorStr);
       setSpoofingLogs((prev) =>
-        appendSpoofingLog(prev, `[ERROR] Failed to apply replacements: ${errorStr}`),
+        appendSpoofingLog(prev, `[ERROR] Could not apply replacements to Studio: ${errorStr}`),
       );
     }
   } finally {

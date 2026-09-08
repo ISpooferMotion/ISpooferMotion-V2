@@ -853,7 +853,11 @@ export default function SpoofingView() {
     } catch (err) {
       // invoke() threw synchronously (e.g. IPC serialization error)
       // — reset immediately since spoofer-result will never arrive.
-      logIsm('error', 'Failed to start spoofer: ' + err, true);
+      logIsm(
+        'error',
+        `Could not launch the spoofer: ${err instanceof Error ? err.message : String(err)}`,
+        true,
+      );
       setIsSpoofing(false);
     }
     // NOTE: no finally setIsSpoofing(false) here — the normal success path
@@ -886,7 +890,11 @@ export default function SpoofingView() {
       const timeoutSecs = detail?.timeoutSecs ?? store.discoveryTimeoutSecs ?? 60;
 
       if (!cookie || cookie.length < 50) {
-        logIsm('warn', 'Select a user account with a valid cookie to discover place IDs.', false);
+        logIsm(
+          'warn',
+          'Please select an active account with a valid cookie to discover place IDs.',
+          false,
+        );
         return;
       }
 
@@ -909,7 +917,11 @@ export default function SpoofingView() {
       }
 
       if (targetAssetIds.length === 0) {
-        logIsm('warn', 'No assets found in explorer to discover place IDs for.', false);
+        logIsm(
+          'warn',
+          'No assets were found in the explorer to discover place IDs for. Please scan a place or select assets first.',
+          false,
+        );
         return;
       }
 

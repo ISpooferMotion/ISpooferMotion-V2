@@ -17,15 +17,19 @@ const ASSET_TYPES = [
 const SCRIPT_MODES = [
   {
     key: 'assetIds',
-    label: 'Asset IDs (fast)',
-    desc: 'Extract IDs locally — much faster on large games',
+    label: 'Asset IDs (Fast)',
+    desc: 'Extract asset IDs directly — best for large places and quick scans',
   },
   {
     key: 'fullSource',
-    label: 'Full source (accurate)',
-    desc: 'Send whole source for AST parsing — finds more refs',
+    label: 'Full Code Analysis (Accurate)',
+    desc: 'Deep-scans script code to identify hidden asset variables and references',
   },
-  { key: 'off', label: 'Off (skip scripts)', desc: 'Skip script scanning entirely' },
+  {
+    key: 'off',
+    label: 'Skip Scripts',
+    desc: 'Only scan visual and audio properties, ignoring script contents',
+  },
 ] as const;
 
 /**
@@ -83,7 +87,7 @@ export default function ScanOptionsModal({
         <div className="space-y-4 py-2">
           {/* Asset type checkboxes */}
           <div>
-            <p className="text-sm font-semibold text-foreground mb-2">What to scan for</p>
+            <p className="text-sm font-semibold text-foreground mb-2">Asset types to scan</p>
             <div className="grid grid-cols-2 gap-2">
               {ASSET_TYPES.map((type) => (
                 <label
@@ -104,7 +108,7 @@ export default function ScanOptionsModal({
 
           {/* Script scan mode */}
           <div>
-            <p className="text-sm font-semibold text-foreground mb-2">Script scan mode</p>
+            <p className="text-sm font-semibold text-foreground mb-2">Script scanning method</p>
             <div className="space-y-2">
               {SCRIPT_MODES.map((mode) => (
                 <label

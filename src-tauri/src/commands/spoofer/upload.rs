@@ -158,7 +158,8 @@ async fn poll_roblox_operation(
         if let Ok(parsed) = serde_json::from_str::<RobloxOperationResponse>(&text) {
             if parsed.done == Some(true) {
                 if let Some(error) = parsed.error {
-                    return Err(format!("Operation failed: {:?}", error));
+                    let msg = crate::utils::extract_human_error(&error, None);
+                    return Err(format!("Roblox asset processing failed: {msg}"));
                 }
                 if let Some(resp_obj) = parsed.response {
                     let id = extract_asset_id_from_value(&resp_obj);
@@ -166,11 +167,13 @@ async fn poll_roblox_operation(
                         return Ok(asset_id);
                     }
                 }
-                return Err("Operation done but no assetId found.".into());
+                return Err(
+                    "Roblox completed asset processing, but did not return a new asset ID.".into(),
+                );
             }
         }
     }
-    Err("Operation timed out after 120 seconds.".into())
+    Err("Asset processing timed out after 120 seconds. Roblox may still be processing the asset in the background.".into())
 }
 
 struct UploadKind {
@@ -233,8 +236,9 @@ async fn upload_path_allowed(
     file_path: &std::path::Path,
     downloads_root: Option<&str>,
 ) -> crate::error::Result<std::path::PathBuf> {
-    let canonical_file_path =
-        tokio::fs::canonicalize(file_path).await.map_err(|_| "Upload file is unavailable.")?;
+    let canonical_file_path = tokio::fs::canonicalize(file_path)
+        .await
+        .map_err(|_| "The requested file could not be found or accessed on your local disk.")?;
 
     let mut allowed_roots = vec![app.path().app_data_dir()?.join("downloads")];
     if let Some(root) = downloads_root.filter(|value| !value.trim().is_empty()) {
@@ -249,7 +253,7 @@ async fn upload_path_allowed(
         }
     }
 
-    Err("Upload file path is outside an allowed downloads directory.".into())
+    Err("For security, asset uploads must originate from within the downloads folder.".into())
 }
 
 #[tauri::command]
@@ -279,7 +283,7 @@ pub async fn publish_asset_with_progress(
         .flatten()
     {
         if !is_valid_numeric_id(id) {
-            return Err("Invalid Roblox creator or asset id.".into());
+            return Err("Invalid creator or asset ID: IDs must contain only numeric digits.".into());
         }
     }
     let canonical_file_path =
@@ -289,7 +293,7 @@ pub async fn publish_asset_with_progress(
     let file_metadata = match tokio::fs::metadata(&canonical_file_path).await {
         Ok(m) => m,
         Err(e) => {
-            let msg = format!("File system error: {e}");
+            let msg = format!("Could not read local file metadata: {e}");
             emit_transfer_update(
                 &app,
                 TransferUpdate {
@@ -433,7 +437,7 @@ pub async fn publish_asset_with_progress(
         let mut upload_auth = match &api_key {
             Some(k) if !k.trim().is_empty() => UploadAuth::ApiKey(k.clone()),
             _ => {
-                let msg = "Uploads require an Open Cloud API key.".to_string();
+                let msg = "Uploading assets requires an Open Cloud API key. Please configure your API key in Settings or Accounts.".to_string();
                 emit_transfer_update(
                     &app,
                     TransferUpdate {
@@ -462,7 +466,8 @@ pub async fn publish_asset_with_progress(
         } else if let Some(uid) = &user_id {
             UploadMetadataCreator { user_id: Some(uid.clone()), group_id: None }
         } else {
-            let msg = "Uploads require a selected user or group creator.".to_string();
+            let msg = "Please select a creator account (user or group) before uploading assets."
+                .to_string();
             emit_transfer_update(
                 &app,
                 TransferUpdate {
@@ -547,13 +552,13 @@ pub async fn publish_asset_with_progress(
 
             if status_code == 401 {
                 return Err(
-                    "Invalid Open Cloud API key (401 Unauthorized). Please check your API key."
+                    "Your Open Cloud API key is invalid or unauthorized (HTTP 401). Please verify your key in Accounts."
                         .into(),
                 );
             }
 
             if status_code == 403 {
-                return Err("Upload rejected (403 Forbidden). Your Open Cloud API Key is missing 'Assets' Write permissions, or you forgot to add '0.0.0.0/0' to the Accepted IP Addresses in the Creator Dashboard.".into());
+                return Err("Upload rejected (HTTP 403). Ensure your Open Cloud API key has 'Assets' write permissions and that your IP address (or 0.0.0.0/0) is allowed in Creator Hub.".into());
             }
 
             if (500..600).contains(&status_code) {
@@ -621,7 +626,7 @@ pub async fn publish_asset_with_progress(
                             mutable_buffer = new_buffer;
                         } else {
                             upload_error =
-                                Some("Cannot bypass 409 Conflict: Invalid PNG format".to_string());
+                                Some("Could not bypass duplicate hash conflict: PNG file structure is invalid or corrupt.".to_string());
                             break;
                         }
                     } else if file_type == "model/x-rbxm" {
@@ -643,7 +648,7 @@ pub async fn publish_asset_with_progress(
                                 mutable_buffer = new_buffer;
                             } else {
                                 upload_error = Some(
-                                    "Cannot bypass 409 Conflict: Invalid RBXM format".to_string(),
+                                    "Could not bypass duplicate hash conflict: binary model file (RBXM) structure is invalid or corrupt.".to_string(),
                                 );
                                 break;
                             }
@@ -666,18 +671,18 @@ pub async fn publish_asset_with_progress(
                                 mutable_buffer = new_buffer;
                             } else {
                                 upload_error = Some(
-                                    "Cannot bypass 409 Conflict: Invalid RBXMX format".to_string(),
+                                    "Could not bypass duplicate hash conflict: XML model file (RBXMX) structure is invalid or corrupt.".to_string(),
                                 );
                                 break;
                             }
                         } else {
                             upload_error = Some(
-                                "Cannot bypass 409 Conflict: Unknown model format".to_string(),
+                                "Could not bypass duplicate hash conflict: unrecognized model format.".to_string(),
                             );
                             break;
                         }
                     } else {
-                        upload_error = Some("Cannot bypass 409 Conflict: File type does not support hash modification".to_string());
+                        upload_error = Some("Could not bypass duplicate hash conflict: this file format does not support metadata padding.".to_string());
                         break;
                     }
                     // Store the mutated buffer back so the next retry uses the modified bytes
@@ -779,12 +784,14 @@ pub async fn publish_asset_with_progress(
                 }
             }
 
-            upload_error = Some("Unexpected response format".into());
+            upload_error =
+                Some("Roblox returned an unexpected response format during upload.".into());
             break;
         }
 
         if !upload_success {
-            let msg = upload_error.unwrap_or_else(|| "Unknown upload error".into());
+            let msg =
+                upload_error.unwrap_or_else(|| "Upload failed due to an unexpected error.".into());
             emit_transfer_update(
                 &app,
                 TransferUpdate {
@@ -879,7 +886,8 @@ pub async fn publish_asset_with_progress(
         });
     }
 
-    let msg = "Upload returned success but no assetId was found.".to_string();
+    let msg =
+        "Roblox accepted the upload, but did not provide an asset ID in the response.".to_string();
     emit_transfer_update(
         &app,
         TransferUpdate {
