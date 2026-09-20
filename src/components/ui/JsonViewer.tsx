@@ -3,7 +3,7 @@ import { Check, ChevronRight, Copy } from 'lucide-react';
 import { useState } from 'react';
 
 import { useLanguage } from '../../contexts/LanguageContext';
-import { cn } from '../../utils/cn';
+import { cn } from '../../lib/utils';
 
 interface JsonViewerProps {
   data: unknown;

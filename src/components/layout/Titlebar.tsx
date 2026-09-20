@@ -1,5 +1,5 @@
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { motion } from 'framer-motion';
 import {
   Activity,
@@ -26,8 +26,8 @@ import { useState } from 'react';
 
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { cn } from '../../lib/utils';
 import { useSpooferStore } from '../../stores/spooferStore';
-import { cn } from '../../utils/cn';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';

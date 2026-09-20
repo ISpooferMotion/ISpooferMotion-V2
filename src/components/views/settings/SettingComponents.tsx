@@ -1,8 +1,9 @@
 import React from 'react';
-import { cn } from '../../../utils/cn';
-import { Card, CardHeader, CardTitle, CardContent } from '../../ui/card';
-import { Label } from '../../ui/label';
+
+import { cn } from '../../../lib/utils';
+import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
 import { Input } from '../../ui/input';
+import { Label } from '../../ui/label';
 import { Switch } from '../../ui/switch';
 
 /**

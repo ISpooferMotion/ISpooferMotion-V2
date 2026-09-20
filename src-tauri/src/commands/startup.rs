@@ -69,6 +69,22 @@ fn roblox_plugins_dirs() -> Vec<PathBuf> {
     dirs
 }
 
+fn is_owned_plugin_file_name(file_name: &str) -> bool {
+    if matches!(
+        file_name,
+        "ISpooferMotion.rbxmx" | ".ISpooferMotion.rbxmx.tmp" | ".ISpooferMotion.rbxmx.backup"
+    ) {
+        return true;
+    }
+
+    file_name
+        .strip_prefix("ISpooferMotion (")
+        .and_then(|rest| rest.strip_suffix(").rbxmx"))
+        .is_some_and(|copy_number| {
+            !copy_number.is_empty() && copy_number.chars().all(|ch| ch.is_ascii_digit())
+        })
+}
+
 /// Automatically installs or updates the ISpooferMotion Luau plugin in Studio's local plugins folder.
 ///
 /// The `.rbxmx` plugin file is bundled into the Tauri binary at compile-time.
@@ -170,8 +186,38 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
         // where the canonical plugin is missing. Windows cannot rename over an existing file.
         #[cfg(target_os = "windows")]
         let install_result = {
-            let _ = tokio::fs::remove_file(&dest_path).await;
-            tokio::fs::rename(&temp_path, &dest_path).await
+            let backup_path = dest_dir.join(".ISpooferMotion.rbxmx.backup");
+            let _ = tokio::fs::remove_file(&backup_path).await;
+            let had_previous = tokio::fs::try_exists(&dest_path).await.unwrap_or(false);
+
+            if had_previous {
+                if let Err(error) = tokio::fs::rename(&dest_path, &backup_path).await {
+                    log::error!("Failed to stage existing Roblox plugin for replacement: {error}");
+                    let _ = tokio::fs::remove_file(&temp_path).await;
+                    continue;
+                }
+            }
+
+            match tokio::fs::rename(&temp_path, &dest_path).await {
+                Ok(()) => {
+                    if had_previous {
+                        let _ = tokio::fs::remove_file(&backup_path).await;
+                    }
+                    Ok(())
+                }
+                Err(error) => {
+                    if had_previous {
+                        if let Err(restore_error) =
+                            tokio::fs::rename(&backup_path, &dest_path).await
+                        {
+                            log::error!(
+                                "Failed to restore previous Roblox plugin after update error: {restore_error}"
+                            );
+                        }
+                    }
+                    Err(error)
+                }
+            }
         };
 
         #[cfg(not(target_os = "windows"))]
@@ -191,7 +237,7 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
                     continue;
                 }
                 if let Some(file_name) = entry.file_name().to_str() {
-                    if file_name.contains("ISpooferMotion") {
+                    if is_owned_plugin_file_name(file_name) {
                         let _ = tokio::fs::remove_file(path).await;
                     }
                 }
@@ -211,12 +257,27 @@ pub fn uninstall_roblox_plugin() {
         if let Ok(entries) = std::fs::read_dir(&dest_dir) {
             for entry in entries.flatten() {
                 if let Some(file_name) = entry.file_name().to_str() {
-                    if file_name.contains("ISpooferMotion") {
+                    if is_owned_plugin_file_name(file_name) {
                         let _ = std::fs::remove_file(entry.path());
                         log::info!("Auto-uninstalled plugin from {:?}", entry.path());
                     }
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_owned_plugin_file_name;
+
+    #[test]
+    fn plugin_cleanup_only_matches_files_owned_by_the_app() {
+        assert!(is_owned_plugin_file_name("ISpooferMotion.rbxmx"));
+        assert!(is_owned_plugin_file_name("ISpooferMotion (2).rbxmx"));
+        assert!(is_owned_plugin_file_name(".ISpooferMotion.rbxmx.tmp"));
+        assert!(!is_owned_plugin_file_name("MyISpooferMotionNotes.rbxmx"));
+        assert!(!is_owned_plugin_file_name("ISpooferMotion (backup).rbxmx"));
+        assert!(!is_owned_plugin_file_name("ISpooferMotion-helper.lua"));
     }
 }

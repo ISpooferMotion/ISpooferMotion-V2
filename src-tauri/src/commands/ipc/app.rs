@@ -90,7 +90,7 @@ pub fn open_external(app: AppHandle, url: String) -> crate::error::Result<bool> 
     if let Ok(parsed) = reqwest::Url::parse(&url) {
         if parsed.scheme() == "http" || parsed.scheme() == "https" {
             use tauri_plugin_opener::OpenerExt;
-            let _ = app.opener().open_url(url, None::<String>);
+            app.opener().open_url(url, None::<String>).map_err(|err| err.to_string())?;
             return Ok(true);
         }
     }
@@ -115,10 +115,14 @@ pub async fn select_folder(app: AppHandle) -> crate::error::Result<Option<String
 #[tauri::command]
 #[specta::specta]
 pub async fn uninstall_app(app: AppHandle) -> crate::error::Result<bool> {
-    // Clear all user data and credentials before exiting.
-    let _ = clear_profile_secrets(app.clone(), None).await;
-    if let Ok(data_dir) = app.path().app_data_dir() {
-        let _ = tokio::fs::remove_dir_all(&data_dir).await;
+    // Clear credentials first. If this fails, do not report a successful uninstall
+    // while secrets remain in the OS credential store.
+    clear_profile_secrets(app.clone(), None).await?;
+    let data_dir = app.path().app_data_dir()?;
+    match tokio::fs::remove_dir_all(&data_dir).await {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(err.into()),
     }
     crate::commands::startup::uninstall_roblox_plugin();
     app.exit(0);

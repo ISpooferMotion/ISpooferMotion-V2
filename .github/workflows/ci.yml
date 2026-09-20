@@ -42,18 +42,23 @@ jobs:
               uses: actions/cache@v6
               with:
                   path: ~/.bun/install/cache
-                  key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+                  key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
                   restore-keys: bun-${{ runner.os }}-
 
             - run: bun install --frozen-lockfile
+            - run: bun run format:prettier:check
+            - run: bun run format:stylua:check
+            - run: bun run build:plugin
             - run: bun run typecheck
             - run: bun run lint
+            - run: bun run test
+            - run: bun run build:app
 
             - name: Install Selene
               run: cargo install selene
 
             - name: Run Selene
-              run: cd src-tauri/plugin && selene .
+              run: cd plugin && selene .
 
     rust-check:
         name: Rust Check & Lint
@@ -202,7 +207,7 @@ jobs:
               uses: actions/cache@v6
               with:
                   path: ~/.bun/install/cache
-                  key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+                  key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
                   restore-keys: bun-${{ runner.os }}-
 
             - name: Rust Cache
@@ -407,7 +412,7 @@ jobs:
               uses: actions/cache@v6
               with:
                   path: ~/.bun/install/cache
-                  key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb') }}
+                  key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
                   restore-keys: bun-${{ runner.os }}-
 
             - name: Build plugin

@@ -12,7 +12,6 @@ import {
   Eye,
   FileUp,
   FolderOpen,
-  FolderPlus,
   Image as ImageIcon,
   Inbox,
   Loader2,
@@ -29,11 +28,6 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import {
   lazy,
   Suspense,
@@ -49,12 +43,18 @@ import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
 import { useStudioAssetPoll } from '../../hooks/useStudioAssetPoll';
+import { cn } from '../../lib/utils';
 import { useSpooferStore } from '../../stores/spooferStore';
-import { cn } from '../../utils/cn';
 import type { PluginAsset, PluginAssetStore } from '../../utils/pluginBridge';
-import { DEFAULT_PLUGIN_PORT, findPluginBridgePort } from '../../utils/pluginBridge';
 import { playRobloxAudio, stopRobloxAudio } from '../../utils/robloxAudio';
 import type { ParsedAssetRef, RbxInstance } from '../../utils/robloxPlaceParser/types';
+import { logIsm } from '../../utils/robloxProfiles';
+import { isTauriRuntime } from '../../utils/tauriRuntime';
+import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Input } from '../ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import {
   ExplorerTreeNode,
   formatShortId,
@@ -62,8 +62,6 @@ import {
   getAssetKey,
   getBrightPlaceIdColor,
 } from './asset-explorer/ExplorerTree';
-import { logIsm } from '../../utils/robloxProfiles';
-import { isTauriRuntime } from '../../utils/tauriRuntime';
 
 interface AssetExplorerProps {
   isOpen: boolean;
@@ -224,9 +222,6 @@ export default function AssetExplorer({
   const ghostAssetIds = useSpooferStore((s) => s.ghostAssetIds);
   const showToast = useSpooferStore((s) => s.showToast);
 
-  const [saveToStudioOpen, setSaveToStudioOpen] = useState(false);
-  const [studioSavePath, setStudioSavePath] = useState('game.Workspace');
-  const [isSavingToStudio, setIsSavingToStudio] = useState(false);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [lockOpen, setLockOpen] = useState(false);
@@ -558,41 +553,6 @@ export default function AssetExplorer({
       stopRobloxAudio();
     };
   }, []);
-
-  const selectedGhostIds = useMemo(
-    () => Array.from(selectedAssetIds).filter((id) => ghostAssetIds.has(id)),
-    [selectedAssetIds, ghostAssetIds],
-  );
-
-  const handleSaveGhostIdsToStudio = async () => {
-    if (selectedGhostIds.length === 0 || !studioSavePath.trim()) return;
-    setIsSavingToStudio(true);
-    try {
-      const pluginPort = (await findPluginBridgePort()) || DEFAULT_PLUGIN_PORT;
-      const cleanPath = studioSavePath.trim().startsWith('game.')
-        ? studioSavePath.trim()
-        : `game.${studioSavePath.trim()}`;
-
-      await invoke('create_ghost_instances_in_studio', {
-        assetIds: selectedGhostIds,
-        parentPath: cleanPath,
-        pluginPort,
-      });
-
-      logIsm(
-        'success',
-        `Sent ${selectedGhostIds.length} Ghost ID instance(s) to Studio at ${cleanPath}.`,
-        true,
-      );
-      showToast('success', `Created ${selectedGhostIds.length} instance(s) in Studio.`);
-      setSaveToStudioOpen(false);
-    } catch (err) {
-      logIsm('error', `Failed to create Ghost ID instances in Studio: ${String(err)}`, true);
-      showToast('error', `Save to Studio failed: ${String(err)}`);
-    } finally {
-      setIsSavingToStudio(false);
-    }
-  };
 
   const handleForceApplyReplacements = useCallback(async () => {
     const store = useSpooferStore.getState();
@@ -1835,65 +1795,6 @@ export default function AssetExplorer({
                           </Popover>
                         );
                       })()}
-
-                      {/* Save Ghost IDs to Studio popover button */}
-                      {selectedGhostIds.length > 0 && (
-                        <Popover open={saveToStudioOpen} onOpenChange={setSaveToStudioOpen}>
-                          <PopoverTrigger
-                            render={
-                              <button
-                                type="button"
-                                className="h-7 px-2 flex items-center gap-1 text-xs font-semibold text-primary hover:bg-primary/10 rounded transition-colors"
-                              >
-                                <FolderPlus size={13} />
-                                <span>Save ({selectedGhostIds.length})</span>
-                              </button>
-                            }
-                          />
-                          <PopoverContent
-                            align="end"
-                            side="top"
-                            sideOffset={8}
-                            className="w-72 p-3 bg-bg-surface border border-border shadow-xl rounded-lg z-[220]"
-                          >
-                            <div className="flex flex-col gap-2.5">
-                              <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                                Save {selectedGhostIds.length} Ghost ID(s) to Studio
-                              </div>
-                              <div className="text-xs text-text-secondary">
-                                Enter Roblox Studio DataModel path to create instances:
-                              </div>
-                              <Input
-                                value={studioSavePath}
-                                onChange={(e) => setStudioSavePath(e.target.value)}
-                                placeholder="e.g. game.Workspace.RifleAnims or Workspace"
-                                className="h-8 text-xs bg-bg-base font-mono"
-                                onKeyDown={(e) =>
-                                  e.key === 'Enter' && void handleSaveGhostIdsToStudio()
-                                }
-                              />
-                              <div className="flex justify-end gap-2 pt-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={() => setSaveToStudioOpen(false)}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  className="h-7 text-xs font-semibold"
-                                  disabled={isSavingToStudio || !studioSavePath.trim()}
-                                  onClick={() => void handleSaveGhostIdsToStudio()}
-                                >
-                                  {isSavingToStudio ? 'Creating...' : 'Create in Studio'}
-                                </Button>
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      )}
                     </div>
                   )}
 

@@ -36,13 +36,28 @@ export function useStudioConnection() {
   useEffect(() => {
     let cancelled = false;
     let timerId: ReturnType<typeof setTimeout> | null = null;
+    let inFlight = false;
+    let immediateRecheckRequested = false;
     let currentDelay = 1000;
     const MAX_DELAY = 10000;
     const VISIBILITY_PENALTY = 5000;
 
-    const check = async () => {
+    const schedule = (delay: number) => {
       if (cancelled) return;
+      if (timerId) clearTimeout(timerId);
+      timerId = setTimeout(() => {
+        timerId = null;
+        void check();
+      }, delay);
+    };
 
+    const check = async () => {
+      if (cancelled || inFlight) {
+        if (!cancelled) immediateRecheckRequested = true;
+        return;
+      }
+
+      inFlight = true;
       let success = false;
       try {
         const activePort = await findPluginBridgePort();
@@ -79,7 +94,11 @@ export function useStudioConnection() {
             if (/^\d+$/.test(placeId) && placeId !== '0') {
               setStudioPlaceId((prev) => {
                 if (prev === placeId) return prev;
-                window.localStorage.setItem(STUDIO_PLACE_ID_CACHE_KEY, placeId);
+                try {
+                  window.localStorage.setItem(STUDIO_PLACE_ID_CACHE_KEY, placeId);
+                } catch {
+                  // Storage can be unavailable in restricted webviews; the live state is still valid.
+                }
                 return placeId;
               });
             }
@@ -93,6 +112,8 @@ export function useStudioConnection() {
           setStudioConnected(false);
           setScanStatus(null);
         }
+      } finally {
+        inFlight = false;
       }
 
       if (cancelled) return;
@@ -103,21 +124,29 @@ export function useStudioConnection() {
         currentDelay = Math.min(currentDelay * 1.5, MAX_DELAY);
       }
 
-      let nextDelay = currentDelay;
-      if (document.hidden) {
-        nextDelay = Math.max(nextDelay, VISIBILITY_PENALTY);
+      if (immediateRecheckRequested) {
+        immediateRecheckRequested = false;
+        schedule(0);
+        return;
       }
 
-      timerId = setTimeout(check, nextDelay);
+      const nextDelay = document.hidden ? Math.max(currentDelay, VISIBILITY_PENALTY) : currentDelay;
+      schedule(nextDelay);
     };
 
-    check();
+    void check();
 
     const handleVisibilityChange = () => {
-      if (!document.hidden && timerId) {
+      if (document.hidden) return;
+      currentDelay = 1000;
+      if (timerId) {
         clearTimeout(timerId);
-        currentDelay = 1000;
-        check();
+        timerId = null;
+      }
+      if (inFlight) {
+        immediateRecheckRequested = true;
+      } else {
+        void check();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);

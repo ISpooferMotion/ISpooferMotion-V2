@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const pluginRoot = join(root, 'src-tauri', 'plugin');
+const pluginRoot = join(root, 'plugin');
 
 const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const versionLuauPath = join(pluginRoot, 'src', 'version', 'version.luau');
@@ -69,7 +69,7 @@ async function buildPlugin() {
     const outDir = join(root, 'dist-plugin');
     mkdirSync(outDir, { recursive: true });
 
-    const pluginBuildDir = join(root, 'plugin-build');
+    const pluginBuildDir = join(pluginRoot, '.generated');
     mkdirSync(pluginBuildDir, { recursive: true });
 
     const generatedSourcePath = join(pluginBuildDir, 'ISpooferMotion.generated.luau');
@@ -81,8 +81,8 @@ async function buildPlugin() {
     const kb = (rawLuaSource.length / 1024).toFixed(1);
 
     console.log(`    Plugin built successfully`);
-    console.log(`    Source      : src-tauri/plugin/plugin.luau + includes  (${kb} KB)`);
-    console.log(`    Lint source : plugin-build/ISpooferMotion.generated.luau`);
+    console.log(`    Source      : plugin/plugin.luau + includes  (${kb} KB)`);
+    console.log(`    Lint source : plugin/.generated/ISpooferMotion.generated.luau`);
     console.log(`    Output      : dist-plugin/ISpooferMotion.rbxmx`);
     console.log(``);
   } catch (err) {

@@ -68,7 +68,6 @@ tauri-plugin-clipboard-manager = "2.3.2"
 rand = "0.9.4"
 hex          = "0.4.3"
 urlencoding  = "2"
-subtle = "2"
 crc32fast = "1.5.0"
 dashmap = "6.2.1"
 specta = { version = "=2.0.0-rc.25", features = ["serde_json"] }

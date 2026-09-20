@@ -1,20 +1,20 @@
+import { invoke } from '@tauri-apps/api/core';
 import { Check, ChevronRight, Loader2, Plus, UserCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { cn } from '../../utils/cn';
+import { cn } from '../../lib/utils';
 import { addDebugLog } from '../../utils/debugLogger';
 import {
   loadCachedGroups,
   loadCachedUsers,
   logIsm,
   normalizeId,
-  saveCachedGroups,
-  validateCookieProfile,
   type RobloxGroup,
   type RobloxUserInfo,
+  saveCachedGroups,
+  validateCookieProfile,
 } from '../../utils/robloxProfiles';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 

@@ -303,23 +303,8 @@ pub fn apply_roblox_game_context(
     builder
 }
 
-#[derive(Clone)]
-enum UploadAuth {
-    ApiKey(String),
-    #[allow(dead_code)]
-    Cookie {
-        token: String,
-    },
-}
-
-fn apply_upload_auth(
-    builder: reqwest::RequestBuilder,
-    auth: &UploadAuth,
-) -> reqwest::RequestBuilder {
-    match auth {
-        UploadAuth::ApiKey(api_key) => builder.header("x-api-key", api_key),
-        UploadAuth::Cookie { token } => builder.header("x-csrf-token", token),
-    }
+fn apply_upload_auth(builder: reqwest::RequestBuilder, api_key: &str) -> reqwest::RequestBuilder {
+    builder.header("x-api-key", api_key)
 }
 
 // Pause task execution upon rate limits; respect global circuit breakers.

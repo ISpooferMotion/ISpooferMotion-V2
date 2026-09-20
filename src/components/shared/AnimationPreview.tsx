@@ -10,16 +10,16 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { cn } from '../../lib/utils';
 import { useSpooferStore } from '../../stores/spooferStore';
-import { Button } from '../ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { cn } from '../../utils/cn';
 import {
   parseAnimationXml,
   type RobloxAnimationClip,
   type RobloxPose,
 } from '../../utils/robloxAnimParser';
 import { detectRigType, getBones, type RigBone, type RigType } from '../../utils/robloxRig';
+import { Button } from '../ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 
 interface AnimationPreviewProps {
   assetId: string;

@@ -11,7 +11,7 @@ export const AppConfigSchema = z.object({
   }),
   advanced: z.object({
     autoCookieStudio: z.boolean().default(true),
-    autoCookieBrowser: z.boolean().default(true),
+    autoCookieBrowser: z.boolean().default(false),
     skipOwned: z.boolean().default(false),
     enablePluginSpoofing: z.boolean().default(false),
     memoryInjectionEnabled: z.boolean().default(false),
@@ -24,11 +24,11 @@ export const AppConfigSchema = z.object({
     // Clamp to backend's accepted range on load — self-heals configs where
     // a user previously typed a huge value into the input before we added
     // a max attribute on the field.
-    maxConcurrency: z.number().min(1).max(100).catch(100).default(50),
+    maxConcurrency: z.number().min(1).max(100).catch(100).default(100),
     maxDownloadConcurrency: z.number().min(1).max(100).catch(10).default(10),
     discoveryConcurrency: z.number().min(1).max(50).catch(30).default(30),
     operationPollIntervalMs: z.number().min(100).max(2000).catch(250).default(250),
-    batchSize: z.number().min(10).max(500).catch(50).default(50),
+    batchSize: z.number().min(10).max(500).catch(250).default(250),
     enableArchiveRecovery: z.boolean().default(false),
     proxyUrl: z.string().default(''),
   }),
@@ -221,15 +221,20 @@ interface ConfigState {
  */
 export const useConfigStore = create<ConfigState>((set, get) => {
   // Load config from localstorage or fallback to defaults.
-  const saved =
-    typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function'
-      ? localStorage.getItem('ISpooferMotion_Config')
-      : null;
+  let saved: string | null = null;
+  try {
+    saved =
+      typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function'
+        ? localStorage.getItem('ISpooferMotion_Config')
+        : null;
+  } catch (error) {
+    console.warn('Configuration storage is unavailable; using in-memory defaults.', error);
+  }
   let initConfig = DEFAULT_APP_CONFIG;
   if (saved) {
     try {
       const p = JSON.parse(saved);
-      initConfig = {
+      const candidate = {
         general: mergeKnownKeys(DEFAULT_APP_CONFIG.general, p.general),
         advanced: mergeKnownKeys(DEFAULT_APP_CONFIG.advanced, p.advanced),
         debug: mergeKnownKeys(DEFAULT_APP_CONFIG.debug, p.debug),
@@ -247,8 +252,15 @@ export const useConfigStore = create<ConfigState>((set, get) => {
             DEFAULT_APP_CONFIG.ui.spoofingSections,
           ),
         },
-        accounts: p.accounts || DEFAULT_APP_CONFIG.accounts,
+        accounts: Array.isArray(p.accounts) ? p.accounts : DEFAULT_APP_CONFIG.accounts,
       };
+      const parsed = AppConfigSchema.safeParse(candidate);
+      if (!parsed.success) {
+        console.warn('Saved configuration failed validation; using defaults.', parsed.error);
+        initConfig = DEFAULT_APP_CONFIG;
+      } else {
+        initConfig = parsed.data;
+      }
       initConfig.spoofing.cookie = '';
       initConfig.spoofing.apiKey = '';
       initConfig.spoofing.groupApiKey = '';
@@ -272,13 +284,17 @@ export const useConfigStore = create<ConfigState>((set, get) => {
   const saveToStorage = (c: AppConfig) => {
     // Cookies and API keys must be saved in the Rust keyring, not standard config storage.
     if (typeof localStorage !== 'undefined' && typeof localStorage.setItem === 'function') {
-      localStorage.setItem(
-        'ISpooferMotion_Config',
-        JSON.stringify({
-          ...c,
-          spoofing: { ...c.spoofing, cookie: '', apiKey: '', groupApiKey: '' },
-        }),
-      );
+      try {
+        localStorage.setItem(
+          'ISpooferMotion_Config',
+          JSON.stringify({
+            ...c,
+            spoofing: { ...c.spoofing, cookie: '', apiKey: '', groupApiKey: '' },
+          }),
+        );
+      } catch (error) {
+        console.warn('Failed to persist configuration; continuing with in-memory state.', error);
+      }
     }
   };
 

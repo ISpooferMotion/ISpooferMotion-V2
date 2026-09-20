@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 import type { PlaywrightTestConfig } from '@playwright/test';
 
+process.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS ??= '--remote-debugging-port=9222';
+
 const config: PlaywrightTestConfig = {
   testDir: './e2e',
   timeout: 30000,
@@ -17,8 +19,7 @@ const config: PlaywrightTestConfig = {
     trace: 'on-first-retry',
   },
   webServer: {
-    command:
-      'cross-env WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9222" bun run tauri dev',
+    command: 'bun run tauri:dev',
     port: 9222,
     reuseExistingServer: !process.env.CI,
     timeout: 300 * 1000,

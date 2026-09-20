@@ -127,7 +127,15 @@ pub fn get_http_client() -> reqwest::Client {
 /// bridge at 127.0.0.1). Routing localhost through a proxy would break Studio
 /// communication.
 pub fn get_local_http_client() -> &'static reqwest::Client {
-    LOCAL_CLIENT.get_or_init(|| build_client(None))
+    LOCAL_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .no_proxy()
+            .timeout(std::time::Duration::from_secs(15))
+            .pool_idle_timeout(std::time::Duration::from_secs(90))
+            .pool_max_idle_per_host(8)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    })
 }
 
 /// Returns a cached HTTP client bound to an explicit proxy URL. Used by the

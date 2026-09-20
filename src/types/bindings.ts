@@ -63,7 +63,7 @@ export const commands = {
     ),
   validateOpencloudApiKey: (key: string) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('validate_opencloud_api_key', { key })),
-  getAuthMetadata: () => typedError<string, AppError>(__TAURI_INVOKE('get_auth_metadata')),
+  getAuthMetadata: () => typedError<unknown, AppError>(__TAURI_INVOKE('get_auth_metadata')),
   /**
    *  Destroys the splashscreen window and spawns the main frameless React window.
    *
@@ -78,7 +78,6 @@ export const commands = {
    */
   syncRobloxPlugin: () => typedError<boolean, AppError>(__TAURI_INVOKE('sync_roblox_plugin')),
   /**  Opens the application's config directory in the native file explorer. */
-  openDataFolder: () => typedError<boolean, AppError>(__TAURI_INVOKE('open_data_folder')),
   /**  Deletes all cached data (like downloaded thumbnails and audio files). */
   clearAppCache: () => typedError<boolean, AppError>(__TAURI_INVOKE('clear_app_cache')),
   /**
@@ -95,13 +94,12 @@ export const commands = {
   showNotification: (options: NotificationOptions) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('show_notification', { options })),
   /**  Spawns a detached native terminal window that tails the latest log file. */
-  openDevConsole: () => typedError<boolean, AppError>(__TAURI_INVOKE('open_dev_console')),
   windowMinimize: () => __TAURI_INVOKE<void>('window_minimize'),
   windowClose: () => __TAURI_INVOKE<void>('window_close'),
   quitApp: () => __TAURI_INVOKE<void>('quit_app'),
   getAppVersion: () => __TAURI_INVOKE<string>('get_app_version'),
   getReleaseSource: () => __TAURI_INVOKE<string>('get_release_source'),
-  getRuntimeInfo: () => __TAURI_INVOKE<string>('get_runtime_info'),
+  getRuntimeInfo: () => __TAURI_INVOKE<unknown>('get_runtime_info'),
   openExternal: (url: string) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('open_external', { url })),
   selectFolder: () => typedError<string | null, AppError>(__TAURI_INVOKE('select_folder')),
@@ -120,32 +118,27 @@ export const commands = {
   spooferPause: (jobId: string) => __TAURI_INVOKE<boolean>('spoofer_pause', { jobId }),
   spooferResume: (jobId: string) => __TAURI_INVOKE<boolean>('spoofer_resume', { jobId }),
   spooferCancel: (jobId: string) => __TAURI_INVOKE<boolean>('spoofer_cancel', { jobId }),
-  checkSession: () => typedError<string, AppError>(__TAURI_INVOKE('check_session')),
   appendDebugLog: (level: string, source: string | null, message: string) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('append_debug_log', { level, source, message })),
   openLogsFolder: () => typedError<boolean, AppError>(__TAURI_INVOKE('open_logs_folder')),
   openPluginsFolder: () => typedError<boolean, AppError>(__TAURI_INVOKE('open_plugins_folder')),
-  copyDebugInfo: (context: string | null) =>
+  copyDebugInfo: (context: unknown | null) =>
     typedError<string, AppError>(__TAURI_INVOKE('copy_debug_info', { context })),
-  exportSupportReport: (context: string | null) =>
+  exportSupportReport: (context: unknown | null) =>
     typedError<string, AppError>(__TAURI_INVOKE('export_support_report', { context })),
   getRobloxProfile: (context: ProfileRequest) =>
-    typedError<string, AppError>(__TAURI_INVOKE('get_roblox_profile', { context })),
-  fetchAudioQuota: (cookie: string | null, autoDetect: boolean | null, context: string | null) =>
-    typedError<string, AppError>(
+    typedError<unknown, AppError>(__TAURI_INVOKE('get_roblox_profile', { context })),
+  fetchAudioQuota: (cookie: string | null, autoDetect: boolean | null, context: unknown | null) =>
+    typedError<unknown, AppError>(
       __TAURI_INVOKE('fetch_audio_quota', { cookie, autoDetect, context }),
     ),
-  loadRendererSettings: () =>
-    typedError<string, AppError>(__TAURI_INVOKE('load_renderer_settings')),
-  saveRendererSettings: (settings: string) =>
-    typedError<boolean, AppError>(__TAURI_INVOKE('save_renderer_settings', { settings })),
-  loadProfileSecrets: () => typedError<string, AppError>(__TAURI_INVOKE('load_profile_secrets')),
-  saveProfileSecrets: (data: string) =>
-    typedError<string, AppError>(__TAURI_INVOKE('save_profile_secrets', { data })),
+  loadProfileSecrets: () => typedError<unknown, AppError>(__TAURI_INVOKE('load_profile_secrets')),
+  saveProfileSecrets: (data: unknown) =>
+    typedError<unknown, AppError>(__TAURI_INVOKE('save_profile_secrets', { data })),
   clearProfileSecrets: (profileId: string | null) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('clear_profile_secrets', { profileId })),
   /**  Reads the job history JSON from disk so the frontend can populate the history tab. */
-  getJobs: () => typedError<string, AppError>(__TAURI_INVOKE('get_jobs')),
+  getJobs: () => typedError<unknown, AppError>(__TAURI_INVOKE('get_jobs')),
   /**  Removes a specific job entry from the persistent history file. */
   deleteJob: (jobId: string) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('delete_job', { jobId })),
@@ -178,13 +171,6 @@ export const commands = {
   /**  Pings Roblox to check for availability before proceeding with API calls. */
   checkRobloxApiStatus: () =>
     typedError<boolean, AppError>(__TAURI_INVOKE('check_roblox_api_status')),
-  /**  Writes the React frontend's current state to disk. */
-  saveSession: (session: string) =>
-    typedError<null, AppError>(__TAURI_INVOKE('save_session', { session })),
-  /**  Reads the previously saved UI state from disk. */
-  loadSession: () => typedError<string | null, AppError>(__TAURI_INVOKE('load_session')),
-  /**  Wipes the saved UI state, usually called during logout or when the user resets the app. */
-  clearSession: () => typedError<null, AppError>(__TAURI_INVOKE('clear_session')),
   /**
    *  Reads a local Roblox place or model file and extracts all spoofable assets.
    *
@@ -283,7 +269,7 @@ export const commands = {
    *  Tries to use the high-performance memory bridge first. If the plugin isn't connected
    *  to the bridge, it falls back to a direct local HTTP POST.
    */
-  pushToStudio: (replacementsMap: string, pluginPort: string | null) =>
+  pushToStudio: (replacementsMap: unknown, pluginPort: string | null) =>
     typedError<string, AppError>(__TAURI_INVOKE('push_to_studio', { replacementsMap, pluginPort })),
   setPluginThemeAccent: (color: string) =>
     typedError<null, string>(__TAURI_INVOKE('set_plugin_theme_accent', { color })),

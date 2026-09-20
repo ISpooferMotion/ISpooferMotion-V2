@@ -3,7 +3,6 @@ pub mod processor;
 pub mod state;
 pub mod types;
 
-use crate::commands::AnyValue;
 use tauri::AppHandle;
 
 use processor::process_spoofer_action;
@@ -58,11 +57,4 @@ pub fn force_reset_spoofer_job() {
     if let Ok(mut control) = state::spoofer_control().lock() {
         *control = state::SpooferControl::default();
     }
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn check_session(app: AppHandle) -> crate::error::Result<AnyValue> {
-    let result = crate::commands::session::load_session(app).await?;
-    Ok(result.unwrap_or(AnyValue(serde_json::Value::Null)))
 }

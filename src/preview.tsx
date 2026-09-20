@@ -1,14 +1,13 @@
 import './index.css';
 import './utils/debugLogger';
+
 import { installBrowserTauriMock } from './utils/browserTauriMock';
 
 installBrowserTauriMock();
 
-import React, { Suspense, useEffect, useRef, useState } from 'react';
-import ReactDOM from 'react-dom/client';
+import { invoke } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { invoke } from '@tauri-apps/api/core';
 import {
   ChevronDown,
   Eye,
@@ -22,13 +21,15 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom/client';
 
 import { Button } from './components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
 import { TooltipProvider } from './components/ui/tooltip';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { LanguageProvider } from './contexts/LanguageContext';
-import { cn } from './utils/cn';
+import { cn } from './lib/utils';
 import { playRobloxAudio, stopRobloxAudio } from './utils/robloxAudio';
 import type { ParsedAssetRef } from './utils/robloxPlaceParser/types';
 

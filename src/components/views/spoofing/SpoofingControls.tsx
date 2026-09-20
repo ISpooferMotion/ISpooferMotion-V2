@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion';
 import { Ban, Play, RotateCcw, ScanSearch } from 'lucide-react';
-import { cn } from '../../../utils/cn';
-import { commands } from '../../../types/bindings';
+
 import { useLanguage } from '../../../contexts/LanguageContext';
-import { Button } from '../../ui/button';
+import { cn } from '../../../lib/utils';
 import { useSpooferStore } from '../../../stores/spooferStore';
+import { commands } from '../../../types/bindings';
+import { Button } from '../../ui/button';
 
 export interface SpoofingControlsProps {
   failedAssetIds: string[];

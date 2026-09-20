@@ -147,7 +147,6 @@ dependencies = [
  "serde_json",
  "specta",
  "specta-typescript",
- "subtle",
  "sysinfo",
  "tauri",
  "tauri-build",

@@ -276,7 +276,9 @@ pub async fn start_server(app_handle: AppHandle) {
 
     tokio::spawn(async move {
         log::info!("Plugin HTTP server listening on {addr}");
-        let _ = axum::serve(listener, app).await;
+        if let Err(err) = axum::serve(listener, app).await {
+            log::error!("Plugin HTTP server stopped with an error on {addr}: {err}");
+        }
         let mut active_port = active_bridge_port().write().await;
         if *active_port == Some(addr.port()) {
             *active_port = None;

@@ -69,8 +69,8 @@ Individual commands if you need them:
 ```text
 src/                   React frontend
 src-tauri/src/         Rust backend (Tauri commands, Studio bridge)
-src-tauri/plugin/      Luau Studio plugin source
+plugin/      Luau Studio plugin source
 scripts/               Build and dev tooling
 ```
 
-The Luau plugin is built from source using `bun run build:plugin` - it concatenates the individual source files in `src-tauri/plugin/src/` into a single `ISpooferMotion.rbxmx`. If you're modifying the plugin, run that after your changes to verify the bundle builds cleanly.
+The Luau plugin is built from source using `bun run build:plugin` - it concatenates the individual source files in `plugin/src/` into a single `ISpooferMotion.rbxmx`. If you're modifying the plugin, run that after your changes to verify the bundle builds cleanly.

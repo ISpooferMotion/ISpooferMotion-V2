@@ -3,10 +3,9 @@ import { lazy, Suspense } from 'react';
 
 import Sidebar from './components/layout/Sidebar';
 import Titlebar from './components/layout/Titlebar';
-import { RobloxStatusBanner } from './components/shared/RobloxStatusBanner';
 import { PortDiagnosticBanner } from './components/shared/PortDiagnosticBanner';
+import { RobloxStatusBanner } from './components/shared/RobloxStatusBanner';
 import { TutorialGate } from './components/tutorial/TutorialGate';
-
 import { useConfig } from './contexts/ConfigContext';
 import { useLanguage } from './contexts/LanguageContext';
 import { useAppInitialization } from './hooks/useAppInitialization';
@@ -23,7 +22,7 @@ const AccountsView = lazy(() => import('./components/views/accounts/AccountsView
 /**
  * The root component of the ISpooferMotion React application.
  *
- * This orchestrates the main layout frame: the Titlebar, Sidebar, StatusBar,
+ * This orchestrates the main layout frame: the Titlebar and Sidebar,
  * and the main content router that flips between Spoofing, Activity, and Settings.
  * It also mounts floating overlays like the Debug Console and Asset Explorer.
  */

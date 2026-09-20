@@ -1,12 +1,11 @@
 import { ClipboardPaste, Copy, ListChecks, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-
 import { useShallow } from 'zustand/react/shallow';
 
 import { useLanguage } from '../../../contexts/LanguageContext';
+import { cn } from '../../../lib/utils';
 import { useConfigStore } from '../../../stores/configStore';
 import { useSpooferStore } from '../../../stores/spooferStore';
-import { cn } from '../../../utils/cn';
 
 interface ExecutionLogsProps {
   logs: string[];

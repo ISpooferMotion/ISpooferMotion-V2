@@ -15,9 +15,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::OnceLock;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Foundation::LocalFree;
@@ -328,54 +326,69 @@ fn decrypt_chromium_cookie(encrypted_value: &[u8], master_key: &[u8]) -> Option<
 }
 
 struct TempDb {
+    dir: PathBuf,
     db: PathBuf,
-    wal: Option<PathBuf>,
-    shm: Option<PathBuf>,
 }
 
 impl Drop for TempDb {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.db);
-        if let Some(ref p) = self.wal {
-            let _ = std::fs::remove_file(p);
-        }
-        if let Some(ref p) = self.shm {
-            let _ = std::fs::remove_file(p);
-        }
+        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 
-// copy the db + WAL/SHM sidecars to temp dir so we can read in-flight cookies even
-// when the browser is running (Chrome uses WAL mode; without the -wal file the copy
-// only sees data from the last checkpoint and misses recent cookies)
-static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+fn path_with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut value = path.as_os_str().to_os_string();
+    value.push(suffix);
+    PathBuf::from(value)
+}
 
+fn private_temp_dir() -> Option<PathBuf> {
+    for _ in 0..8 {
+        let dir = std::env::temp_dir()
+            .join(format!("ispoofermotion-cookie-{:016x}", rand::random::<u64>()));
+        match std::fs::create_dir(&dir) {
+            Ok(()) => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    if std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))
+                        .is_err()
+                    {
+                        let _ = std::fs::remove_dir(&dir);
+                        continue;
+                    }
+                }
+                return Some(dir);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return None,
+        }
+    }
+    None
+}
+
+// Copy the DB plus WAL/SHM sidecars into a private random directory so SQLite can
+// read in-flight browser cookies without competing with the browser's live handles.
 fn copy_cookie_db(path: &Path) -> Option<TempDb> {
-    let ts = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_millis();
-    let pid = std::process::id();
-    let count = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let temp_db = std::env::temp_dir().join(format!("ism-cookies-{pid}-{ts}-{count}.sqlite"));
-    std::fs::copy(path, &temp_db).ok()?;
+    let dir = private_temp_dir()?;
+    let temp_db = dir.join("Cookies.sqlite");
+    if std::fs::copy(path, &temp_db).is_err() {
+        let _ = std::fs::remove_dir_all(&dir);
+        return None;
+    }
 
-    // copy WAL sidecar so SQLite sees all recent writes (Chrome WAL mode)
-    let wal_src = PathBuf::from(format!("{}-wal", path.display()));
-    let wal_dst = PathBuf::from(format!("{}-wal", temp_db.display()));
-    let wal = if wal_src.is_file() {
-        std::fs::copy(&wal_src, &wal_dst).ok().map(|_| wal_dst)
-    } else {
-        None
-    };
+    for suffix in ["-wal", "-shm"] {
+        let source = path_with_suffix(path, suffix);
+        if source.is_file() {
+            let destination = path_with_suffix(&temp_db, suffix);
+            if std::fs::copy(&source, &destination).is_err() {
+                let _ = std::fs::remove_dir_all(&dir);
+                return None;
+            }
+        }
+    }
 
-    // copy SHM sidecar (required when WAL is present)
-    let shm_src = PathBuf::from(format!("{}-shm", path.display()));
-    let shm_dst = PathBuf::from(format!("{}-shm", temp_db.display()));
-    let shm = if shm_src.is_file() {
-        std::fs::copy(&shm_src, &shm_dst).ok().map(|_| shm_dst)
-    } else {
-        None
-    };
-
-    Some(TempDb { db: temp_db, wal, shm })
+    Some(TempDb { dir, db: temp_db })
 }
 
 #[cfg(target_os = "windows")]

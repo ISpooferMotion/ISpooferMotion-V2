@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ChevronLeft,
@@ -10,12 +9,13 @@ import {
   Terminal,
   Users,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import IsmLogoDark from '../../assets/ism_logo_dark.webp';
 import IsmLogoLight from '../../assets/ism_logo_light.webp';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
-import { cn } from '../../utils/cn';
+import { cn } from '../../lib/utils';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';

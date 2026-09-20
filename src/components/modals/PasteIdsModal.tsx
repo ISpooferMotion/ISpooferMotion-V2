@@ -1,8 +1,8 @@
 import { ClipboardPaste, Plus, Replace } from 'lucide-react';
 import { useState } from 'react';
 
+import { cn } from '../../lib/utils';
 import { useSpooferStore } from '../../stores/spooferStore';
-import { cn } from '../../utils/cn';
 import { logIsm } from '../../utils/robloxProfiles';
 import { queueStudioReplacements } from '../../utils/studioBridge';
 import { Button } from '../ui/button';

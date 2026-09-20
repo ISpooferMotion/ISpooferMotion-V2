@@ -12,7 +12,6 @@ pub mod jobs;
 pub mod place_parser;
 pub mod resolver;
 pub mod roblox_status;
-pub mod session;
 pub mod spoofer;
 pub mod startup;
 pub mod studio;
@@ -25,7 +24,7 @@ pub mod studio;
 pub struct AnyValue(pub serde_json::Value);
 
 impl specta::Type for AnyValue {
-    fn definition(_types: &mut specta::Types) -> specta::datatype::DataType {
-        specta::datatype::DataType::Primitive(specta::datatype::Primitive::str)
+    fn definition(types: &mut specta::Types) -> specta::datatype::DataType {
+        <specta_typescript::Unknown as specta::Type>::definition(types)
     }
 }

@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion';
 import {
   ArrowDownUp,
   Bug,
@@ -11,11 +12,13 @@ import {
   Wrench,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
 
-import { pageVariants } from '../../utils/animations';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { cn } from '../../utils/cn';
+import { cn } from '../../lib/utils';
+import { pageVariants } from '../../utils/animations';
+import ExclusionsSection from './config/ExclusionsSection';
+import RoutingSection from './config/RoutingSection';
+import UploadSection from './config/UploadSection';
 import AdvancedSection from './settings/AdvancedSection';
 import AppearanceCard from './settings/AppearanceCard';
 import BehaviorCard from './settings/BehaviorCard';
@@ -23,9 +26,6 @@ import CredentialsCard from './settings/CredentialsCard';
 import DangerCard from './settings/DangerCard';
 import DebugCard from './settings/DebugCard';
 import PermissionsCard from './settings/PermissionsCard';
-import ExclusionsSection from './config/ExclusionsSection';
-import RoutingSection from './config/RoutingSection';
-import UploadSection from './config/UploadSection';
 
 /**
  * Settings — unified scrollspy viewport rendering standardized setting cards.

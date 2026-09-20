@@ -49,7 +49,7 @@ fn sanitize_job_history(jobs: &mut Value) -> bool {
 pub async fn get_jobs(app: AppHandle) -> crate::error::Result<AnyValue> {
     let _guard = job_mutex().lock().await;
     let path = get_jobs_path(&app)?;
-    let mut jobs = read_json_file(&path).await;
+    let mut jobs = read_json_file(&path).await?;
     if !jobs.is_array() {
         jobs = Value::Array(vec![]);
     }
@@ -65,7 +65,7 @@ pub async fn get_jobs(app: AppHandle) -> crate::error::Result<AnyValue> {
 pub async fn delete_job(app: AppHandle, job_id: String) -> crate::error::Result<bool> {
     let _guard = job_mutex().lock().await;
     let path = get_jobs_path(&app)?;
-    let mut jobs = read_json_file(&path).await;
+    let mut jobs = read_json_file(&path).await?;
     if let Some(entries) = jobs.as_array_mut() {
         let before_len = entries.len();
         entries.retain(|job| job.get("id").and_then(Value::as_str) != Some(job_id.as_str()));
@@ -84,7 +84,7 @@ pub async fn delete_job(app: AppHandle, job_id: String) -> crate::error::Result<
 pub(super) async fn persist_job(app: &AppHandle, job: Value) -> crate::error::Result<bool> {
     let _guard = job_mutex().lock().await;
     let path = get_jobs_path(app)?;
-    let mut jobs = read_json_file(&path).await;
+    let mut jobs = read_json_file(&path).await?;
     if !jobs.is_array() {
         jobs = Value::Array(vec![]);
     }
@@ -114,7 +114,8 @@ pub async fn open_job_log(app: AppHandle, log_path: String) -> crate::error::Res
         return Err("Job log path is outside the logs directory.".into());
     }
     use tauri_plugin_opener::OpenerExt;
-    let _ =
-        app.opener().open_path(canonical_log_path.to_string_lossy().into_owned(), None::<String>);
+    app.opener()
+        .open_path(canonical_log_path.to_string_lossy().into_owned(), None::<String>)
+        .map_err(|err| err.to_string())?;
     Ok(true)
 }

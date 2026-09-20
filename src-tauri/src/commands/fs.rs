@@ -1,15 +1,9 @@
 //! OS-level filesystem and system interaction commands.
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-use std::process::Command;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::utils::build_roblox_cookie_header;
-
-#[cfg(target_os = "windows")]
-const DETACHED_PROCESS: u32 = 0x00000008;
 
 #[derive(serde::Deserialize, specta::Type)]
 pub struct NotificationOptions {
@@ -17,26 +11,17 @@ pub struct NotificationOptions {
     pub body: Option<String>,
 }
 
-/// Opens the application's config directory in the native file explorer.
-#[tauri::command]
-#[specta::specta]
-pub async fn open_data_folder(app: AppHandle) -> crate::error::Result<bool> {
-    let Ok(data_dir) = app.path().app_data_dir() else {
-        return Ok(false);
-    };
-    use tauri_plugin_opener::OpenerExt;
-    Ok(app.opener().open_path(data_dir.to_string_lossy().to_string(), None::<String>).is_ok())
-}
-
 /// Deletes all cached data (like downloaded thumbnails and audio files).
 #[tauri::command]
 #[specta::specta]
 pub async fn clear_app_cache(app: AppHandle) -> crate::error::Result<bool> {
-    // Delete and recreate the cache directory.
-    if let Ok(cache_dir) = app.path().app_cache_dir() {
-        let _ = tokio::fs::remove_dir_all(&cache_dir).await;
-        let _ = tokio::fs::create_dir_all(&cache_dir).await;
+    let cache_dir = app.path().app_cache_dir()?;
+    match tokio::fs::remove_dir_all(&cache_dir).await {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(err.into()),
     }
+    tokio::fs::create_dir_all(&cache_dir).await?;
     Ok(true)
 }
 
@@ -141,75 +126,4 @@ pub async fn show_notification(
         .show()
         .map_err(|err| err.to_string())?;
     Ok(true)
-}
-
-/// Spawns a detached native terminal window that tails the latest log file.
-#[tauri::command]
-#[specta::specta]
-pub async fn open_dev_console(app: AppHandle) -> crate::error::Result<bool> {
-    let logs_dir = app.path().app_data_dir()?.join("ispoofer_logs");
-
-    // Scan the logs directory for text files.
-    let mut entries: Vec<_> = match tokio::fs::read_dir(&logs_dir).await {
-        Ok(mut dir) => {
-            let mut res = Vec::new();
-            while let Ok(Some(entry)) = dir.next_entry().await {
-                res.push(entry);
-            }
-            res
-        }
-        Err(_) => return Ok(false),
-    };
-
-    entries.retain(|e| {
-        let name = e.file_name();
-        let name_str = name.to_string_lossy();
-        name_str.starts_with("debug-") && name_str.ends_with(".txt")
-    });
-    // Sort by filename lexicographically (ISO date prefix makes this time-ordered).
-    entries.sort_by_key(tokio::fs::DirEntry::file_name);
-
-    if let Some(latest) = entries.last() {
-        let path = latest.path();
-
-        // Open a native terminal window tailing the log file.
-        #[cfg(target_os = "windows")]
-        {
-            let script = format!(
-                "Get-Content -LiteralPath '{}' -Wait",
-                path.to_string_lossy().replace('\'', "''")
-            );
-            let mut cmd = Command::new("powershell.exe");
-            cmd.args(["-NoExit", "-Command", &script]);
-            cmd.creation_flags(DETACHED_PROCESS);
-            let _ = cmd.spawn();
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            // `quoted form of POSIX path` is AppleScript's own shell-safe path
-            // escaping - it handles all special characters including quotes,
-            // spaces, and backslashes without any manual string construction.
-            let posix_path = path.to_string_lossy().into_owned();
-            let script = format!(
-                "tell application \"Terminal\" to do script \"tail -f \" & quoted form of POSIX path of \"{}\"",
-                posix_path.replace('\\', "/")
-            );
-            let mut cmd = Command::new("osascript");
-            cmd.args(["-e", &script]);
-            let _ = cmd.spawn();
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            let mut cmd = Command::new("x-terminal-emulator");
-            cmd.args(["-e", "tail", "-f"]);
-            cmd.arg(path.as_os_str());
-            let _ = cmd.spawn();
-        }
-
-        Ok(true)
-    } else {
-        Ok(false)
-    }
 }

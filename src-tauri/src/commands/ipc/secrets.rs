@@ -1,10 +1,15 @@
-use super::{read_json_file, write_json_file, AppHandle, Entry, Manager, PathBuf};
+use super::{read_json_file, AppHandle, Entry, Manager, PathBuf};
 use crate::commands::AnyValue;
 use serde_json::Value;
+use std::sync::OnceLock;
+use tokio::sync::Mutex;
 
-fn get_settings_path(app: &AppHandle) -> crate::error::Result<PathBuf> {
-    let dir = app.path().app_data_dir()?;
-    Ok(dir.join("renderer-settings.json"))
+static SECRETS_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+const SECRETS_CHUNK_BYTES: usize = 1_000;
+const MAX_SECRET_CHUNKS: usize = 512;
+
+fn secrets_mutex() -> &'static Mutex<()> {
+    SECRETS_MUTEX.get_or_init(|| Mutex::new(()))
 }
 
 fn get_profile_secrets_path(app: &AppHandle) -> crate::error::Result<PathBuf> {
@@ -19,23 +24,14 @@ pub(super) fn get_secrets_keyring_entry() -> crate::error::Result<Entry> {
 }
 
 // The Open Cloud API key lives in its own credential entry, separate from the
-// ProfileSecrets blob. The blob carries the long .ROBLOSECURITY cookie -- often
-// duplicated across the top-level `cookie`, `profileCookies`, and `accountSecrets`
-// fields -- so it can exceed Windows Credential Manager's 2560-byte
-// CredentialBlob cap, at which point CredWriteW rejects the whole blob and every
-// secret in it is lost. The API key has no re-detection fallback the way the cookie
-// does (Studio credentials), so giving it its own entry keeps it from disappearing
-// on restart when the blob write fails.
+// potentially much larger profile-secrets blob. This prevents a cookie-heavy
+// profile set from making the irreplaceable API key exceed an OS credential
+// entry's size limit.
 pub(super) fn get_opencloud_api_key_entry() -> crate::error::Result<Entry> {
     Entry::new("ISpooferMotion.OpenCloudApiKey", "default").map_err(|e| {
         crate::error::AppError::Custom(format!("Failed to open API key credential store: {e}"))
     })
 }
-
-// Maximum characters stored per credential entry. Windows Credential Manager caps
-// a single credential's blob at 2560 bytes (UTF-16 = 1280 code units), so each
-// chunk stays well under that limit with room to spare.
-const SECRETS_CHUNK_SIZE: usize = 1000;
 
 fn chunk_entry(index: usize) -> crate::error::Result<Entry> {
     Entry::new(&format!("ISpooferMotion.ProfileSecrets.{index}"), "default").map_err(|e| {
@@ -43,147 +39,231 @@ fn chunk_entry(index: usize) -> crate::error::Result<Entry> {
     })
 }
 
-/// Splits a string into chunks of at most `size` characters, breaking only on
-/// character boundaries so multi-byte UTF-8 is never split.
-fn split_chunks(s: &str, size: usize) -> Vec<String> {
+/// Splits a UTF-8 string into chunks that are each at most `max_bytes` bytes,
+/// while preserving character boundaries.
+fn split_chunks_by_bytes(value: &str, max_bytes: usize) -> Vec<String> {
+    assert!(max_bytes > 0, "chunk size must be non-zero");
+    if value.is_empty() {
+        return vec![String::new()];
+    }
+
     let mut chunks = Vec::new();
     let mut start = 0;
-    let mut count = 0;
-    for (i, ch) in s.char_indices() {
-        count += 1;
-        if count == size {
-            let end = i + ch.len_utf8();
-            chunks.push(s[start..end].to_string());
-            start = end;
-            count = 0;
+    let mut bytes_in_chunk = 0;
+
+    for (offset, ch) in value.char_indices() {
+        let char_bytes = ch.len_utf8();
+        if bytes_in_chunk > 0 && bytes_in_chunk + char_bytes > max_bytes {
+            chunks.push(value[start..offset].to_string());
+            start = offset;
+            bytes_in_chunk = 0;
         }
+        bytes_in_chunk += char_bytes;
     }
-    if count > 0 {
-        chunks.push(s[start..].to_string());
+
+    if start < value.len() {
+        chunks.push(value[start..].to_string());
     }
     chunks
 }
 
-/// Writes the secrets blob to the credential store in chunks plus a small
-/// manifest entry (in the base `ProfileSecrets` entry) recording the count. This
-/// keeps every credential under the 2560-byte cap and supports blobs of any
-/// size. Stale chunks left over from a previous, larger blob are deleted.
+fn read_manifest_chunk_count() -> crate::error::Result<Option<usize>> {
+    let entry = get_secrets_keyring_entry()?;
+    let content = match entry.get_password() {
+        Ok(content) => content,
+        Err(keyring::Error::NoEntry) => return Ok(None),
+        Err(e) => {
+            return Err(crate::error::AppError::Custom(format!(
+                "Failed to read secrets manifest: {e}"
+            )))
+        }
+    };
+
+    let parsed: Value = serde_json::from_str(&content)?;
+    let Some(count) = parsed.get("chunks").and_then(Value::as_u64) else {
+        return Ok(None);
+    };
+    let count = usize::try_from(count)
+        .map_err(|_| crate::error::AppError::Custom("Invalid secrets chunk count".to_string()))?;
+    if count > MAX_SECRET_CHUNKS {
+        return Err(crate::error::AppError::Custom(format!(
+            "Secrets manifest requested too many chunks ({count})"
+        )));
+    }
+    Ok(Some(count))
+}
+
 fn save_secrets_chunked(json_str: &str) -> crate::error::Result<()> {
-    let prev = read_chunk_count().unwrap_or(0);
-    let chunks = split_chunks(json_str, SECRETS_CHUNK_SIZE);
-    for (i, chunk) in chunks.iter().enumerate() {
-        let entry = chunk_entry(i)?;
+    let previous_count = read_manifest_chunk_count()?.unwrap_or(0);
+    let chunks = split_chunks_by_bytes(json_str, SECRETS_CHUNK_BYTES);
+    if chunks.len() > MAX_SECRET_CHUNKS {
+        return Err(crate::error::AppError::Custom(
+            "Profile secrets are too large for the credential store".to_string(),
+        ));
+    }
+
+    // Write all new chunks before publishing the manifest. The operation is
+    // serialized in-process; a future storage redesign should add generations if
+    // crash-atomic multi-entry commits are required.
+    for (index, chunk) in chunks.iter().enumerate() {
+        let entry = chunk_entry(index)?;
         entry.set_password(chunk).map_err(|e| {
-            crate::error::AppError::Custom(format!("Failed to save secrets chunk {i}: {e}"))
+            crate::error::AppError::Custom(format!("Failed to save secrets chunk {index}: {e}"))
         })?;
     }
-    // Delete stale chunks left over from a larger previous blob.
-    let upper = prev.max(chunks.len());
-    for i in chunks.len()..upper {
-        if let Ok(e) = chunk_entry(i) {
-            let _ = e.delete_credential();
-        }
-    }
+
     let manifest = format!("{{\"v\":2,\"chunks\":{}}}", chunks.len());
-    let entry = get_secrets_keyring_entry()?;
-    entry.set_password(&manifest).map_err(|e| {
+    get_secrets_keyring_entry()?.set_password(&manifest).map_err(|e| {
         crate::error::AppError::Custom(format!("Failed to save secrets manifest: {e}"))
     })?;
+
+    // Stale chunks are no longer referenced after the manifest commit. Failure
+    // to delete a stale entry does not corrupt the current value, but report it
+    // so credential-store problems are visible instead of silently accumulating.
+    for index in chunks.len()..previous_count {
+        let entry = chunk_entry(index)?;
+        match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => {}
+            Err(e) => {
+                return Err(crate::error::AppError::Custom(format!(
+                    "Failed to remove stale secrets chunk {index}: {e}"
+                )))
+            }
+        }
+    }
     Ok(())
 }
 
-/// Reads the chunk count from the manifest entry when the store is using the
-/// chunked scheme. Returns None for a legacy single-blob entry or an empty store.
-fn read_chunk_count() -> Option<usize> {
-    let entry = get_secrets_keyring_entry().ok()?;
-    let content = entry.get_password().ok()?;
-    serde_json::from_str::<Value>(&content).ok()?.get("chunks")?.as_u64().map(|n| n as usize)
+fn load_keyring_blob() -> crate::error::Result<Option<Value>> {
+    let entry = get_secrets_keyring_entry()?;
+    let content = match entry.get_password() {
+        Ok(content) => content,
+        Err(keyring::Error::NoEntry) => return Ok(None),
+        Err(e) => {
+            return Err(crate::error::AppError::Custom(format!(
+                "Failed to read credential store: {e}"
+            )))
+        }
+    };
+
+    let parsed: Value = serde_json::from_str(&content)?;
+    if let Some(count) = parsed.get("chunks").and_then(Value::as_u64) {
+        let count = usize::try_from(count).map_err(|_| {
+            crate::error::AppError::Custom("Invalid secrets chunk count".to_string())
+        })?;
+        if count > MAX_SECRET_CHUNKS {
+            return Err(crate::error::AppError::Custom(format!(
+                "Secrets manifest requested too many chunks ({count})"
+            )));
+        }
+
+        let mut combined = String::new();
+        for index in 0..count {
+            let chunk = match chunk_entry(index)?.get_password() {
+                Ok(chunk) => chunk,
+                Err(keyring::Error::NoEntry) => {
+                    return Err(crate::error::AppError::Custom(format!(
+                        "Secrets store is incomplete: chunk {index} is missing"
+                    )))
+                }
+                Err(e) => {
+                    return Err(crate::error::AppError::Custom(format!(
+                        "Failed to read secrets chunk {index}: {e}"
+                    )))
+                }
+            };
+            combined.push_str(&chunk);
+        }
+        return Ok(Some(serde_json::from_str(&combined)?));
+    }
+
+    // Legacy pre-chunking entry.
+    Ok(Some(parsed))
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn load_renderer_settings(app: AppHandle) -> crate::error::Result<AnyValue> {
-    let path = get_settings_path(&app)?;
-    Ok(AnyValue(read_json_file(&path).await))
+fn load_opencloud_api_key() -> crate::error::Result<Option<String>> {
+    match get_opencloud_api_key_entry()?.get_password() {
+        Ok(value) => Ok(Some(value)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => {
+            Err(crate::error::AppError::Custom(format!("Failed to read API key credential: {e}")))
+        }
+    }
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn save_renderer_settings(
-    app: AppHandle,
-    settings: AnyValue,
-) -> crate::error::Result<bool> {
-    let settings = settings.0;
-    let path = get_settings_path(&app)?;
-    write_json_file(&path, &settings).await?;
-    Ok(true)
+fn save_opencloud_api_key(api_key: Option<&str>) -> crate::error::Result<()> {
+    let entry = get_opencloud_api_key_entry()?;
+    match api_key.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) => entry.set_password(value).map_err(|e| {
+            crate::error::AppError::Custom(format!("Failed to save API key credential: {e}"))
+        }),
+        None => match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(crate::error::AppError::Custom(format!(
+                "Failed to clear API key credential: {e}"
+            ))),
+        },
+    }
+}
+
+async fn load_profile_secrets_inner(app: &AppHandle) -> crate::error::Result<Value> {
+    let keyring_value = tokio::task::spawn_blocking(load_keyring_blob)
+        .await
+        .map_err(|e| crate::error::AppError::Custom(format!("Credential task failed: {e}")))??;
+
+    let legacy_path = get_profile_secrets_path(app)?;
+    let mut value = if let Some(value) = keyring_value {
+        // A successful keyring migration should not leave plaintext credentials
+        // behind indefinitely.
+        match tokio::fs::remove_file(&legacy_path).await {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(crate::error::AppError::Custom(format!(
+                    "Failed to remove legacy plaintext secrets file: {e}"
+                )))
+            }
+        }
+        value
+    } else if tokio::fs::try_exists(&legacy_path).await? {
+        let legacy_secrets = read_json_file(&legacy_path).await?;
+        if !legacy_secrets.is_object() {
+            return Err(crate::error::AppError::Custom(
+                "Legacy profile secrets file has an invalid root type".to_string(),
+            ));
+        }
+        let json_str = serde_json::to_string(&legacy_secrets)?;
+        tokio::task::spawn_blocking(move || save_secrets_chunked(&json_str)).await.map_err(
+            |e| crate::error::AppError::Custom(format!("Credential task failed: {e}")),
+        )??;
+        tokio::fs::remove_file(&legacy_path).await.map_err(|e| {
+            crate::error::AppError::Custom(format!(
+                "Secrets were migrated, but the legacy plaintext file could not be removed: {e}"
+            ))
+        })?;
+        legacy_secrets
+    } else {
+        Value::Object(serde_json::Map::new())
+    };
+
+    let api_key = tokio::task::spawn_blocking(load_opencloud_api_key)
+        .await
+        .map_err(|e| crate::error::AppError::Custom(format!("Credential task failed: {e}")))??;
+    if let Some(api_key) = api_key {
+        let object = value.as_object_mut().ok_or_else(|| {
+            crate::error::AppError::Custom("Profile secrets have an invalid root type".to_string())
+        })?;
+        object.insert("apiKey".to_string(), Value::String(api_key));
+    }
+
+    Ok(value)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn load_profile_secrets(app: AppHandle) -> crate::error::Result<AnyValue> {
-    // Load user secrets, applying migration from plaintext to the OS keyring if
-    // required. The blob is stored in fixed-size chunks under
-    // ISpooferMotion.ProfileSecrets.<n>, with a small manifest in the base entry
-    // recording the chunk count; a legacy single-blob entry (pre-chunking) is
-    // detected and used directly.
-    let keyring_value = tokio::task::spawn_blocking(|| {
-        let Ok(entry) = get_secrets_keyring_entry() else { return None };
-        let Ok(content) = entry.get_password() else { return None };
-        if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
-            if let Some(n) = parsed.get("chunks").and_then(Value::as_u64) {
-                // Chunked manifest: reassemble the blob from N chunk entries.
-                let mut combined = String::new();
-                for i in 0..n as usize {
-                    if let Ok(ce) = chunk_entry(i) {
-                        if let Ok(chunk) = ce.get_password() {
-                            combined.push_str(&chunk);
-                        }
-                    }
-                }
-                return serde_json::from_str(&combined).ok();
-            }
-            // Legacy single-blob entry (pre-chunking): use it directly.
-            return Some(parsed);
-        }
-        None
-    })
-    .await
-    .unwrap_or(None);
-
-    let mut value = if let Some(v) = keyring_value {
-        v
-    } else {
-        let path = get_profile_secrets_path(&app)?;
-        if path.exists() {
-            let legacy_secrets = read_json_file(&path).await;
-            if legacy_secrets.is_object() {
-                let json_str = serde_json::to_string(&legacy_secrets)?;
-                tokio::task::spawn_blocking(move || save_secrets_chunked(&json_str))
-                    .await
-                    .map_err(|e| crate::error::AppError::Custom(e.to_string()))??;
-                let _ = tokio::fs::remove_file(path).await;
-            }
-            legacy_secrets
-        } else {
-            Value::Object(serde_json::Map::new())
-        }
-    };
-
-    // The API key is the authoritative value from its own entry; fall back to
-    // whatever the blob carries (back-compat for installs that only have it there).
-    let api_key = tokio::task::spawn_blocking(|| {
-        get_opencloud_api_key_entry().ok().and_then(|e| e.get_password().ok())
-    })
-    .await
-    .unwrap_or(None);
-    if let Some(api_key) = api_key {
-        if let Some(obj) = value.as_object_mut() {
-            obj.insert("apiKey".to_string(), Value::String(api_key));
-        }
-    }
-
-    Ok(AnyValue(value))
+    let _guard = secrets_mutex().lock().await;
+    Ok(AnyValue(load_profile_secrets_inner(&app).await?))
 }
 
 #[tauri::command]
@@ -192,70 +272,67 @@ pub async fn save_profile_secrets(
     app: AppHandle,
     data: AnyValue,
 ) -> crate::error::Result<AnyValue> {
-    // Merge incoming secrets with existing store values.
+    let _guard = secrets_mutex().lock().await;
     let data = data.0;
-    let mut all_secrets = load_profile_secrets(app.clone()).await?.0;
+    let mut all_secrets = load_profile_secrets_inner(&app).await?;
 
     if let (Some(all_obj), Some(data_obj)) = (all_secrets.as_object_mut(), data.as_object()) {
-        for (k, v) in data_obj {
-            if k != "action" && k != "secrets" {
-                if k == "profileCookies" {
-                    let profile_cookies = all_obj
-                        .entry(k.clone())
+        for (key, value) in data_obj {
+            if key != "action" && key != "secrets" {
+                if matches!(key.as_str(), "profileCookies" | "accountSecrets") {
+                    let target = all_obj
+                        .entry(key.clone())
                         .or_insert_with(|| Value::Object(serde_json::Map::new()));
                     if let (Some(existing), Some(incoming)) =
-                        (profile_cookies.as_object_mut(), v.as_object())
+                        (target.as_object_mut(), value.as_object())
                     {
-                        for (profile_id, cookie) in incoming {
-                            existing.insert(profile_id.clone(), cookie.clone());
+                        for (entry_key, entry_value) in incoming {
+                            existing.insert(entry_key.clone(), entry_value.clone());
                         }
-                    }
-                } else if k == "accountSecrets" {
-                    let account_secrets = all_obj
-                        .entry(k.clone())
-                        .or_insert_with(|| Value::Object(serde_json::Map::new()));
-                    if let (Some(existing), Some(incoming)) =
-                        (account_secrets.as_object_mut(), v.as_object())
-                    {
-                        for (account_id, secrets) in incoming {
-                            existing.insert(account_id.clone(), secrets.clone());
-                        }
+                    } else {
+                        all_obj.insert(key.clone(), value.clone());
                     }
                 } else {
-                    all_obj.insert(k.clone(), v.clone());
+                    all_obj.insert(key.clone(), value.clone());
                 }
-            } else if k == "secrets" {
-                if let Some(secrets_obj) = v.as_object() {
-                    for (sk, sv) in secrets_obj {
-                        all_obj.insert(sk.clone(), sv.clone());
+            } else if key == "secrets" {
+                if let Some(secrets_obj) = value.as_object() {
+                    for (secret_key, secret_value) in secrets_obj {
+                        all_obj.insert(secret_key.clone(), secret_value.clone());
                     }
                 }
             }
         }
-    } else {
+    } else if data.is_object() {
         all_secrets = data.clone();
+    } else {
+        return Err(crate::error::AppError::Custom(
+            "Profile secrets payload must be an object".to_string(),
+        ));
     }
 
-    let api_key_value = all_secrets.get("apiKey").and_then(|v| v.as_str()).map(str::to_string);
+    let api_key = all_secrets.get("apiKey").and_then(Value::as_str).map(str::to_string);
     let json_str = serde_json::to_string(&all_secrets)?;
     tokio::task::spawn_blocking(move || {
-        // Persist the API key first in its own entry so a valid key is not lost
-        // when the cookie-bearing blob below exceeds the CredentialBlob cap.
-        if let Some(api_key) = api_key_value {
-            if let Ok(entry) = get_opencloud_api_key_entry() {
-                let _ = entry.set_password(&api_key);
-            }
-        }
-        // The blob is chunked across multiple entries so it stays under Windows
-        // Credential Manager's 2560-byte per-credential cap even with several
-        // accounts' cookies duplicated across the blob's fields.
-        save_secrets_chunked(&json_str)
+        // Commit the merged blob first, then update the dedicated API-key entry that
+        // has precedence on load. If the final key update fails, the operation
+        // returns an error while the previously effective key remains authoritative.
+        save_secrets_chunked(&json_str)?;
+        save_opencloud_api_key(api_key.as_deref())
     })
     .await
-    .map_err(|e| crate::error::AppError::Custom(e.to_string()))??;
+    .map_err(|e| crate::error::AppError::Custom(format!("Credential task failed: {e}")))??;
 
-    let path = get_profile_secrets_path(&app)?;
-    let _ = tokio::fs::remove_file(path).await;
+    let legacy_path = get_profile_secrets_path(&app)?;
+    match tokio::fs::remove_file(legacy_path).await {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(crate::error::AppError::Custom(format!(
+                "Secrets were saved, but the legacy plaintext file could not be removed: {e}"
+            )))
+        }
+    }
 
     Ok(AnyValue(all_secrets))
 }
@@ -266,31 +343,81 @@ pub async fn clear_profile_secrets(
     app: AppHandle,
     _profile_id: Option<String>,
 ) -> crate::error::Result<bool> {
-    let _ = tokio::task::spawn_blocking(|| {
-        // Delete every chunk plus the manifest. The manifest records the chunk
-        // count; if it's missing, sweep a conservative range.
-        let mut count = 64usize;
-        if let Ok(entry) = get_secrets_keyring_entry() {
-            if let Ok(content) = entry.get_password() {
-                if let Ok(parsed) = serde_json::from_str::<Value>(&content) {
-                    if let Some(n) = parsed.get("chunks").and_then(Value::as_u64) {
-                        count = n as usize;
+    let _guard = secrets_mutex().lock().await;
+    tokio::task::spawn_blocking(|| -> crate::error::Result<()> {
+        let count = read_manifest_chunk_count()?;
+
+        let manifest = get_secrets_keyring_entry()?;
+        match manifest.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => {}
+            Err(e) => {
+                return Err(crate::error::AppError::Custom(format!(
+                    "Failed to clear secrets manifest: {e}"
+                )))
+            }
+        }
+
+        match count {
+            Some(count) => {
+                for index in 0..count {
+                    let entry = chunk_entry(index)?;
+                    match entry.delete_credential() {
+                        Ok(()) | Err(keyring::Error::NoEntry) => {}
+                        Err(e) => {
+                            return Err(crate::error::AppError::Custom(format!(
+                                "Failed to clear secrets chunk {index}: {e}"
+                            )))
+                        }
                     }
                 }
             }
-            let _ = entry.delete_credential();
-        }
-        for i in 0..count {
-            if let Ok(e) = chunk_entry(i) {
-                let _ = e.delete_credential();
+            None => {
+                // A crash can leave sequential chunks behind before the manifest
+                // is committed. Remove that orphan prefix, but stop at the first
+                // missing entry instead of probing every possible chunk slot.
+                for index in 0..MAX_SECRET_CHUNKS {
+                    let entry = chunk_entry(index)?;
+                    match entry.delete_credential() {
+                        Ok(()) => {}
+                        Err(keyring::Error::NoEntry) => break,
+                        Err(e) => {
+                            return Err(crate::error::AppError::Custom(format!(
+                                "Failed to clear orphaned secrets chunk {index}: {e}"
+                            )))
+                        }
+                    }
+                }
             }
         }
-        if let Ok(entry) = get_opencloud_api_key_entry() {
-            let _ = entry.delete_credential();
-        }
+        save_opencloud_api_key(None)?;
+        Ok(())
     })
-    .await;
-    let path = get_profile_secrets_path(&app)?;
-    let _ = tokio::fs::remove_file(path).await;
+    .await
+    .map_err(|e| crate::error::AppError::Custom(format!("Credential task failed: {e}")))??;
+
+    let legacy_path = get_profile_secrets_path(&app)?;
+    match tokio::fs::remove_file(legacy_path).await {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_chunks_by_bytes;
+
+    #[test]
+    fn chunking_respects_utf8_byte_limit_and_round_trips() {
+        let input = format!("{}{}", "a".repeat(999), "🙂".repeat(20));
+        let chunks = split_chunks_by_bytes(&input, 1_000);
+        assert!(chunks.iter().all(|chunk| chunk.len() <= 1_000));
+        assert_eq!(chunks.concat(), input);
+    }
+
+    #[test]
+    fn chunking_handles_empty_values() {
+        assert_eq!(split_chunks_by_bytes("", 1_000), vec![String::new()]);
+    }
 }

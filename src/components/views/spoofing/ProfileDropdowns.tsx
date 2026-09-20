@@ -3,10 +3,9 @@ import { Loader2, Users, UserSquare2 } from 'lucide-react';
 
 import type { AppConfig } from '../../../contexts/ConfigContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
+import { cn } from '../../../lib/utils';
 import { useConfigStore } from '../../../stores/configStore';
-import { cn } from '../../../utils/cn';
 import { normalizeId, type RobloxGroup, type RobloxUserInfo } from '../../../utils/robloxProfiles';
-
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../ui/select';
 
 /**

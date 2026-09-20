@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { useThemeAccent } from '../../../contexts/ThemeContext';
-import { cn } from '../../../utils/cn';
+import { cn } from '../../../lib/utils';
 import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { SettingCard } from './SettingComponents';

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X, ArrowRight, CheckCircle2, Circle } from 'lucide-react';
-import { cn } from '../../utils/cn';
+import { ArrowRight, CheckCircle2, Circle, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+
+import { cn } from '../../lib/utils';
 
 export interface TutorialStep {
   id: string;
@@ -74,7 +75,6 @@ export const Tutorial = ({ steps, onComplete, onSkip, beforeStep }: TutorialProp
       onEnteredRef.current.add(first.id);
       first.onEnter?.();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const step = steps[stepIndex];

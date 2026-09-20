@@ -64,7 +64,7 @@ tmp/
 
 # Roblox plugin build output
 *.rbxmx
-plugin-build/
+plugin/.generated/
 dist-plugin/
 
 # Test / coverage output
@@ -88,7 +88,6 @@ Thumbs.db
 desktop.ini
 *.swp
 *.swo
-/docs
 
 # Allow env files
 !.env.development

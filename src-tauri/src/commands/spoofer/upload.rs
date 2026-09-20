@@ -1,7 +1,7 @@
 use super::{
     apply_upload_auth, emit_transfer_update, is_valid_numeric_id, patch_asset_permissions,
     sanitize_filename, set_rate_limit, wait_rate_limit, AppHandle, Manager, PublishResult,
-    RateLimitBucket, RobloxOperationResponse, TransferUpdate, UploadAuth, Value,
+    RateLimitBucket, RobloxOperationResponse, TransferUpdate, Value,
 };
 use serde::Serialize;
 use tauri::Emitter;
@@ -88,7 +88,7 @@ async fn poll_roblox_operation(
     app: &AppHandle,
     client: &reqwest::Client,
     operation_path: &str,
-    auth: &UploadAuth,
+    api_key: &str,
     transfer_id: &str,
     name: &str,
     original_asset_id: Option<&str>,
@@ -111,7 +111,7 @@ async fn poll_roblox_operation(
             tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
         }
         wait_rate_limit(RateLimitBucket::OperationPoll).await;
-        let resp = match apply_upload_auth(client.get(&url), auth).send().await {
+        let resp = match apply_upload_auth(client.get(&url), api_key).send().await {
             Ok(r) => r,
             Err(e) => return Err(format!("Operation poll request failed: {e}")),
         };
@@ -434,8 +434,8 @@ pub async fn publish_asset_with_progress(
     let mut final_asset_id = None;
 
     {
-        let mut upload_auth = match &api_key {
-            Some(k) if !k.trim().is_empty() => UploadAuth::ApiKey(k.clone()),
+        let upload_api_key = match &api_key {
+            Some(k) if !k.trim().is_empty() => k.clone(),
             _ => {
                 let msg = "Uploading assets requires an Open Cloud API key. Please configure your API key in Settings or Accounts.".to_string();
                 emit_transfer_update(
@@ -531,7 +531,7 @@ pub async fn publish_asset_with_progress(
                 .text("request", meta_json.clone())
                 .part("fileContent", file_part);
 
-            let resp = match apply_upload_auth(client.post(url), &upload_auth)
+            let resp = match apply_upload_auth(client.post(url), &upload_api_key)
                 .multipart(form)
                 .send()
                 .await
@@ -731,21 +731,6 @@ pub async fn publish_asset_with_progress(
 
             let resp_text = resp.text().await.unwrap_or_default();
 
-            if status_code == 403 && resp_text.contains("Token Validation Failed") {
-                if let Ok(new_token) =
-                    crate::commands::auth::force_refresh_csrf_token(cookie.clone()).await
-                {
-                    let mut updated_auth = false;
-                    if let UploadAuth::Cookie { token, .. } = &mut upload_auth {
-                        *token = new_token;
-                        updated_auth = true;
-                    }
-                    if updated_auth {
-                        continue;
-                    }
-                }
-            }
-
             if !status.is_success() {
                 let parsed_err =
                     if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&resp_text) {
@@ -819,7 +804,7 @@ pub async fn publish_asset_with_progress(
                 &app,
                 &client,
                 &op_path,
-                &upload_auth,
+                &upload_api_key,
                 &transfer_id,
                 &name,
                 original_asset_id.as_deref(),

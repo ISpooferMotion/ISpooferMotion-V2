@@ -13,8 +13,8 @@ import {
 import { memo, useMemo, useState } from 'react';
 
 import type { AppConfig } from '../../../contexts/ConfigContext';
+import { cn } from '../../../lib/utils';
 import { useSpooferStore } from '../../../stores/spooferStore';
-import { cn } from '../../../utils/cn';
 import type { ParsedAssetRef, RbxInstance } from '../../../utils/robloxPlaceParser/types';
 import { Button } from '../../ui/button';
 import { Checkbox } from '../../ui/checkbox';

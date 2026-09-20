@@ -87,9 +87,7 @@ Download the latest release for your platform from the [releases page](https://g
 | macOS    | `ISpooferMotion_x.x.x_x64.dmg`        |
 | Linux    | `ISpooferMotion_x.x.x_amd64.AppImage` |
 
-The Roblox Studio plugin, `ISpooferMotion.rbxmx`, is included with every release.
-
-Install it by opening the file with Roblox Studio or adding it through **Plugins → Manage Plugins**.
+The Roblox Studio plugin, `ISpooferMotion.rbxmx`, is included with every release. The desktop app automatically synchronizes its bundled plugin into supported local Roblox Studio plugin directories when the app starts.
 
 > [!NOTE]
 > Windows Defender and other antivirus software may flag unsigned builds. ISpooferMotion is not currently code signed. Builds can be independently verified by compiling the project from source.
@@ -170,12 +168,13 @@ The project is split between the desktop application and the Roblox Studio integ
 
 ```text
 ISpooferMotion-V2/
-├── src/                 React frontend
-├── src-tauri/           Tauri and Rust backend
-├── plugin/              Roblox Studio Luau plugin
-├── dist-plugin/         Built plugin output
-├── public/              Static frontend assets
-├── tests/               Project tests
+├── src/                 React/TypeScript desktop UI
+├── src-tauri/           Tauri/Rust native backend and Studio bridge
+├── plugin/              Roblox Studio Luau plugin source, config, and tests
+├── scripts/             Build and development helpers
+├── e2e/                 Playwright/Tauri end-to-end tests
+├── public/              Vite-served runtime assets
+├── docs/                Architecture and audit documentation
 └── .github/             CI, issue templates, and contribution files
 ```
 

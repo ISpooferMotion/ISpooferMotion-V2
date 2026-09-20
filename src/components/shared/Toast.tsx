@@ -1,7 +1,8 @@
+import { CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { useEffect } from 'react';
-import { CheckCircle2, XCircle, Info, X } from 'lucide-react';
+
+import { cn } from '../../lib/utils';
 import { useSpooferStore } from '../../stores/spooferStore';
-import { cn } from '../../utils/cn';
 
 export const Toast = () => {
   const toast = useSpooferStore((s) => s.toast);

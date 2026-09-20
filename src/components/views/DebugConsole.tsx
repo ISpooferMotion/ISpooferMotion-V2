@@ -12,7 +12,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { useLanguage } from '../../contexts/LanguageContext';
-import { cn } from '../../utils/cn';
+import { cn } from '../../lib/utils';
 import {
   clearDebugLogs,
   getDebugLogs,

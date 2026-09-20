@@ -13,10 +13,6 @@ const itemVariants: Variants = {
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { readText as readClipboardText } from '@tauri-apps/plugin-clipboard-manager';
-import { Button } from '../ui/button';
-import { Label } from '../ui/label';
-import { Switch } from '../ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { motion } from 'framer-motion';
 import { ArrowDownUp, Settings2, ShieldAlert, SlidersHorizontal, Wand2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -25,16 +21,14 @@ import { useShallow } from 'zustand/react/shallow';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
+import { cn } from '../../lib/utils';
 import { useConfigStore } from '../../stores/configStore';
 import { applyReplacements, useSpooferStore } from '../../stores/spooferStore';
-import { cn } from '../../utils/cn';
+import { getStudioPlaceIdFallback } from '../../utils/apiClient';
 import { addDebugLog } from '../../utils/debugLogger';
 import { type PendingSpoofRetry, takeSpoofRetry } from '../../utils/jobTypes';
 import { type PluginAsset } from '../../utils/pluginBridge';
-import { getStudioPlaceIdFallback } from '../../utils/apiClient';
 import type { RbxInstance } from '../../utils/robloxPlaceParser/types';
-import { SpoofingControls } from './spoofing/SpoofingControls';
-import { SpoofingCustomAssets } from './spoofing/SpoofingCustomAssets';
 import {
   loadCachedGroups,
   loadCachedUsers,
@@ -46,13 +40,16 @@ import {
   validateCookieProfile,
 } from '../../utils/robloxProfiles';
 import { appendSpoofingLog } from '../../utils/spoofingLogs';
+import type { ScanOptions } from '../../utils/studioScan';
 import { triggerStudioScan } from '../../utils/studioScan';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 import PasteIdsModal from '../modals/PasteIdsModal';
 import ResultsModal from '../modals/ResultsModal';
 import ScanOptionsModal from '../modals/ScanOptionsModal';
-import type { ScanOptions } from '../../utils/studioScan';
-
+import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Label } from '../ui/label';
+import { Switch } from '../ui/switch';
 import CredentialsSection from './config/CredentialsSection';
 import ExclusionsSection from './config/ExclusionsSection';
 import RoutingSection from './config/RoutingSection';
@@ -60,13 +57,15 @@ import UploadSection from './config/UploadSection';
 import AdvancedSection from './settings/AdvancedSection';
 import ExecutionLogs from './spoofing/ExecutionLogs';
 import {
-  type AudioQuotaDisplay,
   AccountSwitcher,
+  type AudioQuotaDisplay,
   AvatarDropdown,
   GroupDropdown,
   parseAudioQuota,
 } from './spoofing/ProfileDropdowns';
-import { SpoofProgressText, SpoofProgressOverlay } from './spoofing/SpoofingHeader';
+import { SpoofingControls } from './spoofing/SpoofingControls';
+import { SpoofingCustomAssets } from './spoofing/SpoofingCustomAssets';
+import { SpoofProgressOverlay, SpoofProgressText } from './spoofing/SpoofingHeader';
 
 type SpooferRunContext = {
   selectedUserId?: string;

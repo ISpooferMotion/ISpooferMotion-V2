@@ -23,13 +23,16 @@ use crate::utils::build_roblox_cookie_header;
 
 static REDACTION_REGEXES: OnceLock<Vec<(Regex, &'static str)>> = OnceLock::new();
 
-// Read a JSON file into a generic value object; returns an empty object on failure.
-pub(super) async fn read_json_file(path: &PathBuf) -> Value {
+// Read a JSON file into a generic value object. A missing file is the only
+// condition treated as an empty/default store; real I/O or parse failures are
+// propagated so corrupted data is never silently overwritten on the next save.
+pub(super) async fn read_json_file(path: &PathBuf) -> crate::error::Result<Value> {
     match tokio::fs::read_to_string(path).await {
-        Ok(content) => {
-            serde_json::from_str(&content).unwrap_or(Value::Object(serde_json::Map::new()))
+        Ok(content) => Ok(serde_json::from_str(&content)?),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Ok(Value::Object(serde_json::Map::new()))
         }
-        Err(_) => Value::Object(serde_json::Map::new()),
+        Err(e) => Err(e.into()),
     }
 }
 

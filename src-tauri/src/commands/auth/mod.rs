@@ -84,13 +84,17 @@ pub async fn get_cookie_from_auto_detect(
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_saved_roblox_profile_cookie(user_id: String) -> crate::error::Result<bool> {
-    let entry = profile_cookie_entry(&user_id)?;
-    match entry.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(true),
-        Err(e) => Err(crate::error::AppError::Custom(format!(
-            "Failed to delete saved profile cookie: {e}"
-        ))),
-    }
+    tokio::task::spawn_blocking(move || {
+        let entry = profile_cookie_entry(&user_id)?;
+        match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(true),
+            Err(e) => Err(crate::error::AppError::Custom(format!(
+                "Failed to delete saved profile cookie: {e}"
+            ))),
+        }
+    })
+    .await
+    .map_err(|e| crate::error::AppError::Custom(format!("Credential task failed: {e}")))?
 }
 
 #[tauri::command]
