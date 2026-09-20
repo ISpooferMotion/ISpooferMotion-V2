@@ -23,8 +23,10 @@ pub struct PollQuery {
 /// Responds to the health check ping from the frontend UI.
 pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> {
     let guard = state.data.read().await;
+    // /poll can legitimately wait for up to 8 seconds. Keep the health window comfortably
+    // above one complete long-poll cycle so direct HTTP health checks do not flicker offline.
     let synced =
-        guard.last_plugin_poll_time.is_some_and(|poll| poll.elapsed() < Duration::from_secs(5));
+        guard.last_plugin_poll_time.is_some_and(|poll| poll.elapsed() < Duration::from_secs(30));
     Json(serde_json::json!({
         "synced": synced,
         "protocolVersion": STUDIO_PROTOCOL_VERSION,
@@ -110,18 +112,19 @@ pub async fn handle_scan_records(
         }
     }
 
-    // Hold a single write lock for the entire operation so that a concurrent handle_scan_start
-    // cannot replace pending_studio_records between our Arc clone and our extend, which would
-    // silently discard the incoming records.
+    // Keep the state write guard until the current pending buffer is updated. If we cloned
+    // the Arc and dropped this guard first, a concurrent /scan-start could replace the buffer
+    // and this chunk would be appended to an orphaned Arc and silently lost. All code that
+    // takes both locks uses this state -> pending-records order.
     let mut guard = state.data.write().await;
     guard.last_plugin_poll_time = Some(Instant::now());
-    let pending_mutex = std::sync::Arc::clone(&guard.pending_studio_records);
-    // Drop the RwLock guard before taking the Mutex to avoid holding two locks simultaneously.
-    drop(guard);
 
     let mut truncated = false;
     {
-        let mut pending = pending_mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut pending = guard
+            .pending_studio_records
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let current_len = pending.len();
         if current_len < super::MAX_STUDIO_RECORDS {
             let available = super::MAX_STUDIO_RECORDS - current_len;
@@ -136,7 +139,7 @@ pub async fn handle_scan_records(
     }
 
     if truncated {
-        state.data.write().await.scan_records_truncated = true;
+        guard.scan_records_truncated = true;
     }
     Json(serde_json::json!({"success": true}))
 }
@@ -157,29 +160,41 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
     };
     let record_count = records.len();
     let mapping_count = mappings.len();
-    let records_for_patches = std::sync::Arc::clone(&records);
-    let stores =
-        tokio::task::spawn_blocking(move || analyze_records(&records)).await.unwrap_or_else(|e| {
-            log::error!("Failed to analyze records: {}", e);
-            (
-                AssetStore::completed(),
-                AssetStore::completed(),
-                AssetStore::completed(),
-                AssetStore::completed(),
-                AssetStore::completed(),
-            )
-        });
 
-    let patches = if mappings.is_empty() {
-        Vec::new()
+    // Analysis and patch planning are independent CPU-heavy passes over the same immutable
+    // record snapshot. Start both before awaiting either one so /scan-complete spends roughly
+    // the slower pass, rather than the sum of both passes, reducing Studio RequestAsync timeouts
+    // on large places without changing completion semantics.
+    let records_for_analysis = std::sync::Arc::clone(&records);
+    let analysis_task = tokio::task::spawn_blocking(move || analyze_records(&records_for_analysis));
+    let patch_task = if mappings.is_empty() {
+        None
     } else {
+        let records_for_patches = std::sync::Arc::clone(&records);
         let plan_mappings = mappings.clone();
-        tokio::task::spawn_blocking(move || plan_patches(&records_for_patches, &plan_mappings))
-            .await
-            .unwrap_or_else(|e| {
-                log::error!("Failed to plan patches after scan: {}", e);
-                Vec::new()
-            })
+        Some(tokio::task::spawn_blocking(move || {
+            plan_patches(&records_for_patches, &plan_mappings)
+        }))
+    };
+
+    let stores = analysis_task.await.unwrap_or_else(|e| {
+        log::error!("Failed to analyze records: {}", e);
+        (
+            AssetStore::completed(),
+            AssetStore::completed(),
+            AssetStore::completed(),
+            AssetStore::completed(),
+            AssetStore::completed(),
+        )
+    });
+
+    let patches = if let Some(task) = patch_task {
+        task.await.unwrap_or_else(|e| {
+            log::error!("Failed to plan patches after scan: {}", e);
+            Vec::new()
+        })
+    } else {
+        Vec::new()
     };
 
     // Diagnostics for the "replace works unstable" reports: these three
@@ -409,8 +424,8 @@ pub async fn handle_set_batch_size(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> Json<Value> {
-    let size = body.get("batchSize").and_then(Value::as_u64).unwrap_or(50) as u32;
-    state.data.write().await.batch_size = Some(size);
+    let size = body.get("batchSize").and_then(Value::as_u64).unwrap_or(50).clamp(1, 1_000);
+    state.data.write().await.batch_size = Some(size as u32);
     Json(serde_json::json!({"success": true}))
 }
 

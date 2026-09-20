@@ -194,8 +194,11 @@ pub async fn start_server(app_handle: AppHandle) {
         .allow_origin(AllowOrigin::predicate(
             |origin: &HeaderValue, _req_parts: &axum::http::request::Parts| {
                 let bytes = origin.as_bytes();
-                // Allow null/empty origins.
-                if bytes.is_empty() || bytes == b"null" {
+                // Requests with no Origin header are not subject to browser CORS checks and
+                // still work for the Roblox plugin. Do not explicitly trust Origin: null: that
+                // origin is shared by sandboxed/local documents and should not receive bridge
+                // access from a browser context.
+                if bytes.is_empty() {
                     return true;
                 }
                 matches!(
