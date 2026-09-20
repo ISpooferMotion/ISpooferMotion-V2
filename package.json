@@ -59,7 +59,7 @@
     "@tauri-apps/plugin-updater": "^2.10.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "2.1.1",
-    "lucide-react": "1.25.0",
+    "lucide-react": "1.47.0",
     "react": "19.2.7",
     "react-colorful": "5.8.0",
     "react-dom": "19.2.7",
