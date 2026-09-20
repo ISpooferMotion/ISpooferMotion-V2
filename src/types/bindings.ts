@@ -77,7 +77,6 @@ export const commands = {
    *  When the app boots, this copies it directly into Roblox plugins folders.
    */
   syncRobloxPlugin: () => typedError<boolean, AppError>(__TAURI_INVOKE('sync_roblox_plugin')),
-  /**  Opens the application's config directory in the native file explorer. */
   /**  Deletes all cached data (like downloaded thumbnails and audio files). */
   clearAppCache: () => typedError<boolean, AppError>(__TAURI_INVOKE('clear_app_cache')),
   /**
@@ -93,7 +92,6 @@ export const commands = {
   /**  Triggers a native desktop notification. */
   showNotification: (options: NotificationOptions) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('show_notification', { options })),
-  /**  Spawns a detached native terminal window that tails the latest log file. */
   windowMinimize: () => __TAURI_INVOKE<void>('window_minimize'),
   windowClose: () => __TAURI_INVOKE<void>('window_close'),
   quitApp: () => __TAURI_INVOKE<void>('quit_app'),
@@ -118,6 +116,15 @@ export const commands = {
   spooferPause: (jobId: string) => __TAURI_INVOKE<boolean>('spoofer_pause', { jobId }),
   spooferResume: (jobId: string) => __TAURI_INVOKE<boolean>('spoofer_resume', { jobId }),
   spooferCancel: (jobId: string) => __TAURI_INVOKE<boolean>('spoofer_cancel', { jobId }),
+  /**
+   *  Force-clears the global spoofer job lock even if the active job_id doesn't match.
+   *
+   *  Normally only `finish_spoofer_job` should clear this, which requires matching the
+   *  active job_id. This command exists as an escape hatch for the "Force Reset (Stuck?)"
+   *  button: if a Rust panic orphaned the lock (job finished abnormally and never called
+   *  finish_spoofer_job), the user can clear it without restarting the app.
+   */
+  forceResetSpooferJob: () => __TAURI_INVOKE<void>('force_reset_spoofer_job'),
   appendDebugLog: (level: string, source: string | null, message: string) =>
     typedError<boolean, AppError>(__TAURI_INVOKE('append_debug_log', { level, source, message })),
   openLogsFolder: () => typedError<boolean, AppError>(__TAURI_INVOKE('open_logs_folder')),
@@ -285,14 +292,14 @@ export const commands = {
   /**  Returns the ephemeral port the bridge server successfully bound to. */
   getPluginBridgePort: () => __TAURI_INVOKE<number | null>('get_plugin_bridge_port'),
   /**  Checks if the Studio plugin has polled the daemon recently. */
-  getStudioHealthStatus: () => __TAURI_INVOKE<string>('get_studio_health_status'),
+  getStudioHealthStatus: () => __TAURI_INVOKE<unknown>('get_studio_health_status'),
   /**
    *  Reports whether the plugin HTTP server landed on its default ports or had to
    *  move past them, and which processes are occupying the defaults.
    */
-  getPortDiagnostic: () => __TAURI_INVOKE<string>('get_port_diagnostic'),
+  getPortDiagnostic: () => __TAURI_INVOKE<unknown>('get_port_diagnostic'),
   /**  Returns the current state of asset discovery for the frontend UI. */
-  getStudioAssetSnapshots: () => __TAURI_INVOKE<string>('get_studio_asset_snapshots'),
+  getStudioAssetSnapshots: () => __TAURI_INVOKE<unknown>('get_studio_asset_snapshots'),
 };
 
 /* Types */

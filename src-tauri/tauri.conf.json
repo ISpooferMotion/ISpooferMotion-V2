@@ -50,9 +50,7 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "resources": [
-      "../dist-plugin/ISpooferMotion.rbxmx"
-    ],
+    "resources": ["../dist-plugin/ISpooferMotion.rbxmx"],
     "windows": {
       "nsis": {
         "installerIcon": "assets/app_icon.ico",
@@ -70,9 +68,7 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": [
-          "ispoofermotion"
-        ]
+        "schemes": ["ispoofermotion"]
       }
     },
     "updater": {

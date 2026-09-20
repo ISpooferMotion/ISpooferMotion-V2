@@ -360,7 +360,7 @@ fn private_temp_dir() -> Option<PathBuf> {
                 }
                 return Some(dir);
             }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(_) => return None,
         }
     }

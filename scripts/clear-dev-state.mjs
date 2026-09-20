@@ -4,7 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
-const tauriConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src-tauri', 'tauri.conf.json'), 'utf8'));
+const tauriConfig = JSON.parse(
+  fs.readFileSync(path.join(process.cwd(), 'src-tauri', 'tauri.conf.json'), 'utf8'),
+);
 const appId = tauriConfig.identifier;
 if (typeof appId !== 'string' || appId.trim() === '') {
   throw new Error('src-tauri/tauri.conf.json is missing a valid identifier');
