@@ -63,26 +63,21 @@ function PreviewApp() {
   const isAudio = asset?.type === 'audio';
   const isAnimation = asset?.type === 'animation' || asset?.type === 'raw_keyframe_sequence';
 
-  // Reset zoom on asset change
   useEffect(() => {
     setImageZoom(1);
     setPan({ x: 0, y: 0 });
   }, [assetId]);
 
-  // Listen for asset change events from the main window
   useEffect(() => {
     const unlistenPromise = listen<ParsedAssetRef>('preview-asset-change', (event) => {
       if (event.payload) {
         setAsset(event.payload);
         try {
           localStorage.setItem('preview-current-asset', JSON.stringify(event.payload));
-        } catch {
-          // ignore
-        }
+        } catch {}
       }
     });
 
-    // Notify main window that preview window is ready to receive data
     void emit('preview-window-ready');
 
     return () => {
@@ -90,7 +85,6 @@ function PreviewApp() {
     };
   }, []);
 
-  // Fetch thumbnail for images/meshes
   useEffect(() => {
     if (!assetId || (!isImage && !isMesh)) {
       setThumbnailUrl(null);
@@ -167,7 +161,6 @@ function PreviewApp() {
         isPinned ? 'border-primary/50 shadow-primary/20 ring-1 ring-primary/30' : 'border-border',
       )}
     >
-      {/* Titlebar */}
       <div className="h-9 px-3 bg-bg-elevated/90 border-b border-border flex items-center justify-between drag-region shrink-0">
         <div className="flex items-center gap-2 text-xs font-semibold text-foreground truncate min-w-0">
           <Eye size={13} className="text-primary shrink-0" />
@@ -208,11 +201,10 @@ function PreviewApp() {
         </div>
       </div>
 
-      {/* Viewport Content */}
       <div className="flex-1 relative overflow-hidden bg-bg-base flex items-center justify-center">
         {!asset ? (
           <div className="text-xs text-text-muted flex flex-col items-center gap-2 p-6 text-center">
-            <Eye size={28} className="opacity-30 text-primary animate-pulse" />
+            <Eye size={28} className="opacity-30 text-primary" />
             <span>Select an asset in ISpooferMotion to preview</span>
           </div>
         ) : isAnimation ? (
@@ -275,7 +267,6 @@ function PreviewApp() {
               </div>
             )}
 
-            {/* Floating Zoom Controls Overlay */}
             {thumbnailUrl && !loading && !error && (
               <div
                 className="absolute bottom-3 right-3 flex items-center gap-1 bg-bg-surface/90 border border-border-subtle rounded-md px-1.5 py-0.5 shadow-md backdrop-blur-xs select-none z-10"

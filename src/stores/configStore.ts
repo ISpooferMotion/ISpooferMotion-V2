@@ -21,9 +21,7 @@ export const AppConfigSchema = z.object({
     excludedGroupIds: z.string().default(''),
     concurrentSpoofing: z.boolean().default(true),
     concurrentDownloading: z.boolean().default(true),
-    // Clamp to backend's accepted range on load — self-heals configs where
-    // a user previously typed a huge value into the input before we added
-    // a max attribute on the field.
+
     maxConcurrency: z.number().min(1).max(100).catch(100).default(100),
     maxDownloadConcurrency: z.number().min(1).max(100).catch(10).default(10),
     discoveryConcurrency: z.number().min(1).max(50).catch(30).default(30),
@@ -56,13 +54,12 @@ export const AppConfigSchema = z.object({
     preserveMetadata: z.boolean().default(true),
   }),
   permissions: z.object({
-    /** Whether to automatically grant permissions after a successful spoof. */
     enabled: z.boolean().default(false),
-    /** "experience" = place/universe, "user" = userId, "group" = groupId */
+
     subjectType: z.enum(['experience', 'user', 'group']).default('experience'),
-    /** Comma-separated list of IDs to grant access to. */
+
     subjectIds: z.string().default(''),
-    /** Roblox Asset Permissions API only supports 'Use' action. */
+
     action: z.literal('Use').default('Use'),
   }),
   ui: z.object({
@@ -160,12 +157,6 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   accounts: [],
 };
 
-/**
- * Merges the saved configuration from disk with the application's default settings.
- *
- * This prevents crashes if new settings are added in an update by ensuring every
- * expected key exists, while preserving whatever custom values the user already set.
- */
 const mergeKnownKeys = <T extends Record<string, unknown>>(
   defaults: T,
   saved: Partial<T> | undefined,
@@ -179,12 +170,6 @@ const mergeKnownKeys = <T extends Record<string, unknown>>(
   return next;
 };
 
-/**
- * Sanitizes UI sections to prevent rendering invalid or removed config blocks.
- *
- * If a setting tab gets renamed or removed in an update, this strips it out
- * and forces the UI back to a safe default.
- */
 const mergeSections = (savedSections: unknown, defaultSections: string[]) => {
   if (!Array.isArray(savedSections)) return defaultSections;
   const next = savedSections.filter((section: string) => defaultSections.includes(section));
@@ -194,10 +179,7 @@ const mergeSections = (savedSections: unknown, defaultSections: string[]) => {
 interface ConfigState {
   config: AppConfig;
   accountSecrets: Record<string, { cookie?: string; apiKey?: string }>;
-  // Tracks whether loadSecrets() has completed at least once this session.
-  // Views (e.g. AccountsView) use this to avoid rendering 'missing cookie'
-  // pills during the brief window between app mount and the async secrets
-  // load, which was misread as 'the app invalidated my credentials'.
+
   secretsLoaded: boolean;
   updateConfig: <C extends keyof AppConfig, K extends keyof AppConfig[C]>(
     c: C,
@@ -212,15 +194,7 @@ interface ConfigState {
   updateAccountsList: (accounts: AppConfig['accounts']) => void;
 }
 
-/**
- * The global configuration store.
- *
- * Manages user preferences, spoofing targets, and UI state. It automatically syncs
- * secure credentials (like the .ROBLOSECURITY cookie) to the native OS keyring via Tauri,
- * keeping them out of plaintext `localStorage`.
- */
 export const useConfigStore = create<ConfigState>((set, get) => {
-  // Load config from localstorage or fallback to defaults.
   let saved: string | null = null;
   try {
     saved =
@@ -264,10 +238,7 @@ export const useConfigStore = create<ConfigState>((set, get) => {
       initConfig.spoofing.cookie = '';
       initConfig.spoofing.apiKey = '';
       initConfig.spoofing.groupApiKey = '';
-      // Clamp concurrency values to the backend's accepted [1, 100] range
-      // in case an older build let the user save a larger value (the input
-      // was uncapped before we added a max attribute + backend hard-failed
-      // with a validation error on every job start).
+
       const clamp = (n: number, lo: number, hi: number) =>
         Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo;
       initConfig.advanced.maxConcurrency = clamp(initConfig.advanced.maxConcurrency, 1, 100);
@@ -282,7 +253,6 @@ export const useConfigStore = create<ConfigState>((set, get) => {
   }
 
   const saveToStorage = (c: AppConfig) => {
-    // Cookies and API keys must be saved in the Rust keyring, not standard config storage.
     if (typeof localStorage !== 'undefined' && typeof localStorage.setItem === 'function') {
       try {
         localStorage.setItem(
@@ -382,19 +352,13 @@ export const useConfigStore = create<ConfigState>((set, get) => {
         });
       } catch (e) {
         console.warn('Failed to load profile secrets from backend', e);
-        // Still mark as loaded so the UI doesn't sit in the loading state
-        // forever — accounts without secrets will correctly show as missing.
+
         set({ secretsLoaded: true });
       }
     },
     saveSecrets: async () => {
       if (!isTauriRuntime()) return;
-      // Don't persist until the initial load has finished. On restart, the
-      // cookie auto-detect fires applyValidatedCookie -> saveSecrets on mount,
-      // racing loadSecrets(). If that save wins, it reads the not-yet-restored
-      // apiKey (still '') and overwrites the persisted key with empty --
-      // silently wiping the Open Cloud API key every restart. Waiting for
-      // secretsLoaded guarantees the saved key is in state before any write.
+
       if (!get().secretsLoaded) return;
       try {
         const { invoke } = await import('@tauri-apps/api/core');

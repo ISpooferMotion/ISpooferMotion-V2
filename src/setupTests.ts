@@ -1,14 +1,7 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
-import React from 'react';
 
-/**
- * Global Vitest test environment configuration.
- *
- * Mocks out browser-native APIs (like matchMedia) and Tauri-specific
- * native IPC calls so our React components can be unit tested headlessly.
- */
-// Mock matchMedia
+import { vi } from 'vitest';
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query) => ({
@@ -23,47 +16,12 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
-// Mock Framer Motion
-vi.mock('framer-motion', async () => {
-  const actual = await vi.importActual('framer-motion');
-  const motion = new Proxy(
-    {},
-    {
-      get: (_, key) => {
-        // Return a functional component for each HTML element (e.g. motion.div)
-        return React.forwardRef((props, ref) => {
-          const {
-            initial,
-            animate,
-            exit,
-            transition,
-            variants,
-            whileHover,
-            whileTap,
-            whileDrag,
-            whileFocus,
-            whileInView,
-            layout,
-            layoutId,
-            ...rest
-          } = props as any;
-          return React.createElement(key as string, { ...rest, ref });
-        });
-      },
-    },
-  );
-  return {
-    ...actual,
-    motion,
-    AnimatePresence: ({ children }: any) => React.createElement(React.Fragment, {}, children),
-  };
-});
+type TauriListener = (event: { event: string; payload: unknown }) => void;
 
 const { listeners } = vi.hoisted(() => ({
-  listeners: {} as Record<string, Function[]>,
+  listeners: {} as Record<string, TauriListener[]>,
 }));
 
-// Mock Tauri invoke globally
 vi.mock('@tauri-apps/api/core', () => {
   return {
     invoke: vi.fn((cmd, _args) => {
@@ -71,7 +29,7 @@ vi.mock('@tauri-apps/api/core', () => {
       if (cmd === 'is_update_available') return Promise.resolve(false);
       return Promise.resolve(null);
     }),
-    __listeners: listeners, // For tests to trigger events
+    __listeners: listeners,
   };
 });
 

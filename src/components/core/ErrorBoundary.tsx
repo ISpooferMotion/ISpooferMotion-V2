@@ -1,11 +1,10 @@
-/// <reference types="vite/client" />
 import { getVersion } from '@tauri-apps/api/app';
 import { type as getOsType, version as getOsVersion } from '@tauri-apps/plugin-os';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { fetchTelemetry } from '../../utils/apiClient';
 
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfigStore } from '../../stores/configStore';
+import { fetchTelemetry } from '../../utils/apiClient';
 import { getTranslation } from '../../utils/i18n';
 import { isTauriRuntime } from '../../utils/tauriRuntime';
 
@@ -18,13 +17,6 @@ interface State {
   error: Error | null;
 }
 
-/**
- * Global React Error Boundary to catch UI crashes before they take down the app.
- *
- * If a render throws, this displays a clean fallback UI instead of a white screen,
- * extracts the stack trace, and optionally fires off an anonymous telemetry ping
- * so I can fix it later.
- */
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,

@@ -1,7 +1,8 @@
-import { renderHook } from '@testing-library/react';
-import { useStudioAssetPoll } from './useStudioAssetPoll';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as tauriCore from '@tauri-apps/api/core';
+import { renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useStudioAssetPoll } from './useStudioAssetPoll';
 
 describe('useStudioAssetPoll', () => {
   const defaultBundle = {
@@ -43,11 +44,9 @@ describe('useStudioAssetPoll', () => {
 
     await vi.advanceTimersByTimeAsync(100);
 
-    // Initial poll
     expect(invokeSpy).toHaveBeenCalled();
     expect(onComplete).not.toHaveBeenCalled();
 
-    // Fast polling while scanning
     await vi.advanceTimersByTimeAsync(2100);
     expect(invokeSpy).toHaveBeenCalledTimes(2);
     expect(onComplete).not.toHaveBeenCalled();
@@ -72,7 +71,6 @@ describe('useStudioAssetPoll', () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(invokeSpy).toHaveBeenCalled();
 
-    // Resolve the poll promise queue
     await vi.advanceTimersByTimeAsync(100);
 
     expect(onComplete).toHaveBeenCalledWith(completeBundle);
@@ -98,14 +96,11 @@ describe('useStudioAssetPoll', () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(invokeSpy).toHaveBeenCalled();
 
-    // First complete
     expect(onComplete).toHaveBeenCalledTimes(1);
 
-    // Fast forward to next poll (10s idle)
     await vi.advanceTimersByTimeAsync(10100);
     expect(invokeSpy).toHaveBeenCalledTimes(2);
 
-    // Hash is the same, should not trigger onComplete again
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 });

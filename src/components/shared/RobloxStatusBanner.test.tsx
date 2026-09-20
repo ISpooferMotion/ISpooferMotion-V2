@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-import { RobloxStatusBanner } from './RobloxStatusBanner';
+import { describe, expect, it, vi } from 'vitest';
+
 import * as LanguageContext from '../../contexts/LanguageContext';
+import { RobloxStatusBanner } from './RobloxStatusBanner';
 
 vi.mock('../../contexts/LanguageContext', () => ({
   useLanguage: vi.fn(),

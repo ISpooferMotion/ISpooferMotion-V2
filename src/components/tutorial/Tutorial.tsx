@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, CheckCircle2, Circle, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -8,19 +7,11 @@ export interface TutorialStep {
   id: string;
   title: string;
   body: string;
-  /**
-   * Optional hook called when this step becomes active.
-   */
+
   onEnter?: () => void;
-  /**
-   * When set, the Next button is disabled until this returns true. Lets the
-   * tutorial gate progress on real user actions (account added, API key set,
-   * place loaded, etc.) rather than just clicking Next.
-   */
+
   isComplete?: () => boolean;
-  /**
-   * Optional hint shown under the body when isComplete returns false.
-   */
+
   waitingHint?: string;
 }
 
@@ -28,11 +19,7 @@ interface TutorialProps {
   steps: TutorialStep[];
   onComplete: () => void;
   onSkip: () => void;
-  /**
-   * Optional side-effect run before a step becomes active. Receives the next
-   * step's id (or null when finishing) and is where navigation should live.
-   * Returning a Promise delays the step change until it resolves.
-   */
+
   beforeStep?: (nextId: string | null) => void | Promise<void>;
 }
 
@@ -68,7 +55,6 @@ export const Tutorial = ({ steps, onComplete, onSkip, beforeStep }: TutorialProp
     }
   };
 
-  // Run onEnter for the initial step exactly once.
   useEffect(() => {
     const first = steps[0];
     if (first && !onEnteredRef.current.has(first.id)) {
@@ -85,13 +71,9 @@ export const Tutorial = ({ steps, onComplete, onSkip, beforeStep }: TutorialProp
   const isRunStep = step.id === 'run';
 
   return (
-    <AnimatePresence>
-      <motion.div
+    <>
+      <div
         key="tutorial-card"
-        initial={{ opacity: 0, y: 16, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 16, scale: 0.96 }}
-        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
         className={cn(
           'fixed z-[200] w-[280px] max-w-[calc(100vw-32px)] bg-bg-surface border border-border-subtle rounded-xl shadow-2xl p-3 flex flex-col gap-2.5',
           isRunStep ? 'bottom-4 left-4' : 'bottom-4 right-4',
@@ -100,7 +82,6 @@ export const Tutorial = ({ steps, onComplete, onSkip, beforeStep }: TutorialProp
         aria-modal="false"
         aria-label="Tutorial"
       >
-        {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-sm font-bold text-text-primary leading-tight">{step.title}</h3>
@@ -117,20 +98,17 @@ export const Tutorial = ({ steps, onComplete, onSkip, beforeStep }: TutorialProp
           </button>
         </div>
 
-        {/* Body */}
         <p className="text-[12.5px] text-text-secondary leading-relaxed">{step.body}</p>
 
-        {/* Waiting hint */}
         {!isStepComplete && step.waitingHint && (
           <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/20">
-            <Circle size={12} className="text-primary shrink-0 mt-0.5 animate-pulse" />
+            <Circle size={12} className="text-primary shrink-0 mt-0.5" />
             <p className="text-[11.5px] text-primary font-medium leading-snug">
               {step.waitingHint}
             </p>
           </div>
         )}
 
-        {/* Step dots */}
         <div className="flex items-center gap-1">
           {steps.map((s, i) => (
             <div
@@ -149,7 +127,6 @@ export const Tutorial = ({ steps, onComplete, onSkip, beforeStep }: TutorialProp
           ))}
         </div>
 
-        {/* Actions */}
         <div className="flex items-center justify-end gap-2">
           <button
             onClick={onSkip}
@@ -180,7 +157,7 @@ export const Tutorial = ({ steps, onComplete, onSkip, beforeStep }: TutorialProp
             )}
           </button>
         </div>
-      </motion.div>
-    </AnimatePresence>
+      </div>
+    </>
   );
 };

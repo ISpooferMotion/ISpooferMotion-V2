@@ -1,4 +1,5 @@
-import { ShieldCheck, Info } from 'lucide-react';
+import { Info, ShieldCheck } from 'lucide-react';
+
 import { useConfig } from '../../../contexts/ConfigContext';
 import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';

@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as tauriCore from '@tauri-apps/api/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as tauriRuntime from './tauriRuntime';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -99,15 +100,13 @@ describe('pluginBridge', () => {
 
       vi.mocked(tauriCore.invoke).mockResolvedValue(8888);
 
-      // Advance by 500ms (cache valid)
       await vi.advanceTimersByTimeAsync(500);
       const result2 = await findPluginBridgePort();
-      expect(result2).toBe('9999'); // Should be cached!
+      expect(result2).toBe('9999');
 
-      // Advance by 1000ms (cache invalid)
       await vi.advanceTimersByTimeAsync(1000);
       const result3 = await findPluginBridgePort();
-      expect(result3).toBe('8888'); // Should fetch new
+      expect(result3).toBe('8888');
     });
   });
 });

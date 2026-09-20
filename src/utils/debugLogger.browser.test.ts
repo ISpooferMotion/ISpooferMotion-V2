@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Minimal window stub for debugLogger node testing.
 const createWindow = () => {
   const listeners: Record<string, EventListener[]> = {};
   return {

@@ -1,7 +1,8 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import Sidebar from './Sidebar';
-import { vi, describe, it, expect } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+
 import * as LanguageContext from '../../contexts/LanguageContext';
+import Sidebar from './Sidebar';
 
 vi.mock('../../contexts/LanguageContext', () => ({
   useLanguage: vi.fn(),

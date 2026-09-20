@@ -6,15 +6,6 @@ import { useEffect, useState } from 'react';
 import { useConfigStore } from '../stores/configStore';
 import { isTauriRuntime } from '../utils/tauriRuntime';
 
-/**
- * Bootstraps the ISpooferMotion React environment on startup.
- *
- * This hook is responsible for:
- * Pinging the Roblox API to detect if the platform is down.
- * Fetching remote killswitches (Maintenance Mode) from our config server.
- * Starting the telemetry heartbeat.
- * Registering global OS shortcuts (like Alt+I to summon the window).
- */
 export function useAppInitialization() {
   const [maintenance, setMaintenance] = useState<{ mode: boolean; message: string }>({
     mode: false,
@@ -22,7 +13,6 @@ export function useAppInitialization() {
   });
   const [isRobloxApiDown, setIsRobloxApiDown] = useState(false);
 
-  // Check Roblox API Status
   useEffect(() => {
     if (!isTauriRuntime()) return;
 
@@ -41,23 +31,16 @@ export function useAppInitialization() {
 
   const telemetryEnabled = useConfigStore((s) => s.config.general.telemetryEnabled);
 
-  // Push the configured proxy URL to the Rust backend so all outbound Roblox
-  // calls route through it. An empty value falls back to the OS system proxy
-  // (Windows WinINET — what VPN "proxy mode" apps like Happ set). Runs on mount
-  // and whenever the setting changes.
   const proxyUrl = useConfigStore((s) => s.config.advanced.proxyUrl);
   useEffect(() => {
     if (!isTauriRuntime()) return;
     void invoke('set_proxy_url', { url: proxyUrl || null }).catch(console.warn);
   }, [proxyUrl]);
 
-  // Fetch remote config (Maintenance Mode) and initialize remote cache
   useEffect(() => {
     let cancelled = false;
     const tauriRuntime = isTauriRuntime();
 
-    // Opt-out must not depend on the config server being reachable. Doing this
-    // before the fetch also closes the window where an old endpoint stays active.
     if (tauriRuntime && !telemetryEnabled) {
       void invoke('initialize_remote_cache', { pushUrl: null }).catch(console.warn);
     }
@@ -109,7 +92,6 @@ export function useAppInitialization() {
     };
   }, [telemetryEnabled]);
 
-  // Heartbeat
   useEffect(() => {
     if (!isTauriRuntime() || !telemetryEnabled) return;
 
@@ -125,9 +107,7 @@ export function useAppInitialization() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ source: 'spoofer' }),
         });
-      } catch (e) {
-        // ignore network errors for heartbeat
-      }
+      } catch (e) {}
     };
 
     sendHeartbeat();
@@ -135,7 +115,6 @@ export function useAppInitialization() {
     return () => clearInterval(interval);
   }, [telemetryEnabled]);
 
-  // Global Shortcuts & Dragging Prevention
   useEffect(() => {
     const preventDrag = (e: Event) => e.preventDefault();
     window.addEventListener('dragover', preventDrag);

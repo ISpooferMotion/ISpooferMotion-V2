@@ -37,14 +37,12 @@ fn emit_perm_log(app: &tauri::AppHandle, level: &str, msg: &str) {
     log::info!("[AssetPermissions] [{level}] {msg}");
 }
 
-/// Resolves a Place ID to its parent Universe ID if needed.
 async fn resolve_place_to_universe_id(client: &reqwest::Client, raw_id: &str) -> String {
     let trimmed = raw_id.trim();
     if trimmed.is_empty() {
         return String::new();
     }
 
-    // Check Open Cloud place-to-universe endpoint
     let url = format!("https://apis.roblox.com/universes/v1/places/{trimmed}/universe");
     if let Ok(resp) = client.get(&url).send().await {
         if resp.status().is_success() {
@@ -60,7 +58,6 @@ async fn resolve_place_to_universe_id(client: &reqwest::Client, raw_id: &str) ->
         }
     }
 
-    // Fallback: games.roblox.com multiget-place-details
     let url2 =
         format!("https://games.roblox.com/v1/games/multiget-place-details?placeIds={trimmed}");
     if let Ok(resp) = client.get(&url2).send().await {
@@ -85,10 +82,6 @@ async fn resolve_place_to_universe_id(client: &reqwest::Client, raw_id: &str) ->
     trimmed.to_string()
 }
 
-/// Grants access permissions to multiple assets for experiences, users, or groups
-/// via the Roblox Asset Permissions API (Creator Hub PATCH endpoint).
-///
-/// Handles pacing and retry backoff to prevent hitting Roblox rate limits.
 #[tauri::command]
 #[specta::specta]
 pub async fn batch_grant_asset_permissions(
@@ -97,7 +90,6 @@ pub async fn batch_grant_asset_permissions(
 ) -> crate::error::Result<BatchGrantPermissionsResponse> {
     let client = crate::utils::get_http_client();
 
-    // Clean and deduplicate raw subject IDs
     let mut raw_subject_ids: Vec<String> = Vec::new();
     for s in req.subject_ids {
         for part in s.split(',') {
@@ -129,7 +121,6 @@ pub async fn batch_grant_asset_permissions(
         });
     }
 
-    // Determine subject type for Roblox requests
     let lower_type = req.subject_type.trim().to_lowercase();
     let is_experience = lower_type.contains("experience")
         || lower_type.contains("place")
@@ -143,7 +134,6 @@ pub async fn batch_grant_asset_permissions(
         "Group"
     };
 
-    // If experience, resolve Place IDs to Universe IDs
     let mut resolved_subject_ids: Vec<String> = Vec::new();
     for id in &raw_subject_ids {
         if is_experience {
@@ -156,7 +146,6 @@ pub async fn batch_grant_asset_permissions(
         }
     }
 
-    // Determine authentication
     let api_key = req.api_key.as_deref().map(str::trim).filter(|k| !k.is_empty());
     let cookie = req.cookie.as_deref().map(str::trim).filter(|c| !c.is_empty());
 
@@ -186,7 +175,6 @@ pub async fn batch_grant_asset_permissions(
         ),
     );
 
-    // Build the requests payload array matching Creator Hub specification exactly
     let requests_payload: Vec<Value> = resolved_subject_ids
         .iter()
         .map(|sid| {
@@ -260,7 +248,6 @@ pub async fn batch_grant_asset_permissions(
                 Ok(resp) => {
                     let status = resp.status();
 
-                    // Check for CSRF token challenge on 403
                     if status.as_u16() == 403 {
                         if let Some(new_csrf) =
                             resp.headers().get("x-csrf-token").and_then(|h| h.to_str().ok())
@@ -337,7 +324,6 @@ pub async fn batch_grant_asset_permissions(
             failed_ids_set.insert(*asset_id);
         }
 
-        // Pacing delay between asset requests
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
@@ -362,7 +348,7 @@ pub async fn batch_grant_asset_permissions(
 
 #[tauri::command]
 #[specta::specta]
-// Grant universe permission to an audio asset to prevent in-game muting.
+
 pub async fn patch_asset_permissions(
     asset_id: String,
     universe_id: String,
@@ -437,7 +423,7 @@ pub async fn patch_asset_permissions(
 
 #[tauri::command]
 #[specta::specta]
-// Toggle asset visibility on the Creator Marketplace.
+
 pub async fn set_asset_privacy(
     asset_id: String,
     privacy_status: String,

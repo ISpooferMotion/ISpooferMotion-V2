@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useSpooferStore, applyReplacements } from './spooferStore';
 import * as tauriCore from '@tauri-apps/api/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { useConfigStore } from './configStore';
+import { applyReplacements, useSpooferStore } from './spooferStore';
 
 vi.mock('../utils/tauriRuntime', () => ({
   isTauriRuntime: vi.fn().mockReturnValue(true),
@@ -19,7 +20,6 @@ describe('spooferStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Reset all state for reliable testing
     const store = useSpooferStore.getState();
     store.setRootInstances([]);
     store.setLoadedFileName(null);
@@ -122,7 +122,7 @@ describe('applyReplacements', () => {
     useConfigStore.getState().updateConfig('advanced', 'memoryInjectionEnabled', true);
 
     (tauriCore.invoke as any).mockImplementation((cmd: string) => {
-      if (cmd === 'find_studio_process') return Promise.resolve(null); // No process found
+      if (cmd === 'find_studio_process') return Promise.resolve(null);
       return Promise.resolve(null);
     });
 

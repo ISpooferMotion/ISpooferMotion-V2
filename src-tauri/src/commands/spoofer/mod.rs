@@ -20,13 +20,6 @@ static CIRCUIT_BREAKER: Mutex<Option<Instant>> = Mutex::new(None);
 static RATE_LIMIT_BUCKETS: OnceLock<dashmap::DashMap<&'static str, Instant>> = OnceLock::new();
 static RATE_LIMIT_LOG_TIMES: OnceLock<dashmap::DashMap<&'static str, Instant>> = OnceLock::new();
 
-/// Per-channel throttle for user-facing rate-limit warnings.
-///
-/// Roblox 429s during a batch operation can produce dozens of retry attempts
-/// in quick succession. Logging each one flooded the output panel with the
-/// same 'Roblox rate limited... 2.0s' line and made the app look broken.
-/// This helper returns `true` at most once every 20 seconds per `channel`
-/// key, so we log the first hit and stay quiet during the retry storm.
 pub fn should_log_rate_limit_warning(channel: &'static str) -> bool {
     let map = RATE_LIMIT_LOG_TIMES.get_or_init(dashmap::DashMap::new);
     let now = Instant::now();
@@ -51,7 +44,6 @@ static ADAPTIVE_LIMITER: std::sync::OnceLock<AdaptiveLimiter> = std::sync::OnceL
 static ROBLOX_GAME_IDS: std::sync::OnceLock<dashmap::DashMap<String, String>> =
     std::sync::OnceLock::new();
 
-// Independent buckets for throttling uploads, downloads, and scrapes.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum RateLimitBucket {
     Upload,
@@ -87,7 +79,6 @@ fn is_valid_numeric_id(value: &str) -> bool {
     !value.is_empty() && value.chars().all(|character| character.is_ascii_digit())
 }
 
-// Adaptive concurrency limiter that adjusts based on API rejection rates.
 struct AdaptiveLimiter {
     max: AtomicUsize,
     current: AtomicUsize,
@@ -127,7 +118,6 @@ pub fn configure_adaptive_concurrency(max_concurrency: usize) {
     let limiter = adaptive_limiter();
     limiter.max.store(max, Ordering::Release);
 
-    // Start with a conservative baseline to prevent initial rate limiting.
     let start = max.min(3);
     limiter.current.store(start, Ordering::Release);
 
@@ -135,8 +125,6 @@ pub fn configure_adaptive_concurrency(max_concurrency: usize) {
     if let Ok(mut guard) = limiter.blocked_until.lock() {
         *guard = None;
     }
-
-    // We don't restore permits here because they are restored when permits drop or when success increases.
 }
 
 pub async fn acquire_adaptive_permit() -> AdaptivePermit {
@@ -264,7 +252,6 @@ fn game_ids_by_place() -> &'static dashmap::DashMap<String, String> {
     ROBLOX_GAME_IDS.get_or_init(dashmap::DashMap::new)
 }
 
-// Emulate a Studio session for a specific game to access copylocked assets.
 fn roblox_game_context(place_id: Option<&str>) -> Option<RobloxGameContext> {
     let place_id =
         place_id.map(str::trim).filter(|value| is_valid_numeric_id(value) && *value != "0")?;
@@ -307,7 +294,6 @@ fn apply_upload_auth(builder: reqwest::RequestBuilder, api_key: &str) -> reqwest
     builder.header("x-api-key", api_key)
 }
 
-// Pause task execution upon rate limits; respect global circuit breakers.
 pub(crate) async fn wait_rate_limit(bucket: RateLimitBucket) {
     let wait_dur = {
         let mut max_until: Option<Instant> = None;

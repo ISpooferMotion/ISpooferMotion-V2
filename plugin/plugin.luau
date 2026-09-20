@@ -1,11 +1,9 @@
---// Hello from cody.
 --!nocheck
 --!nolint
 --# selene: allow(unused_variable, global_usage)
 local ASSET_PROPERTIES: { [string]: { string } } = {}
 local STRING_SCAN_PROPERTIES: { [string]: { string } } = {}
 
--- Dummy declarations to satisfy IDE Luau Language Server (shadowed by includes)
 local startPolling: any
 local hidePluginGui: any
 local togglePluginGui: any
@@ -27,7 +25,6 @@ local BASE_URL: any
 --#include "src/bridge/discovery.luau"
 --#include "src/bridge/polling.luau"
 
--- Runtime assertions to validate the build step included modules in the correct order
 assert(
 	MAX_SCRIPT_SOURCE_BYTES ~= nil,
 	"Include order violation: config/runtime.luau not loaded early"
@@ -36,7 +33,6 @@ assert(normalizeAssetId ~= nil, "Include order violation: util/assets.luau not l
 assert(getMaxRecordValueBytes ~= nil, "Include order violation: scan/properties.luau not loaded")
 assert(applyPatch ~= nil, "Include order violation: patch/patcher.luau not loaded")
 
---- Manual Replacement Handler (declared before _G registration so the table is valid at load time)
 local function runManualReplacements(
 	text: string,
 	progressCallback: ((number, number, number, boolean) -> ())?,
@@ -95,7 +91,6 @@ local function runManualReplacements(
 	end)
 	local replacedCount = 0
 
-	--- Coerces a raw numeric id into a rbxassetid:// URI; leaves URIs untouched.
 	local function toAssetUriString(v)
 		if
 			v
@@ -134,7 +129,6 @@ local function runManualReplacements(
 			return
 		end
 
-		-- O(1) Fast lookup path: check if any numeric ID in the property exists in mappings
 		local oldId = string.match(strVal, "%d+")
 		if not oldId or not mappings[oldId] then
 			return
@@ -163,7 +157,6 @@ local function runManualReplacements(
 				return
 			end
 
-			-- prop == "MeshId": MeshId cannot be assigned directly, recreate MeshPart
 			local targetMeshUri = toAssetUriString(newVal)
 			local targetTextureUri = nil
 			pcall(function()
@@ -348,7 +341,6 @@ local function runManualReplacements(
 			end
 		end
 
-		-- Handle Script source replacement safely with single-pass substitution
 		if obj:IsA("LuaSourceContainer") and obj.ClassName ~= "CoreScript" then
 			local ok, src = pcall(function()
 				return (obj :: any).Source
@@ -397,7 +389,6 @@ local function runManualReplacements(
 		game:GetService("MaterialService"),
 	}
 
-	-- Collect all instances first into a flat array
 	local allInstances: { Instance } = {}
 	for _, root in ipairs(candidateRoots) do
 		if root then
@@ -430,7 +421,6 @@ local function runManualReplacements(
 				processInstance(inst)
 			end
 
-			-- Yield every BATCH_SIZE items to allow Roblox Studio to render frames and prevent freezes
 			if i % BATCH_SIZE == 0 or i == totalInstances then
 				local elapsed = os.clock() - startTime
 				local etaStr = "calc..."
@@ -487,8 +477,6 @@ local function runManualReplacements(
 	end
 end
 
---- Spawns runManualReplacements in a task so GUI click handlers (which cannot yield)
---- don't block and can receive live progress.
 local function runManualReplacementsAsync(
 	text: string,
 	progressCallback: ((number, number, number, boolean) -> ())?,
@@ -497,11 +485,8 @@ local function runManualReplacementsAsync(
 	task.spawn(runManualReplacements, text, progressCallback, customBatchSize)
 end
 
--- Register the plugin API table BEFORE startPolling() and GUI creation so any button
--- click that fires immediately after plugin load never sees a nil handler.
 _G.ISpooferMotionPlugin = {
 	runManualReplacements = runManualReplacementsAsync,
-	-- Expose the sync version for scripting contexts that manage their own coroutine.
 	runManualReplacementsSync = runManualReplacements,
 }
 

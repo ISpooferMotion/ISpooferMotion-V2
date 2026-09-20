@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronDown, Clapperboard, Loader2, Pause, Play, RotateCcw, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -29,7 +28,6 @@ interface AnimationPreviewProps {
 }
 
 function disposeMaterial(material: THREE.Material) {
-  // Prevent memory leaks when the preview modal closes.
   for (const value of Object.values(material)) {
     if (value instanceof THREE.Texture) {
       value.dispose();
@@ -55,7 +53,6 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
 
-// Mimic Roblox's internal easing styles.
 function applyEasing(t: number, style: number, dir: number): number {
   t = Math.max(0, Math.min(1, t));
   const ease = (fn: (x: number) => number) => {
@@ -76,7 +73,6 @@ function applyEasing(t: number, style: number, dir: number): number {
 }
 
 function flattenPoses(poses: RobloxPose[]): Map<string, RobloxPose> {
-  // Flatten the pose tree into a map for fast bone lookups.
   const map = new Map<string, RobloxPose>();
   const walk = (list: RobloxPose[]) => {
     for (const p of list) {
@@ -88,7 +84,6 @@ function flattenPoses(poses: RobloxPose[]): Map<string, RobloxPose> {
   return map;
 }
 
-// Hoist three.js math objects to reduce garbage collection in the render loop.
 const _tempMat1 = new THREE.Matrix4();
 const _tempMat2 = new THREE.Matrix4();
 const _transformMat = new THREE.Matrix4();
@@ -122,13 +117,6 @@ const cframeToMatrix4InPlace = (cf: number[], target: THREE.Matrix4) =>
 const toMat4InPlace = (r: number[], target: THREE.Matrix4) =>
   target.set(r[0], r[1], r[2], 0, r[3], r[4], r[5], 0, r[6], r[7], r[8], 0, 0, 0, 0, 1);
 
-/**
- * A full hardware-accelerated 3D viewport for previewing Roblox animations.
- *
- * Uses Three.js to parse and render Roblox's raw XML animation keyframes in real-time.
- * Reconstructs the R6 or R15 bone hierarchy, interpolates CFrames manually to match
- * Roblox's internal easing styles, and wraps it all in a React Portal.
- */
 export default function AnimationPreview({
   assetId,
   assetName,
@@ -186,8 +174,7 @@ export default function AnimationPreview({
     (async () => {
       try {
         let activeCookie = cookie;
-        // Auto-detect cookie if not set in config.
-        // Required to view private animations.
+
         if (!activeCookie) {
           try {
             const detected = await invoke('get_cookie_from_auto_detect', {
@@ -240,7 +227,6 @@ export default function AnimationPreview({
         for (const kf of parsed.keyframes) uniqueTimes.add(kf.time);
         setKeyframeTimes(Array.from(uniqueTimes).sort((a, b) => a - b));
 
-        // Guess R6 or R15 based on present bone names.
         const rig = detectRigType(allPoseNames);
         setDetectedRig(rig);
 
@@ -286,7 +272,6 @@ export default function AnimationPreview({
       let kfA = kfs[0],
         kfB = kfs[0];
 
-      // Identify the two keyframes the current time sits between.
       for (let i = 0; i < kfs.length - 1; i++) {
         if (kfs[i].time <= wt && kfs[i + 1].time >= wt) {
           kfA = kfs[i];
@@ -309,7 +294,6 @@ export default function AnimationPreview({
         _transformMat.identity();
 
         if (pa && pb) {
-          // Interpolate between the two keyframes for this bone.
           const pose = pa || pb!;
           const alpha = applyEasing(raw, pose.easingStyle, pose.easingDirection);
           _tempPos.set(
@@ -460,7 +444,6 @@ export default function AnimationPreview({
         const mat = getMaterialForBone(bone.name);
 
         if (bone.name === 'Head') {
-          // Load the head obj model.
           const headFile = rigType === 'R6' ? '/headr6.obj' : '/headr15.obj';
           const loader = new OBJLoader();
           loader.load(headFile, (loadedObj) => {
@@ -511,7 +494,6 @@ export default function AnimationPreview({
             obj.add(faceMesh);
           });
         } else {
-          // Use a rounded box for other body parts.
           const boxGeo = new RoundedBoxGeometry(bone.size[0], bone.size[1], bone.size[2], 2, 0.1);
           const mesh = new THREE.Mesh(boxGeo, mat);
           mesh.castShadow = true;
@@ -585,11 +567,7 @@ export default function AnimationPreview({
   const speedOptions = [0.25, 0.5, 1, 2] as const;
 
   const content = (
-    <motion.div
-      initial={inline ? { opacity: 0 } : { scale: 0.95, y: 12, opacity: 0 }}
-      animate={inline ? { opacity: 1 } : { scale: 1, y: 0, opacity: 1 }}
-      exit={inline ? { opacity: 0 } : { scale: 0.95, y: 12, opacity: 0 }}
-      transition={inline ? { duration: 0.15 } : { type: 'spring', damping: 30, stiffness: 350 }}
+    <div
       onClick={(e) => e.stopPropagation()}
       className={cn(
         'relative flex flex-col bg-bg-surface border border-border-subtle rounded-lg overflow-hidden',
@@ -642,36 +620,30 @@ export default function AnimationPreview({
       <div className="relative flex-1 overflow-hidden bg-bg-base">
         <div ref={mountRef} className="w-full h-full" />
 
-        <AnimatePresence>
+        <>
           {status === 'loading' && (
-            <motion.div
+            <div
               key="loading"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg-base"
             >
               <Loader2 className="animate-spin text-primary" size={32} />
               <p className="text-[13px] text-text-muted font-medium">
                 {t('misc.fetchingAnimation')}
               </p>
-            </motion.div>
+            </div>
           )}
 
           {status === 'error' && (
-            <motion.div
+            <div
               key="error"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 bg-bg-base"
             >
               <p className="text-[12px] text-text-muted text-center max-w-[320px] leading-relaxed">
                 {errorMsg}
               </p>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+        </>
 
         {status === 'ready' && (
           <>
@@ -690,7 +662,6 @@ export default function AnimationPreview({
             className="relative w-full h-2 bg-bg-base hover:h-2.5 rounded-full cursor-pointer select-none transition-all group flex items-center"
             ref={scrubBarRef}
             onPointerDown={(e) => {
-              // Scrub through animation manually via timeline drag.
               isScrubbing.current = true;
               e.currentTarget.setPointerCapture(e.pointerId);
               const rect = e.currentTarget.getBoundingClientRect();
@@ -723,7 +694,7 @@ export default function AnimationPreview({
               className="absolute top-0 left-0 bottom-0 bg-primary rounded-full z-10 pointer-events-none"
               style={{ width: '0%', transition: 'none' }}
             />
-            {/* Draggable Scrubber Thumb (Fixed Size on Hover) */}
+
             <div
               ref={scrubThumbRef}
               className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full shadow-md border-2 border-white pointer-events-none z-20"
@@ -803,22 +774,18 @@ export default function AnimationPreview({
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 
   if (inline) return content;
 
   return createPortal(
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.15 }}
+    <div
       onClick={onClose}
       className="fixed inset-0 z-9999 bg-black/80 backdrop-blur-md flex items-center justify-center p-6 pointer-events-auto"
     >
       {content}
-    </motion.div>,
+    </div>,
     document.body,
   );
 }

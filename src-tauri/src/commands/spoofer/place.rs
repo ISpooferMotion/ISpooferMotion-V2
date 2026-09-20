@@ -29,7 +29,6 @@ pub fn parse_excluded_id_list(raw: Option<&str>) -> HashSet<String> {
     ids
 }
 
-// decides if we should ignore this asset based on whether the user already owns it or if it belongs to a blacklisted group
 pub async fn should_skip_asset_for_spoofing(
     app: AppHandle,
     asset_id: &str,
@@ -71,14 +70,9 @@ pub async fn should_skip_asset_for_spoofing(
     false
 }
 
-/// Fastest possible place-context path: resolves an asset directly to the universe(s)
-/// that own it via the `asset-to-universe` endpoint, then batch-resolves those universes
-/// to their root place IDs. One successful call here makes all creator/game-list
-/// scraping unnecessary.
 async fn asset_to_universe_fast_path(asset_id: &str, cookie_header: &str) -> Vec<String> {
     let client = crate::utils::get_http_client();
 
-    // Asset -> universeIds
     let url = format!("https://games.roblox.com/v1/games/asset-to-universe?assetId={asset_id}");
     let mut resp_opt = None;
     for _ in 0..3 {
@@ -129,7 +123,6 @@ async fn asset_to_universe_fast_path(asset_id: &str, cookie_header: &str) -> Vec
         return Vec::new();
     }
 
-    // universeIds -> rootPlaceIds
     let mut place_ids: Vec<String> = Vec::new();
     for chunk in universe_ids.chunks(50) {
         let ids_str = chunk.join(",");
@@ -161,8 +154,6 @@ async fn asset_to_universe_fast_path(asset_id: &str, cookie_header: &str) -> Vec
     place_ids
 }
 
-/// Fetches groups the user belongs to where their rank is at least `min_rank`, sorted
-/// by rank descending and capped at `top_n`. Returns `(group_id, rank)` tuples.
 async fn fetch_user_high_rank_groups(
     user_id: &str,
     cookie_header: &str,
@@ -228,9 +219,6 @@ async fn fetch_user_high_rank_groups(
     groups
 }
 
-/// Fetches root place IDs for a single group. Designed to be spawned concurrently
-/// across many groups - keeps its own rate limiting via short sleeps rather than
-/// the shared bucket to avoid contention from parallel callers.
 async fn fetch_group_place_ids_parallel(
     group_id: String,
     cookie_header: String,
@@ -294,7 +282,6 @@ async fn fetch_group_place_ids_parallel(
             break;
         }
 
-        // Brief inter-page pause to avoid hammering the same group's endpoint.
         tokio::time::sleep(Duration::from_millis(150)).await;
     }
 
@@ -310,10 +297,6 @@ pub async fn get_place_ids_for_asset_creator(
 ) -> crate::error::Result<Vec<String>> {
     let cookie_header = build_roblox_cookie_header(&cookie);
 
-    // Fast path: asset-to-universe. This single API call resolves which universe(s)
-    // directly reference this asset - no creator lookup or game-list scraping needed.
-    // It is the highest-confidence source, so we try it first and only fall through
-    // to the creator-based path when it returns nothing.
     let fast_ids = if cookie_header.is_empty() {
         Vec::new()
     } else {
@@ -367,7 +350,6 @@ pub fn clear_place_caches(app: Option<&AppHandle>) {
     }
 }
 
-// hits the open cloud api to find out who actually made the asset so we know if we need to spoof it
 pub async fn get_asset_creator_for_asset(
     app: AppHandle,
     asset_id: String,
@@ -487,7 +469,7 @@ fn value_to_string(value: &Value) -> Option<String> {
 
 #[tauri::command]
 #[specta::specta]
-// scrapes a user's or group's games list to find a valid place id we can use for spoofing context
+
 pub async fn get_place_id_from_creator(
     app: AppHandle,
     creator_type: String,
@@ -509,7 +491,6 @@ pub async fn get_place_id_from_creator(
     let cache_path = app.path().app_data_dir().map(|p| p.join("place_id_cache.json")).ok();
     let cache_key = format!("{}_{}", creator_type, creator_id);
 
-    // Check persistent cache first
     if let Some(ref path) = cache_path {
         if let Ok(data) = tokio::fs::read_to_string(path).await {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data) {
@@ -611,7 +592,6 @@ pub async fn get_place_id_from_creator(
                         }
                     }
 
-                    // Only query subplaces if we still need more place IDs
                     if root_places.len() < max_results as usize {
                         if let Some(universe_id) = game
                             .get("id")
@@ -711,16 +691,12 @@ pub async fn get_place_id_from_creator(
         }
     }
 
-    // Secondary discovery for user-owned assets: if the direct game list didn't fill
-    // the quota, also walk the user's high-rank group memberships and fetch their games
-    // in parallel. Mirrors the Python script's Path 2 fallback.
     if !is_group && root_places.len() < max_results as usize {
         let remaining = max_results as usize - root_places.len();
         let high_rank_groups =
             fetch_user_high_rank_groups(&creator_id, &cookie_header, 50, 15).await;
 
         if !high_rank_groups.is_empty() {
-            // Spawn one task per group so all fetches run concurrently.
             let handles: Vec<tokio::task::JoinHandle<Vec<String>>> = high_rank_groups
                 .into_iter()
                 .map(|(gid, _rank)| {
@@ -754,8 +730,7 @@ pub async fn get_place_id_from_creator(
             let lower = name.to_lowercase();
             let exact = lower == lower_target;
             let contains = lower.contains(&lower_target);
-            // Sorting uses boolean tuple comparison: false < true.
-            // By inverting the booleans, we ensure true (exact match) sorts before false.
+
             (!exact, !contains)
         });
     }
@@ -878,7 +853,7 @@ pub async fn clear_downloads_directory_command(app: AppHandle) -> crate::error::
 
 #[tauri::command]
 #[specta::specta]
-// paginates through the user's inventory to see if they already uploaded an asset with this exact name
+
 pub async fn find_asset_by_name(
     cookie: String,
     asset_type: String,
@@ -1059,7 +1034,6 @@ pub async fn discover_asset_place_id(
         });
     };
 
-    // 0. If a pinned forced_place_id is provided, test it first
     if let Some(ref pid) = forced_place_id {
         if !pid.is_empty() && pid != "1818" {
             log::info!("[Discovery:{}] Testing pinned forced Place ID: {}", asset_id, pid);
@@ -1086,7 +1060,6 @@ pub async fn discover_asset_place_id(
         }
     }
 
-    // 0.5. Try previously verified working Place ID for this creator
     if let Ok((creator_type, creator_id)) =
         get_asset_creator_for_asset(app.clone(), asset_id.clone(), cookie.clone()).await
     {
@@ -1106,7 +1079,6 @@ pub async fn discover_asset_place_id(
         }
     }
 
-    // 1. Try creator places & asset-to-universe
     log::info!("[Discovery:{}] Fetching creator places/universes...", asset_id);
     let candidates = get_place_ids_for_asset_creator(
         app.clone(),
@@ -1118,8 +1090,6 @@ pub async fn discover_asset_place_id(
     .await
     .unwrap_or_default();
 
-    // Check if another task for this creator is already doing discovery.
-    // If so, wait for it to finish and reuse its Place ID if it found one.
     let creator_key_for_lock = if let Ok((creator_type, creator_id)) =
         get_asset_creator_for_asset(app.clone(), asset_id.clone(), cookie.clone()).await
     {
@@ -1178,7 +1148,7 @@ pub async fn discover_asset_place_id(
                             (pid, loc.is_some())
                         }
                     })
-                    .buffer_unordered(10); // test 10 candidates simultaneously
+                    .buffer_unordered(10);
 
             while let Some((pid, success)) = stream.next().await {
                 if success {
@@ -1209,7 +1179,6 @@ pub async fn discover_asset_place_id(
         return Ok(Some(pid));
     }
 
-    // 2. Try Asset Usage discovery
     log::info!("[Discovery:{}] Attempting Asset Usage discovery...", asset_id);
     let usage_pids = crate::commands::spoofer::download::attempt_asset_usage_place_id_discovery(
         &asset_id,
@@ -1229,7 +1198,6 @@ pub async fn discover_asset_place_id(
         return Ok(Some(pid));
     }
 
-    // 3. Try Social Graph discovery
     log::info!("[Discovery:{}] Attempting Social Graph discovery...", asset_id);
     let social_pids = crate::commands::spoofer::download::attempt_social_graph_place_id_discovery(
         &asset_id,

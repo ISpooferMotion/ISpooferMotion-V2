@@ -1,4 +1,3 @@
-// Validate magic numbers to ensure the download is not an HTML error page.
 const MAGIC_PNG: &[u8] = b"\x89PNG\r\n\x1a\n";
 const MAGIC_JPEG: &[u8] = &[0xff, 0xd8, 0xff];
 const MAGIC_GIF87A: &[u8] = b"GIF87a";
@@ -96,12 +95,7 @@ pub async fn validate_downloaded_payload(
                 Err("Downloaded video was not a recognized video format.".into())
             }
         }
-        "mesh" | "animation" | "plugin" | "model" => {
-            // Rely on the HTML/JSON blacklist above rather than a strict whitelist,
-            // because Roblox frequently introduces new binary formats (e.g., Mesh V3/V4/V5, packages)
-            // that don't match old magic number signatures.
-            Ok(())
-        }
+        "mesh" | "animation" | "plugin" | "model" => Ok(()),
         _ => Ok(()),
     }
 }

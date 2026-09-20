@@ -1,19 +1,6 @@
-import { type Variants } from 'framer-motion';
-
-const pageVariants: Variants = {
-  hidden: { opacity: 0, y: 10 },
-  show: { opacity: 1, y: 0, transition: { staggerChildren: 0.05, duration: 0.3 } },
-  exit: { opacity: 0, y: -10, transition: { duration: 0.2 } },
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 10 },
-  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
-};
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { readText as readClipboardText } from '@tauri-apps/plugin-clipboard-manager';
-import { motion } from 'framer-motion';
 import { ArrowDownUp, Settings2, ShieldAlert, SlidersHorizontal, Wand2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -86,13 +73,6 @@ type ApiKeyOwnerDetectResult = {
   message?: string;
 };
 
-/**
- * The primary workspace view where the actual spoofing execution is orchestrated.
- *
- * This component acts as the main controller for the spoofing lifecycle. It validates the
- * selected Roblox profile/cookie, performs sanity checks on the Open Cloud API key, enforces
- * rate limit quotas for audio uploads, and bridges the UI state down to the Rust core engine.
- */
 export default function SpoofingView() {
   const { t } = useLanguage();
   const { studioPlaceId } = useStudioConnectionState();
@@ -189,8 +169,6 @@ export default function SpoofingView() {
     ),
   );
 
-  // Results modal removed entirely since Explorer view shows the same data live.
-
   useEffect(() => {
     const cookie = config.spoofing.cookie.trim();
     if (!cookie || config.spoofing.selectedUser === 'none') {
@@ -234,8 +212,6 @@ export default function SpoofingView() {
         if (text && text !== lastClipboardText) {
           lastClipboardText = text;
 
-          // Watch clipboard for Roblox asset URLs.
-          // Auto-queue new clipboard URLs.
           const robloxUrlRegex =
             /(?:roblox\.com\/(?:library|catalog)\/|create\.roblox\.com\/store\/asset\/)(\d+)/i;
           const match = text.match(robloxUrlRegex);
@@ -540,7 +516,6 @@ export default function SpoofingView() {
           selectedUser !== 'none' &&
           normalizeId(result.ownerUserId) !== normalizeId(selectedUser)
         ) {
-          // Warn if the API key belongs to a different user.
           setLogs((prev) =>
             appendSpoofingLog(
               prev,
@@ -573,11 +548,6 @@ export default function SpoofingView() {
     skipQuotaWarning = false,
     runContext?: SpooferRunContext,
   ) => {
-    // Guard: prevent double-start if a job is already running.
-    // This is the root cause of the "button does nothing" bug — isSpoofing
-    // can get stuck true if the spoofer-result Tauri event is never received
-    // (e.g. Rust panic, listener race condition). The force-reset button in the
-    // UI handles recovery without requiring an app restart.
     if (useSpooferStore.getState().isSpoofing) {
       logIsm(
         'warn',
@@ -600,10 +570,7 @@ export default function SpoofingView() {
 
     const spoofSounds = runContext?.spoofSounds ?? config.spoofing.audio;
     const uploadTypes = runContext?.uploadTypes ?? config.spoofing.uploadTypes;
-    // Emit a persistent log line at every early-return so users can see WHY
-    // clicking "Run Spoofer" appeared to do nothing. A toast alone
-    // disappears in a few seconds and leaves the logs panel empty, which
-    // reads as "nothing happened".
+
     if (cookie.length < 50) {
       const msg =
         'Cannot start spoofer: no valid Roblox cookie. Open Accounts and paste a fresh .ROBLOSECURITY value, then try again.';
@@ -636,7 +603,6 @@ export default function SpoofingView() {
     const extraIdsSet = new Set(extraIdsParsed);
     const assetInfoMap = new Map<string, { type: string; name: string; rawValue?: string }>();
 
-    // Recursively extract asset details from the parsed rbxl tree.
     const gatherAllInfo = (nodes: RbxInstance[]) => {
       for (const node of nodes) {
         for (const asset of node.assets) {
@@ -654,7 +620,6 @@ export default function SpoofingView() {
     };
     gatherAllInfo(rootInstances);
 
-    // Populate store with asset metadata for other components to display.
     useSpooferStore.getState().setAssetMetadataMap(Object.fromEntries(assetInfoMap));
 
     const shouldIncludeId = (id: string) => {
@@ -831,7 +796,6 @@ export default function SpoofingView() {
       useSpooferStore.getState().setSpoofTotalCount(finalAssetsPayload.length);
       useSpooferStore.getState().setSpoofCurrentCount(0);
 
-      // Instantly mark all queued assets in the spoofer store so the tree shows "Queued..." badges
       const storeState = useSpooferStore.getState();
       for (const item of finalAssetsPayload) {
         storeState.setAssetStatus(item.id, {
@@ -850,8 +814,6 @@ export default function SpoofingView() {
         },
       });
     } catch (err) {
-      // invoke() threw synchronously (e.g. IPC serialization error)
-      // — reset immediately since spoofer-result will never arrive.
       logIsm(
         'error',
         `Could not launch the spoofer: ${err instanceof Error ? err.message : String(err)}`,
@@ -859,15 +821,10 @@ export default function SpoofingView() {
       );
       setIsSpoofing(false);
     }
-    // NOTE: no finally setIsSpoofing(false) here — the normal success path
-    // gets reset by the spoofer-result Tauri event in ConfigContext.
   };
 
   handleRunSpooferRef.current = handleRunSpoofer;
 
-  // Bridge for the explorer-first action bar / toolbar, which dispatch window
-  // CustomEvents instead of calling these handlers directly (the explorer is
-  // the visible main view; SpoofingView runs hidden as the logic host).
   useEffect(() => {
     const onOpenScan = () => setScanOptionsOpen(true);
     const onRun = (e?: Event) => {
@@ -897,7 +854,6 @@ export default function SpoofingView() {
         return;
       }
 
-      // Target assets: selected assets, or all scanned assets if none explicitly selected
       const selectedSet = store.selectedAssetIds;
       const targetAssetIds: string[] = [];
       if (selectedSet.size > 0) {
@@ -1105,19 +1061,12 @@ export default function SpoofingView() {
   }, []);
 
   return (
-    <motion.div
-      variants={pageVariants}
-      initial="hidden"
-      animate="show"
-      exit="exit"
-      className="w-full h-full"
-    >
+    <div className="w-full h-full">
       <div className="w-full h-full p-4 flex flex-col overflow-hidden">
         <div className="w-full flex-1 min-h-0 flex flex-col gap-4 relative px-2 pt-2">
           <Dialog open={showAdvanced} onOpenChange={setShowAdvanced}>
             <DialogContent className="w-[95vw]! max-w-[95vw]! sm:max-w-225! max-h-[90vh]! p-0! overflow-hidden">
               <div className="flex h-full min-h-[75vh]">
-                {/* Sidebar Nav */}
                 <div className="w-56 shrink-0 flex flex-col gap-1 p-4 border-r border-border-subtle bg-bg-base">
                   <div className="flex items-center gap-2 px-2 pb-3 mb-2 border-b border-border-subtle">
                     <Settings2 size={16} className="text-primary" />
@@ -1177,7 +1126,6 @@ export default function SpoofingView() {
                   </div>
                 </div>
 
-                {/* Content Pane */}
                 <div className="flex-1 overflow-y-auto p-6">
                   {advancedTab === 'upload' && (
                     <div className="flex flex-col gap-2">
@@ -1228,12 +1176,7 @@ export default function SpoofingView() {
             </DialogContent>
           </Dialog>
 
-          {/* Top Configuration Bento */}
-          <motion.div
-            variants={itemVariants}
-            className="w-full grid grid-cols-1 lg:grid-cols-12 gap-3 shrink-0"
-          >
-            {/* Left Column: Identity & Credentials */}
+          <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-3 shrink-0">
             <div className="col-span-1 lg:col-span-7 flex flex-col gap-2 p-3 bg-bg-surface border border-border-subtle rounded-lg shadow-sm">
               <div className="flex items-center gap-2 mb-0.5">
                 <ArrowDownUp size={14} className="text-primary" />
@@ -1242,10 +1185,8 @@ export default function SpoofingView() {
                 </span>
               </div>
 
-              {/* Account switcher — mirrors the Select action from the Accounts tab */}
               <AccountSwitcher accounts={config.accounts} />
 
-              {/* Target Context */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <AvatarDropdown
@@ -1267,15 +1208,12 @@ export default function SpoofingView() {
                 </div>
               </div>
 
-              {/* Credentials */}
               <div className="flex flex-col gap-2 mt-1">
                 <CredentialsSection />
               </div>
             </div>
 
-            {/* Right Column: Options & Custom Assets */}
             <div className="col-span-1 lg:col-span-5 flex flex-col gap-3">
-              {/* Job Options */}
               <div className="flex flex-col gap-2 p-3 bg-bg-surface border border-border-subtle rounded-lg shadow-sm">
                 <div className="flex items-center gap-2 mb-0.5">
                   <Wand2 size={14} className="text-primary" />
@@ -1324,13 +1262,11 @@ export default function SpoofingView() {
                 </div>
               </div>
 
-              {/* Custom Assets Input */}
               <SpoofingCustomAssets />
             </div>
-          </motion.div>
+          </div>
 
-          {/* Middle Console - Logs */}
-          <motion.div variants={itemVariants} className="flex-1 min-h-0 flex flex-col gap-4 mt-3">
+          <div className="flex-1 min-h-0 flex flex-col gap-4 mt-3">
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               <ExecutionLogs
                 logs={logs}
@@ -1340,9 +1276,8 @@ export default function SpoofingView() {
                 onOpenPasteIds={() => setPasteIdsOpen(true)}
               />
             </div>
-          </motion.div>
+          </div>
 
-          {/* Bottom Action Bar */}
           <SpoofingControls
             failedAssetIds={failedAssetIds}
             failedReplacements={failedReplacements}
@@ -1352,7 +1287,6 @@ export default function SpoofingView() {
             isScanningStudio={isScanningStudio}
             isJobPaused={isJobPaused}
             replaceError={replaceError}
-            itemVariants={itemVariants}
             handleRetryFailedAssets={handleRetryFailedAssets}
 
             handleScanStudio={() => setScanOptionsOpen(true)}
@@ -1409,6 +1343,6 @@ export default function SpoofingView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </motion.div>
+    </div>
   );
 }

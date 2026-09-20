@@ -21,8 +21,6 @@ pub fn open_frontend_devtools(app: AppHandle) {
         win.open_devtools();
         #[cfg(not(debug_assertions))]
         {
-            // DevTools are restricted to debug builds.
-            // Notify the frontend so the user knows.
             let _ = win.eval(
                 "console.warn('[ISpooferMotion] DevTools are not available in this release build.')"
             );
@@ -53,10 +51,6 @@ pub fn get_app_version() -> String {
     APP_VERSION.to_string()
 }
 
-/// Updates the proxy URL used for outbound Roblox/API calls. Pass an empty
-/// string or `None` to fall back to the OS system proxy (Windows WinINET, which
-/// VPN "proxy mode" apps like Happ set). Called from the frontend on startup and
-/// whenever the Proxy URL setting changes.
 #[tauri::command]
 #[specta::specta]
 pub fn set_proxy_url(url: Option<String>) -> bool {
@@ -86,7 +80,6 @@ pub fn get_runtime_info() -> AnyValue {
 #[tauri::command]
 #[specta::specta]
 pub fn open_external(app: AppHandle, url: String) -> crate::error::Result<bool> {
-    // Validate the URL scheme before execution.
     if let Ok(parsed) = reqwest::Url::parse(&url) {
         if parsed.scheme() == "http" || parsed.scheme() == "https" {
             use tauri_plugin_opener::OpenerExt;
@@ -115,8 +108,6 @@ pub async fn select_folder(app: AppHandle) -> crate::error::Result<Option<String
 #[tauri::command]
 #[specta::specta]
 pub async fn uninstall_app(app: AppHandle) -> crate::error::Result<bool> {
-    // Clear credentials first. If this fails, do not report a successful uninstall
-    // while secrets remain in the OS credential store.
     clear_profile_secrets(app.clone(), None).await?;
     let data_dir = app.path().app_data_dir()?;
     match tokio::fs::remove_dir_all(&data_dir).await {

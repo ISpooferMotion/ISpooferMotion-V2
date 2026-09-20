@@ -1,7 +1,8 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { JsonViewer } from './JsonViewer';
-import { vi, describe, it, expect } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+
 import * as LanguageContext from '../../contexts/LanguageContext';
+import { JsonViewer } from './JsonViewer';
 
 vi.mock('../../contexts/LanguageContext', () => ({
   useLanguage: vi.fn(),
@@ -38,7 +39,6 @@ describe('JsonViewer', () => {
   it('renders arrays correctly', () => {
     render(<JsonViewer data={[1, 2, 3]} />);
 
-    // Since level 0 is expanded by default (level < 2), it should show the brackets and values
     expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
@@ -55,20 +55,15 @@ describe('JsonViewer', () => {
   it('can collapse and expand', async () => {
     const data = { nested: { value: 123 } };
 
-    // Level 0 is expanded by default. nested is level 1, also expanded by default.
     render(<JsonViewer data={data} />);
 
     expect(screen.getByText('123')).toBeInTheDocument();
 
-    // Click on the nested key to collapse it
     const toggle = screen.getByText('nested:').closest('.cursor-pointer');
     fireEvent.click(toggle!);
 
-    // Should now say "1 keys" and "123" is hidden (framer-motion handles unmount, but react-testing-library might see it with opacity 0 or it might unmount)
-    // Wait for the exit animation or just check for "1 keys"
     expect(screen.getByText('1 keys')).toBeInTheDocument();
 
-    // Expand again
     fireEvent.click(toggle!);
     expect(screen.queryByText('1 keys')).not.toBeInTheDocument();
   });

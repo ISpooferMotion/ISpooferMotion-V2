@@ -1,11 +1,11 @@
 import { render, screen } from '@testing-library/react';
-import SpoofingView from './SpoofingView';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import * as LanguageContext from '../../contexts/LanguageContext';
-import * as ConfigContext from '../../contexts/ConfigContext';
-import * as StudioConnectionContext from '../../contexts/StudioConnectionContext';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Contexts
+import * as ConfigContext from '../../contexts/ConfigContext';
+import * as LanguageContext from '../../contexts/LanguageContext';
+import * as StudioConnectionContext from '../../contexts/StudioConnectionContext';
+import SpoofingView from './SpoofingView';
+
 vi.mock('../../contexts/LanguageContext', () => ({ useLanguage: vi.fn() }));
 vi.mock('../../contexts/ConfigContext', () => ({ useConfig: vi.fn() }));
 vi.mock('../../contexts/StudioConnectionContext', () => ({
@@ -13,7 +13,6 @@ vi.mock('../../contexts/StudioConnectionContext', () => ({
   useStudioConnectionDispatch: vi.fn(),
 }));
 
-// Tauri APIs
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn().mockResolvedValue(null) }));
 vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
   readText: vi.fn().mockResolvedValue(''),
@@ -21,7 +20,6 @@ vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn().mockResolvedValue(null) }));
 vi.mock('@tauri-apps/plugin-notification', () => ({}));
 
-// Store
 vi.mock('../../stores/spooferStore', () => ({
   useSpooferStore: vi.fn((selector: any) =>
     selector({
@@ -76,7 +74,6 @@ vi.mock('../../stores/spooferStore', () => ({
   applyReplacements: vi.fn(),
 }));
 
-// Utilities
 vi.mock('../../utils/debugLogger', () => ({ addDebugLog: vi.fn() }));
 vi.mock('../../utils/spoofingLogs', () => ({ appendSpoofingLog: vi.fn() }));
 vi.mock('../../utils/studioBridge', () => ({
@@ -138,32 +135,6 @@ vi.mock('../modals/ResultsModal', () => ({
   default: () => null,
 }));
 
-// Framer Motion (no animation in tests)
-vi.mock('framer-motion', () => ({
-  motion: new Proxy(
-    {},
-    {
-      get: (_target, prop) => {
-        const El = ({ children, ...rest }: any) => {
-          const {
-            variants: _v,
-            initial: _i,
-            animate: _a,
-            exit: _e,
-            layout: _l,
-            ...domProps
-          } = rest;
-          return <div {...domProps}>{children}</div>;
-        };
-        El.displayName = String(prop);
-        return El;
-      },
-    },
-  ),
-  AnimatePresence: ({ children }: any) => <>{children}</>,
-}));
-
-// Globals
 globalThis.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}
@@ -213,7 +184,7 @@ describe('SpoofingView', () => {
 
   it('renders without crashing', () => {
     render(<SpoofingView />);
-    // The view's outer wrapper must be present
+
     expect(document.querySelector('.w-full.h-full')).toBeInTheDocument();
   });
 

@@ -9,7 +9,6 @@ use reqwest::header::{COOKIE, USER_AGENT};
 use std::collections::HashMap;
 use tauri::AppHandle;
 
-// Request raw bytes from the asset delivery API, applying User-Agent spoofing when required.
 pub async fn get_scraped_asset_cdn_url(client: &reqwest::Client, asset_id: &str) -> Option<String> {
     let url = format!("https://www.roblox.com/library/{}/", asset_id);
     if let Ok(resp) = client
@@ -20,7 +19,7 @@ pub async fn get_scraped_asset_cdn_url(client: &reqwest::Client, asset_id: &str)
     {
         if resp.status().is_success() {
             if let Ok(text) = resp.text().await {
-                // look for data-mediathumb-url="([^"]+)"
+
                 if let Some(idx) = text.find("data-mediathumb-url=\"") {
                     let start = idx + 21;
                     if let Some(end_idx) = text[start..].find('"') {
@@ -31,9 +30,6 @@ pub async fn get_scraped_asset_cdn_url(client: &reqwest::Client, asset_id: &str)
         }
     }
 
-    // Fallback: hit the assetdelivery v1 endpoint with redirect disabled and read the Location
-    // header directly. This avoids downloading any bytes and works even when the library page
-    // no longer embeds a mediathumb URL (increasingly common since 2024).
     let redirect_url = format!(
         "https://assetdelivery.roblox.com/v1/asset/?id={}&expectedAssetType=Audio",
         asset_id
@@ -89,7 +85,6 @@ pub async fn send_asset_download_request_ua(
     req.send().await
 }
 
-// Stream download response directly to disk to minimize memory usage, emitting progress events.
 pub async fn write_download_response(
     app: &AppHandle,
     download_resp: reqwest::Response,
@@ -265,7 +260,6 @@ pub async fn write_download_response(
     })
 }
 
-// Automatically acquire free assets to bypass copylock restrictions.
 pub async fn auto_claim_free_asset(
     app: &AppHandle,
     client: &reqwest::Client,
@@ -328,7 +322,6 @@ pub async fn auto_claim_free_asset(
     Ok(false)
 }
 
-// (Removed tauri command as this is internal)
 #[specta::specta]
 pub async fn batch_get_download_urls(
     app: AppHandle,
@@ -340,7 +333,6 @@ pub async fn batch_get_download_urls(
     batch_get_download_urls_for_assets(app, assets, cookie, place_id, None).await
 }
 
-// Resolve multiple asset download links via batch request to reduce API calls.
 pub async fn batch_get_download_urls_for_assets(
     app: AppHandle,
     assets: Vec<(String, String)>,
@@ -400,7 +392,7 @@ pub async fn batch_get_download_urls_for_assets(
 
     struct BatchChunkResult {
         urls: HashMap<String, String>,
-        // asset IDs that came back with 403/access-denied errors - these need a different place ID
+
         access_denied_ids: std::collections::HashSet<String>,
         has_transient_error: bool,
     }
@@ -473,18 +465,17 @@ pub async fn batch_get_download_urls_for_assets(
 
     for chunk in body.chunks(50) {
         let chunk_vec = chunk.to_vec();
-        // resolved_this_chunk holds URLs we've already found; we won't re-request these
+
         let mut resolved_this_chunk: HashMap<String, String> = HashMap::new();
 
         for current_place_id_opt in &fallback_place_ids {
-            // Build a sub-chunk of only the asset IDs still unresolved
             let pending: Vec<BatchAssetRequest> = chunk_vec
                 .iter()
                 .filter(|item| !resolved_this_chunk.contains_key(&item.request_id))
                 .cloned()
                 .collect();
             if pending.is_empty() {
-                break; // all resolved
+                break;
             }
 
             let current_place_id_num = current_place_id_opt
@@ -535,7 +526,7 @@ pub async fn batch_get_download_urls_for_assets(
                             chunk_access_denied.extend(res.access_denied_ids);
                             has_transient = res.has_transient_error;
                         }
-                        break; // got a 200 - stop UA cycling
+                        break;
                     } else if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
                         return Err("Your ROBLOSECURITY cookie is missing, invalid, or expired. Please update it in settings.".into());
                     } else if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
@@ -564,20 +555,17 @@ pub async fn batch_get_download_urls_for_assets(
                         has_transient = true;
                     }
                 } else {
-                    has_transient = true; // timeout or network error
+                    has_transient = true;
                 }
                 if !chunk_urls.is_empty() {
-                    break; // partial success is good enough - stop UA cycling
+                    break;
                 }
                 wait_rate_limit(RateLimitBucket::DownloadResolution).await;
             }
 
-            // Absorb newly resolved URLs into the running total
             resolved_this_chunk.extend(chunk_urls);
 
-            // Prepare next pending_with_place to only retry access-denied IDs (not transient errors -
-            // those might succeed with the same place ID on retry, which the outer loop already handles)
-            let _ = chunk_access_denied; // consumed - next iteration will re-filter from resolved_this_chunk
+            let _ = chunk_access_denied;
             let _ = has_transient;
         }
 
@@ -587,7 +575,6 @@ pub async fn batch_get_download_urls_for_assets(
     Ok(urls)
 }
 
-// (Removed tauri command as this is internal)
 #[specta::specta]
 pub async fn batch_download_assets_concurrent(
     app: AppHandle,
@@ -613,7 +600,7 @@ pub async fn batch_download_assets_concurrent(
                     task.name,
                     task.asset_id,
                     task.asset_type,
-                    place_id_for_task, // was incorrectly None
+                    place_id_for_task,
                     false,
                     None,
                 )
@@ -657,7 +644,7 @@ mod tests {
         let client = Client::new();
         let _ = send_asset_download_request_ua(
             &client,
-            "http://127.0.0.1:0/", // mock, will fail but request is built
+            "http://127.0.0.1:0/",
             None,
             None,
             "mock",

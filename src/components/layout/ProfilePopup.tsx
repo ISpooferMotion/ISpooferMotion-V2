@@ -18,14 +18,6 @@ import {
 } from '../../utils/robloxProfiles';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 
-/**
- * Profile popup launched from the user-logo button in the Titlebar.
- *
- * Lets the user switch the active Roblox profile, add another (jumps to the
- * Accounts tab), pick an upload group, and set the global forced place IDs.
- * Per-asset forced place IDs are handled separately via the explorer's lock
- * icon; the value here is the fallback for assets without a per-asset pin.
- */
 export default function ProfilePopup({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useLanguage();
   const { config, updateConfig, updateCategory } = useConfig();
@@ -36,12 +28,10 @@ export default function ProfilePopup({ collapsed = false }: { collapsed?: boolea
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [open, setOpen] = useState(false);
 
-  // Refresh the cached user list whenever the popup opens.
   useEffect(() => {
     if (open) setUsers(loadCachedUsers());
   }, [open]);
 
-  // Load manageable groups for the active profile (mirrors SpoofingView's effect).
   useEffect(() => {
     if (!open) return;
     const userId = config.spoofing.selectedUser;
@@ -168,9 +158,7 @@ export default function ProfilePopup({ collapsed = false }: { collapsed?: boolea
             {t('spoof.targetContext')}
           </div>
 
-          {/* Show saved accounts, or discovered cached users if no accounts added yet */}
           {(() => {
-            // Merge config.accounts with discovered cached users that aren't already added
             const configIds = new Set(config.accounts.map((a) => normalizeId(a.id)));
             const discovered = users.filter((u) => !configIds.has(normalizeId(u.id)));
             const allAccounts = [
@@ -235,7 +223,6 @@ export default function ProfilePopup({ collapsed = false }: { collapsed?: boolea
 
           <div className="h-px bg-border my-1.5" />
 
-          {/* Group */}
           <div className="flex flex-col gap-1 px-1">
             <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-text-muted">
               <span>{t('spoof.selectedGroup')}</span>

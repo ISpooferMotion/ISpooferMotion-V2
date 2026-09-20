@@ -2,10 +2,7 @@
 --!nolint
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
---- Network utility wrapper for communicating with the desktop daemon.
----
---- This module handles JSON encoding/decoding and enforces safety limits on
---- payload sizes to prevent the plugin from locking up Studio on massive games.
+
 local function decodeJsonResponseBody(response: any): (boolean, any)
 	if not response then
 		return false, nil
@@ -35,9 +32,6 @@ local function decodeJsonResponseBody(response: any): (boolean, any)
 	return true, decoded
 end
 
---- Performs a POST request against the active daemon.
----
---- Fails early if the encoded JSON body exceeds `MAX_HTTP_BODY_BYTES`.
 local function postJson(endpoint: string, payload: any): (boolean, any)
 	if not BASE_URL then
 		return false, nil

@@ -1,4 +1,3 @@
-// Check if running inside Tauri or a standard browser environment.
 export function isTauriRuntime() {
   const internals = (
     window as Window & {
@@ -34,6 +33,5 @@ async function getTauriPlatform(): Promise<string | null> {
 }
 
 export async function isMemoryInjectionSupported(): Promise<boolean> {
-  // Memory injection only reliable on Windows.
   return (await getTauriPlatform()) === 'windows';
 }

@@ -35,10 +35,6 @@ fn emit_spoofer_log(app: &AppHandle, level: &str, message: &str) {
     );
 }
 
-/// Runs both discovery passes (asset-usage + creator social-graph) and pushes
-/// the resulting per-place download URLs onto `candidate_urls`. Called once
-/// upfront when the caller supplied no place_id, and once as a fallback when
-/// the caller *did* supply a place_id but every direct URL failed.
 async fn run_discovery_and_extend_urls(
     app: &AppHandle,
     asset_id: &str,
@@ -115,7 +111,6 @@ async fn run_discovery_and_extend_urls(
     }
 }
 
-// Download orchestration: manages discovery, resolution, fallbacks, and retries.
 pub async fn download_animation_asset_with_progress(
     app: AppHandle,
     direct_url: Option<String>,
@@ -184,12 +179,10 @@ pub async fn download_animation_asset_with_progress(
         push_unique_url(&mut candidate_urls, url);
     }
 
-    // 1. Direct URLs with place IDs (fastest path: succeeds on request #1 in ~100ms)
     for url in build_direct_asset_download_urls(&asset_id, asset_type.as_deref(), &place_ids) {
         push_unique_url(&mut candidate_urls, url);
     }
 
-    // 2. Fall back to location API resolution if direct URL didn't hit
     for place_id in place_ids.iter().map(String::as_str).map(Some).chain(std::iter::once(None)) {
         if let Some(resolved_url) =
             resolve_asset_id_location(&app, &client, &asset_id, &cookie_header, place_id).await?
@@ -198,9 +191,6 @@ pub async fn download_animation_asset_with_progress(
         }
     }
 
-    // Discovery strategy:
-    // If no forced place ID was provided, run discovery upfront to populate candidate place URLs.
-    // If place_ids is provided, use direct candidate URLs first and only run discovery if direct URLs fail.
     let mut discovery_attempted = false;
     if place_ids.is_empty() {
         run_discovery_and_extend_urls(
@@ -253,25 +243,9 @@ pub async fn download_animation_asset_with_progress(
     let user_agents =
         ["RobloxStudio/WinInet", "RobloxApp/WinInet", "Roblox/WinInet", "roblox/9.0.0.0 (WinInet)"];
 
-    // A private/copylocked asset returns 403 for every candidate URL. Without
-    // an early-bail this loop can burn 75+ URLs × parallel workers behind the
-    // shared rate limiter, stalling the whole job for minutes on a single
-    // dead asset. Track consecutive permanent failures across candidates and
-    // give up once we're clearly hitting a wall.
-    //
-    // Threshold sits at 20 (not the original 5) because 5 was too eager --
-    // some legit assets need a long-tail URL to succeed, and 5 consecutive
-    // 403s in the early direct-URL block would bail before discovery even
-    // ran. 20 gives every asset up to ~40 URLs across the two phases,
-    // capping worst-case wall time on dead assets at ~30s while still
-    // matching v2.1's "try everything" behavior for accessible assets.
     const PERM_FAILURE_BAIL_THRESHOLD: usize = 20;
     let mut consecutive_perm_failures: usize = 0;
 
-    // Iterate through candidate URLs until the file is successfully retrieved.
-    // The outer `'phases` loop lets us run discovery as a fallback once every
-    // direct URL has been tried without success -- see the block after this
-    // `while` for the trigger.
     let mut is_first_url = true;
     let mut i: usize = 0;
     'phases: loop {
@@ -300,8 +274,6 @@ pub async fn download_animation_asset_with_progress(
                 },
             );
 
-            // Periodic heartbeat so users don't think a slow asset has hung. Only
-            // fires past the first handful so short jobs stay quiet.
             if candidate_idx > 0 && candidate_idx % 10 == 0 {
                 emit_spoofer_log(
                     &app,
@@ -314,9 +286,6 @@ pub async fn download_animation_asset_with_progress(
                 );
             }
 
-            // Tracks whether this specific URL exited the attempt loop via the
-            // 403/404/409 "permanent" break so we can reset the streak on any
-            // other exit (rate-limit exhaustion, transport error, timeout).
             let mut this_url_was_perm_failure = false;
             let is_cdn_url = download_url.contains("rbxcdn.com");
 
@@ -331,9 +300,6 @@ pub async fn download_animation_asset_with_progress(
             };
             is_first_url = false;
 
-            // V1 used 3 attempts / 30s timeout. The bump to 10/45s combined with
-            // retry-on-403 turned every dead URL into ~40s of wall time before we
-            // moved to the next candidate. Restore the tighter V1 budget.
             for attempt in 0..3u64 {
                 if attempt > 0 {
                     if let Ok(meta) = tokio::fs::metadata(&file_path).await {
@@ -415,14 +381,6 @@ pub async fn download_animation_asset_with_progress(
                             return Ok(res);
                         }
                         Err(e) => {
-                            // Body streaming failure ("error decoding response
-                            // body", write errors, chunked-encoding truncation).
-                            // Roblox occasionally cuts the connection mid-stream,
-                            // and previously that took the whole asset down with
-                            // no retry. Treat it like any other transient
-                            // transport error: log, backoff, and try the same
-                            // URL again -- and if attempts exhaust, fall through
-                            // to the next candidate URL.
                             last_error = format!("Download stream failed: {e}");
                             if attempt < 2 {
                                 tokio::time::sleep(Duration::from_millis(1000 * (attempt + 1)))
@@ -489,14 +447,7 @@ pub async fn download_animation_asset_with_progress(
                     }
                 }
 
-                // 403 on the asset delivery endpoint is essentially always
-                // terminal for that specific URL -- retrying the same URL with
-                // the same cookie always yields the same 403. V1 fell straight
-                // through to the next candidate here; V2's retry-on-403 loop
-                // was the single biggest wall-time cost on private assets.
-
                 if is_retryable_download_status(status) && attempt < 2 {
-                    // 429 and 5xx are transient - worth retrying on the same URL.
                     let retry_after_ms = crate::utils::extract_retry_after(&download_resp, None)
                         .unwrap_or_else(|| 800 * (attempt + 1));
                     if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
@@ -520,7 +471,7 @@ pub async fn download_animation_asset_with_progress(
                                 ),
                             );
                                 tokio::time::sleep(Duration::from_millis(500)).await;
-                                continue; // Retry the same URL with the new cookie
+                                continue;
                             }
                         }
 
@@ -547,9 +498,6 @@ pub async fn download_animation_asset_with_progress(
                     continue;
                 }
 
-                // 403, 404, 409 on a specific URL are permanent for that URL.
-                // Breaking immediately lets us try the next candidate without burning
-                // 10 × backoff iterations on a URL that will never succeed (V1 behavior).
                 this_url_was_perm_failure = true;
                 break;
             }
@@ -557,15 +505,9 @@ pub async fn download_animation_asset_with_progress(
             if this_url_was_perm_failure {
                 consecutive_perm_failures += 1;
             } else {
-                // A non-permanent exit (rate-limit exhaustion, transport error)
-                // isn't evidence the asset is dead, so keep exploring candidates.
                 consecutive_perm_failures = 0;
             }
 
-            // If every recent candidate URL returned the same permanent status,
-            // the asset is almost certainly private/copylocked/missing and the
-            // remaining candidates will fail the same way. Bail out so a single
-            // dead asset can't hold the shared rate limiter for minutes.
             if consecutive_perm_failures >= PERM_FAILURE_BAIL_THRESHOLD {
                 emit_spoofer_log(
                 &app,
@@ -578,12 +520,8 @@ pub async fn download_animation_asset_with_progress(
             );
                 break;
             }
-        } // end while
+        }
 
-        // Every direct URL exhausted. If the caller supplied a place_id and
-        // we haven't run discovery yet, do it now as a fallback -- the
-        // supplied place_id might not have permission to serve this specific
-        // asset even if it works for others in the same job.
         if !discovery_attempted {
             discovery_attempted = true;
             let before = candidate_urls.len();
@@ -613,7 +551,6 @@ pub async fn download_animation_asset_with_progress(
         break 'phases;
     }
 
-    // Fall back to the Wayback Machine if all other resolution methods fail.
     if place_ids.is_empty()
         && (last_error.contains("Permission Denied") || last_error.contains("Conflict"))
     {

@@ -6,9 +6,6 @@ import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Switch } from '../../ui/switch';
 
-/**
- * Standardized Settings Card container with compact, zero-waste layout.
- */
 export function SettingCard({
   icon: Icon,
   title,
@@ -55,9 +52,6 @@ export function SettingCard({
   );
 }
 
-/**
- * Standardized Toggle Setting Row (Label + Subtitle on Left, Switch on Right).
- */
 export function SettingSwitchRow({
   label,
   description,
@@ -91,9 +85,6 @@ export function SettingSwitchRow({
   );
 }
 
-/**
- * Standardized Input Field Setting Row.
- */
 export function SettingFieldRow({
   label,
   description,
@@ -133,9 +124,6 @@ export function SettingFieldRow({
   );
 }
 
-/**
- * Custom-designed modern Slider Setting Item.
- */
 export function SettingSliderItem({
   label,
   description,
@@ -172,14 +160,13 @@ export function SettingSliderItem({
       </div>
 
       <div className="relative flex items-center w-full py-1">
-        {/* Custom Track Background */}
         <div className="w-full h-1.5 bg-bg-base border border-border-subtle/70 rounded-full overflow-hidden relative">
           <div
             className="h-full bg-primary transition-all duration-75 rounded-full"
             style={{ width: `${pct}%` }}
           />
         </div>
-        {/* Native Range input overlay */}
+
         <input
           type="range"
           min={min}
@@ -189,7 +176,7 @@ export function SettingSliderItem({
           onChange={(e) => onChange(Number(e.target.value))}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         />
-        {/* Custom Draggable Thumb */}
+
         <div
           className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-primary shadow-xs border border-white pointer-events-none transition-all duration-75"
           style={{ left: `${pct}%` }}

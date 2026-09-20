@@ -1,16 +1,10 @@
-//! Lifecycle commands invoked when the Tauri app boots up.
-
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
 
-/// Destroys the splashscreen window and spawns the main frameless React window.
-///
-/// This avoids the ugly white flash during React initialization.
 #[tauri::command]
 #[specta::specta]
 pub async fn close_splashscreen(app: AppHandle) {
-    // Dynamically create main window only after splash is done
     if app.get_webview_window("main").is_none() {
         match tauri::WebviewWindowBuilder::new(
             &app,
@@ -31,8 +25,7 @@ pub async fn close_splashscreen(app: AppHandle) {
             }
             Err(e) => {
                 log::error!("Failed to create main window: {e}");
-                // If the window already exists despite the initial check losing the race,
-                // show it; otherwise there is nothing we can do.
+
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.show();
                 }
@@ -45,7 +38,6 @@ pub async fn close_splashscreen(app: AppHandle) {
     }
 }
 
-/// Resolve all OS-specific Roblox Studio Plugins directories.
 fn roblox_plugins_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
@@ -85,10 +77,6 @@ fn is_owned_plugin_file_name(file_name: &str) -> bool {
         })
 }
 
-/// Automatically installs or updates the ISpooferMotion Luau plugin in Studio's local plugins folder.
-///
-/// The `.rbxmx` plugin file is bundled into the Tauri binary at compile-time.
-/// When the app boots, this copies it directly into Roblox plugins folders.
 #[tauri::command]
 #[specta::specta]
 pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
@@ -98,12 +86,9 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
 
     log::info!("Starting Roblox plugin sync...");
 
-    // The bundled resource path varies between installed (NSIS) and standalone
-    // (--no-bundle) builds. Try every candidate and use the first that exists.
     let resource_path: Option<PathBuf> = {
         let mut candidates: Vec<PathBuf> = Vec::new();
 
-        // Tauri resource paths (installed builds).
         if let Ok(p) = app
             .path()
             .resolve("_up_/dist-plugin/ISpooferMotion.rbxmx", tauri::path::BaseDirectory::Resource)
@@ -117,7 +102,6 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
             candidates.push(p);
         }
 
-        // Standalone exe or dev run: check direct relative paths from current_dir or workspace root.
         let local_candidates = [
             PathBuf::from("dist-plugin").join("ISpooferMotion.rbxmx"),
             PathBuf::from("tmp_clone").join("dist-plugin").join("ISpooferMotion.rbxmx"),
@@ -181,9 +165,6 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
             }
         };
 
-        // Keep the previous plugin intact until the replacement has been copied fully.
-        // POSIX rename replaces the destination atomically, so macOS/Linux never have a window
-        // where the canonical plugin is missing. Windows cannot rename over an existing file.
         #[cfg(target_os = "windows")]
         let install_result = {
             let backup_path = dest_dir.join(".ISpooferMotion.rbxmx.backup");
@@ -229,7 +210,6 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
             continue;
         }
 
-        // Clean up older/duplicate plugin filenames only after the canonical copy exists.
         if let Ok(mut entries) = tokio::fs::read_dir(&dest_dir).await {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();
@@ -251,7 +231,6 @@ pub async fn sync_roblox_plugin(app: AppHandle) -> crate::error::Result<bool> {
     Ok(any_copied)
 }
 
-/// Uninstalls (deletes) the ISpooferMotion plugin from Roblox's plugins folder on app exit.
 pub fn uninstall_roblox_plugin() {
     for dest_dir in roblox_plugins_dirs() {
         if let Ok(entries) = std::fs::read_dir(&dest_dir) {

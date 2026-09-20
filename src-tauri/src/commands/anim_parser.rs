@@ -1,15 +1,8 @@
-//! Parses Roblox XML animation data into a structured JSON payload for the UI.
-//!
-//! Because animations are stored as a complex tree of Poses inside Keyframes,
-//! we traverse the `rbx_dom_weak` XML tree and convert the CFrames and EasingStyles
-//! into a clean, flat format the React frontend can consume for the 3D viewer.
-
 use rbx_dom_weak::types::Variant;
 use rbx_dom_weak::WeakDom;
 use serde::Serialize;
 use specta::Type;
 
-/// Represents a single joint/bone's transform at a specific point in time.
 #[derive(Serialize, Clone, Type)]
 pub struct RobloxPose {
     pub name: String,
@@ -22,14 +15,12 @@ pub struct RobloxPose {
     pub easing_direction: i32,
 }
 
-/// A specific moment in time within an animation clip.
 #[derive(Serialize, Clone, Type)]
 pub struct RobloxKeyframe {
     pub time: f32,
     pub poses: Vec<RobloxPose>,
 }
 
-/// The root structure of a Roblox animation containing all keyframes.
 #[derive(Serialize, Clone, Type)]
 pub struct RobloxAnimationClip {
     #[serde(rename = "loop")]
@@ -43,7 +34,6 @@ fn get_prop<'a>(instance: &'a rbx_dom_weak::Instance, key: &str) -> Option<&'a V
     instance.properties.iter().find(|(k, _)| k.as_str() == key).map(|(_, v)| v)
 }
 
-/// Recursively parses child `Pose` nodes into `RobloxPose` structs.
 fn parse_poses(dom: &WeakDom, referent: rbx_dom_weak::types::Ref) -> Vec<RobloxPose> {
     let Some(instance) = dom.get_by_ref(referent) else {
         return vec![];
@@ -118,8 +108,6 @@ fn find_keyframe_sequence(
     None
 }
 
-/// Takes raw Roblox XML (`<roblox!>...`) containing a `KeyframeSequence`
-/// and converts it into a `RobloxAnimationClip` for the frontend.
 #[tauri::command]
 #[specta::specta]
 pub fn parse_animation_data(xml: String) -> Result<Option<RobloxAnimationClip>, String> {
@@ -134,7 +122,7 @@ pub fn parse_animation_data(xml: String) -> Result<Option<RobloxAnimationClip>, 
     let kfs_ref = find_keyframe_sequence(&dom, dom.root_ref());
 
     let mut loop_flag = false;
-    let mut priority = 2; // Core
+    let mut priority = 2;
 
     if let Some(ref_id) = kfs_ref {
         if let Some(kfs_instance) = dom.get_by_ref(ref_id) {

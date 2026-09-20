@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import {
   ArrowDownUp,
   Bug,
@@ -15,7 +14,6 @@ import { useEffect, useRef, useState } from 'react';
 
 import { useLanguage } from '../../contexts/LanguageContext';
 import { cn } from '../../lib/utils';
-import { pageVariants } from '../../utils/animations';
 import ExclusionsSection from './config/ExclusionsSection';
 import RoutingSection from './config/RoutingSection';
 import UploadSection from './config/UploadSection';
@@ -27,11 +25,6 @@ import DangerCard from './settings/DangerCard';
 import DebugCard from './settings/DebugCard';
 import PermissionsCard from './settings/PermissionsCard';
 
-/**
- * Settings — unified scrollspy viewport rendering standardized setting cards.
- * Scrolling through the page highlights the active left tab, and clicking a tab
- * smoothly scrolls directly to that section.
- */
 export default function SettingsView() {
   const { t } = useLanguage();
   const [tab, setTab] = useState('credentials');
@@ -117,15 +110,8 @@ export default function SettingsView() {
   }, [t]);
 
   return (
-    <motion.div
-      variants={pageVariants}
-      initial="hidden"
-      animate="show"
-      exit="exit"
-      className="w-full h-full overflow-hidden"
-    >
+    <div className="w-full h-full overflow-hidden">
       <div className="w-full h-full p-4 lg:p-6 flex">
-        {/* Left Sub-Tab Nav */}
         <div className="w-52 shrink-0 flex flex-col gap-1 pr-4 border-r border-border-subtle overflow-y-auto scrollbar-hide">
           {tabs.map((tb) => (
             <button
@@ -147,7 +133,6 @@ export default function SettingsView() {
           ))}
         </div>
 
-        {/* Right Scrollspy Viewport */}
         <div
           id="settings-scroll-container"
           className="flex-1 overflow-y-auto pl-6 flex flex-col gap-6 pb-32 scroll-smooth"
@@ -193,6 +178,6 @@ export default function SettingsView() {
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

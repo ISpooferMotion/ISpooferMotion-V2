@@ -1,21 +1,14 @@
 --!nocheck
 --!nolint
 --# selene: allow(global_usage, shadowing, unused_variable)
---- Minimal unit test runner for the plugin environment.
----
---- Because the plugin runs inside Roblox Studio, we cannot easily use
---- external test frameworks like Jest. This script provides a lightweight
---- testing harness to verify core logic without a full Studio session.
 local tests_passed = 0
 local tests_failed = 0
 
---- Defines a logical group of tests.
 local function describe(name, callback)
 	print("TEST SUITE: " .. name)
 	callback()
 end
 
---- Runs a single test case, catching any errors.
 local function it(name, callback)
 	local success, err = pcall(callback)
 	if success then
@@ -28,7 +21,6 @@ local function it(name, callback)
 	end
 end
 
---- Basic assertion wrapper for tests.
 local function expect(value)
 	return {
 		to_equal = function(expected)
@@ -44,7 +36,6 @@ local function expect(value)
 	}
 end
 
--- Mocks for Roblox globals
 local plugin = {
 	CreateToolbar = function(_self, _name)
 		return {
@@ -109,7 +100,6 @@ local AssetService = {}
 local ScriptEditorService = {}
 local task = { wait = function() end }
 
--- Dummy declarations to satisfy IDE Luau Language Server
 local startPolling: any
 local hidePluginGui: any
 local togglePluginGui: any
@@ -130,7 +120,6 @@ local BASE_URL: any
 --#include "../src/bridge/discovery.luau"
 --#include "../src/bridge/polling.luau"
 
--- Tests
 describe("Plugin Initialization", function()
 	it("should provide mock plugin object", function()
 		expect(plugin ~= nil).to_be_truthy()
@@ -159,7 +148,6 @@ describe("registry.luau", function()
 		local mockInstance = { ClassName = "Part", Parent = {} }
 		local token = registerObject(mockInstance)
 
-		-- Destroy the object
 		mockInstance.Parent = nil
 		expect(getRegisteredObject(token) == nil).to_be_truthy()
 	end)

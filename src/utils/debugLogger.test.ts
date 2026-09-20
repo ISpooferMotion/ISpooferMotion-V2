@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { addDebugLog, getDebugLogs, clearDebugLogs, subscribeDebugLogs } from './debugLogger';
 import { invoke } from '@tauri-apps/api/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { addDebugLog, clearDebugLogs, getDebugLogs, subscribeDebugLogs } from './debugLogger';
 import * as tauriRuntime from './tauriRuntime';
 
 describe('debugLogger', () => {
@@ -38,7 +39,7 @@ describe('debugLogger', () => {
     addDebugLog('error', [err]);
 
     const logs = getDebugLogs();
-    expect(logs[0].message).toContain('Something broke'); // Could contain stack trace
+    expect(logs[0].message).toContain('Something broke');
   });
 
   it('handles object payloads', () => {
@@ -53,12 +54,10 @@ describe('debugLogger', () => {
     const listener = vi.fn();
     const unsubscribe = subscribeDebugLogs(listener);
 
-    // Initial call on subscribe
     expect(listener).toHaveBeenCalledWith([]);
 
     addDebugLog('info', ['New log']);
 
-    // Listeners are called asynchronously via setTimeout(0)
     vi.runAllTimers();
 
     expect(listener).toHaveBeenCalledTimes(2);
@@ -84,7 +83,7 @@ describe('debugLogger', () => {
     }
     const logs = getDebugLogs();
     expect(logs.length).toBe(1000);
-    expect(logs[999].message).toBe('log 1009'); // The very last one
+    expect(logs[999].message).toBe('log 1009');
   });
 
   describe('global hooks', () => {

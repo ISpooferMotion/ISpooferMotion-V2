@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from 'framer-motion';
 import { Palette } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HexAlphaColorPicker } from 'react-colorful';
@@ -111,7 +110,7 @@ export default function AppearanceCard() {
             {(accentColor || '#3B82F6').toUpperCase()}
           </span>
           <div
-            className="w-7 h-7 rounded-full border border-border cursor-pointer shadow-xs transition-transform hover:scale-110 shrink-0"
+            className="w-7 h-7 rounded-full border border-border cursor-pointer shadow-xs shrink-0"
             style={{ backgroundColor: accentColor || '#3B82F6' }}
             onClick={(e: React.MouseEvent) => {
               e.stopPropagation();
@@ -126,45 +125,40 @@ export default function AppearanceCard() {
         </div>
 
         {createPortal(
-          <AnimatePresence>
-            {isColorPickerOpen && (
-              <div className="fixed inset-0 z-9999 pointer-events-none">
-                <div
-                  className="absolute inset-0 z-490 pointer-events-auto"
-                  onClick={(e: React.MouseEvent) => {
-                    e.stopPropagation();
-                    setIsColorPickerOpen(false);
-                  }}
-                />
+          isColorPickerOpen && (
+            <div className="fixed inset-0 z-9999 pointer-events-none">
+              <div
+                className="absolute inset-0 z-490 pointer-events-auto"
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  setIsColorPickerOpen(false);
+                }}
+              />
 
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  className="absolute z-500 p-0 border border-border rounded-xl overflow-hidden shadow-2xl bg-bg-surface flex flex-col pointer-events-auto"
-                  onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                  style={{
-                    top: pickerCoords.top,
-                    left: pickerCoords.left,
-                  }}
-                >
-                  <HexAlphaColorPicker color={localAccent} onChange={handleColorChange} />
-                  <div className="p-3 border-t border-border flex items-center justify-between bg-bg-elevated/50">
-                    <span className="text-xs font-bold text-text-muted">{t('common.hex')}</span>
-                    <input
-                      type="text"
-                      value={localAccent.toUpperCase()}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        handleColorChange(e.target.value)
-                      }
-                      className="bg-bg-base text-text-primary text-xs font-mono px-2 py-1 rounded w-24 text-center border border-border-subtle outline-none focus:border-primary transition-colors"
-                    />
-                  </div>
-                </motion.div>
+              <div
+                className="absolute z-500 p-0 border border-border rounded-xl overflow-hidden shadow-2xl bg-bg-surface flex flex-col pointer-events-auto"
+                onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                style={{
+                  top: pickerCoords.top,
+                  left: pickerCoords.left,
+                }}
+              >
+                <HexAlphaColorPicker color={localAccent} onChange={handleColorChange} />
+                <div className="p-3 border-t border-border flex items-center justify-between bg-bg-elevated/50">
+                  <span className="text-xs font-bold text-text-muted">{t('common.hex')}</span>
+                  <input
+                    type="text"
+                    value={localAccent.toUpperCase()}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      handleColorChange(e.target.value)
+                    }
+                    className="bg-bg-base text-text-primary text-xs font-mono px-2 py-1 rounded w-24 text-center border border-border-subtle outline-none focus:border-primary transition-colors"
+                  />
+                </div>
               </div>
-            )}
-          </AnimatePresence>,
+            </div>
+          ),
           document.body,
         )}
       </div>

@@ -14,7 +14,6 @@ export interface LogEntry {
   timestamp: string;
 }
 
-// Lazy loaded to prevent circular dependencies.
 let cachedConfigStore: typeof import('../stores/configStore') | null = null;
 
 const MAX_LOGS = 1000;
@@ -50,7 +49,6 @@ declare global {
   }
 }
 
-// Initialize or retrieve global logger state across hot reloads.
 function getState(): DebugLoggerState {
   if (!window.__ismDebugLogger) {
     window.__ismDebugLogger = {
@@ -77,10 +75,6 @@ function formatArg(arg: unknown): string {
   }
 }
 
-/**
- * Injects a new log line into the in-memory circular buffer and optionally forwards
- * it to the Rust backend (for disk persistence) and triggers desktop notifications.
- */
 export function addDebugLog(
   level: LogLevel,
   args: unknown[],
@@ -100,7 +94,6 @@ export function addDebugLog(
     timestamp: timeFormatter.format(new Date()),
   };
 
-  // Set a default message if only a payload is provided.
   if (!entry.message && entry.payload) {
     entry.message = 'Object logged';
   }
@@ -177,17 +170,10 @@ export function clearDebugLogs() {
   state.listeners.forEach((listener) => listener([]));
 }
 
-/**
- * Monkey-patches `console.log`, `console.warn`, etc. globally.
- *
- * This ensures that any standard React/library logs get funneled into our custom
- * Debug Console view in the app UI, not just hidden away in the WebView inspector.
- */
 function installDebugLogger() {
   const state = getState();
   if (state.patched) return;
 
-  // Intercept and record console output.
   const originals = {
     log: Reflect.get(console, 'log').bind(console),
     info: Reflect.get(console, 'info').bind(console),
@@ -250,7 +236,6 @@ function installDebugLogger() {
 
           const message = payload.message || JSON.stringify(payload);
 
-          // Prevent feedback loop: don't log messages that originated from JS append_debug_log
           if (typeof message === 'string' && message.includes('[ui]')) return;
           if (typeof message === 'string' && message.includes('[ism]')) return;
           if (typeof message === 'string' && message.includes('[console]')) return;

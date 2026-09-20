@@ -1,7 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   Check,
   ChevronDown,
@@ -160,7 +159,6 @@ function buildDataModelTree(
     const parts = rawPath.split('.').filter(Boolean);
     if (parts.length === 0) continue;
 
-    // For script refs without physical instance hierarchy, group under script container
     const isScriptRef = item.type === 'script_ref';
     const targetNode = isScriptRef
       ? getOrCreateNode(parts.length > 1 ? parts.slice(0, -1) : parts, 'Script')
@@ -169,7 +167,6 @@ function buildDataModelTree(
     const assetId = a.assetId ?? '';
     const propName = a.property ?? a.callType ?? a.sourceHint ?? '';
 
-    // If this asset property is already on this node, skip duplicate
     if (
       targetNode.assets.some(
         (ref) => ref.assetId === assetId && ref.propertyName === propName && ref.type === item.type,
@@ -178,7 +175,6 @@ function buildDataModelTree(
       continue;
     }
 
-    // Skip alias properties on the same instance
     const isAliasProperty =
       (propName === 'AnimationContent' &&
         targetNode.assets.some((r) => r.propertyName === 'AnimationId')) ||
@@ -231,7 +227,6 @@ export default function AssetExplorer({
   const [scanTypes, setScanTypes] = useState<Set<string>>(
     new Set(['sounds', 'animations', 'images', 'meshes', 'scripts']),
   );
-  const [scriptMode, setScriptMode] = useState<string>('assetIds');
   const [showScanOptions, setShowScanOptions] = useState(false);
 
   const toggleScanType = (key: string) => {
@@ -261,7 +256,7 @@ export default function AssetExplorer({
     );
     document.dispatchEvent(
       new CustomEvent('ism-start-scan', {
-        detail: { scanTypes: types, scriptScanMode: scriptMode, scanPath: p.trim() },
+        detail: { scanTypes: types, scanPath: p.trim() },
       }),
     );
     setTargetedScanOpen(false);
@@ -277,6 +272,7 @@ export default function AssetExplorer({
   const rootInstances = useSpooferStore((s) => s.rootInstances);
   const setRootInstances = useSpooferStore((s) => s.setRootInstances);
   const setLoadedFileName = useSpooferStore((s) => s.setLoadedFileName);
+  const setLoadedFilePath = useSpooferStore((s) => s.setLoadedFilePath);
   const selectedAssetIds = useSpooferStore((s) => s.selectedAssetIds);
   const setSelectedAssetIds = useSpooferStore((s) => s.setSelectedAssetIds);
   const selectedAssetKeys = useSpooferStore((s) => s.selectedAssetKeys);
@@ -413,8 +409,6 @@ export default function AssetExplorer({
       const children = buildDataModelTree(allInitialAssets);
 
       if (children.length === 0 && scriptRefAssets.length === 0) {
-        // Return early so an empty background poll doesn't inject a studio-root on startup,
-        // while preserving any studio-root manually created by "Connect to explorer without scanning".
         return;
       }
 
@@ -430,7 +424,6 @@ export default function AssetExplorer({
       setLoadedFileName((prev) => prev ?? studioDisplayName);
       useSpooferStore.getState().setLastScanTime(Date.now());
 
-      // Resolve script ref asset types on the Rust backend
       if (scriptRefAssets.length > 0 && isTauriRuntime()) {
         const uniqueIds = Array.from(
           new Set(scriptRefAssets.map((a) => a.assetId).filter((id): id is string => Boolean(id))),
@@ -563,8 +556,6 @@ export default function AssetExplorer({
       return;
     }
 
-    // If specific assets are selected and have stored replacements, prioritize them;
-    // otherwise apply all stored replacements.
     let toApply: Record<string, string> = {};
     if (selectedAssetIds.size > 0) {
       for (const id of selectedAssetIds) {
@@ -780,600 +771,405 @@ export default function AssetExplorer({
   }, [displayedInstances]);
 
   return (
-    <motion.div
-      initial={false}
-      animate={{ width: '100%', opacity: 1 }}
-      className="h-full bg-background flex flex-col shrink-0 overflow-hidden relative w-full border-l-0"
-    >
-      <AnimatePresence>
-        {isDragOver && (
-          <motion.div
-            key="asset-drag-drop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 flex items-center justify-center bg-bg-surface/90 backdrop-blur-sm border-2 border-dashed border-primary m-1 rounded-md pointer-events-none"
-          >
-            <div className="flex flex-col items-center gap-3 text-primary">
-              <FileUp size={28} />
-              <span className="font-semibold text-sm">{t('misc.dropRbxl')}</span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        <motion.div
-          key="asset-explorer-body"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="flex-1 overflow-y-auto scrollbar-hide w-full flex flex-col"
+    <div className="h-full bg-background flex flex-col shrink-0 overflow-hidden relative w-full border-l-0">
+      {isDragOver && (
+        <div
+          key="asset-drag-drop"
+          className="absolute inset-0 z-50 flex items-center justify-center bg-bg-surface/90 border-2 border-dashed border-primary m-1 rounded-md pointer-events-none"
         >
-          {displayedInstances.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.35 }}
-              className="flex-1 flex flex-col items-center justify-center gap-6 p-8 overflow-y-auto"
-            >
-              <img
-                src="/ism_logo_theme_swap.svg"
-                alt="ISpooferMotion"
-                className="w-28 h-28 object-contain select-none drop-shadow-md"
-                draggable={false}
-              />
+          <div className="flex flex-col items-center gap-3 text-primary">
+            <FileUp size={28} />
+            <span className="font-semibold text-sm">{t('misc.dropRbxl')}</span>
+          </div>
+        </div>
+      )}
 
-              {(studioConnected && scanStatus?.scanning) || isScanningStudio ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 size={20} className="animate-spin text-primary" />
-                  <span className="text-xs font-bold text-primary">{t('misc.scanningStudio')}</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  {/* Open file split button with options */}
-                  <div className="flex items-center rounded-lg overflow-hidden border border-border-strong shadow-sm bg-bg-surface">
-                    <button
-                      type="button"
-                      data-tutorial-target="explorer-open-file"
-                      onClick={async () => {
-                        try {
-                          const selected = await openFilePicker({
-                            multiple: false,
-                            filters: [
-                              {
-                                name: 'Roblox Place',
-                                extensions: ['rbxl', 'rbxlx', 'rbxm', 'rbxmx'],
-                              },
-                            ],
-                          });
-                          const path = Array.isArray(selected) ? selected[0] : selected;
-                          if (!path) return;
-                          const result = await invoke<{
-                            instances: Array<{
-                              className: string;
-                              name: string;
-                              referent: string;
-                              children?: unknown[];
-                              assets?: Array<{
-                                assetId?: string;
-                                type: string;
-                                instanceName?: string;
-                                path?: string;
-                                rawValue?: string;
-                              }>;
-                            }>;
-                          }>('parse_place_file', { filePath: path });
-                          // Filter incoming assets by active scanTypes
-                          const filterCategory = (type: string) => {
-                            if (type === 'animation' || type === 'raw_keyframe_sequence')
-                              return scanTypes.has('animations');
-                            if (type === 'audio') return scanTypes.has('sounds');
-                            if (type === 'image') return scanTypes.has('images');
-                            if (type === 'mesh') return scanTypes.has('meshes');
-                            if (type === 'script_ref') return scanTypes.has('scripts');
-                            return true;
-                          };
+      <div
+        key="asset-explorer-body"
+        className="flex-1 overflow-y-auto scrollbar-hide w-full flex flex-col"
+      >
+        {displayedInstances.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8 overflow-y-auto">
+            <img
+              src="/ism_logo_theme_swap.svg"
+              alt="ISpooferMotion"
+              className="w-28 h-28 object-contain select-none drop-shadow-md"
+              draggable={false}
+            />
 
-                          const filterTree = (nodes: RbxInstance[]): RbxInstance[] => {
-                            return nodes
-                              .map((node) => ({
-                                ...node,
-                                assets: node.assets.filter((a) => filterCategory(a.type)),
-                                children: filterTree(node.children),
-                              }))
-                              .filter((node) => node.assets.length > 0 || node.children.length > 0);
-                          };
-
-                          const incoming = (result?.instances ?? []) as RbxInstance[];
-                          const filteredIncoming = filterTree(incoming);
-                          useSpooferStore.getState().setRootInstances(filteredIncoming);
-                          useSpooferStore
-                            .getState()
-                            .setLoadedFileName(path.split(/[\\/]/).pop() ?? path);
-                          logIsm('success', `Loaded place file: ${path}`);
-                        } catch (err) {
-                          logIsm('error', `Failed to load place file: ${String(err)}`);
-                        }
-                      }}
-                      className="flex items-center justify-center gap-2 px-5 h-11 text-text-primary font-bold text-sm hover:bg-bg-elevated disabled:opacity-50 transition-colors cursor-pointer"
-                    >
-                      <FolderOpen size={18} />
-                      Open File
-                    </button>
-
-                    <Popover>
-                      <PopoverTrigger
-                        render={
-                          <button
-                            type="button"
-                            className="h-11 w-10 text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors border-l border-border flex items-center justify-center cursor-pointer"
-                            title="File extraction options"
-                          >
-                            <Settings2 size={16} />
-                          </button>
-                        }
-                      />
-                      <PopoverContent
-                        align="center"
-                        side="bottom"
-                        sideOffset={8}
-                        className="w-72 p-3 bg-bg-surface border border-border shadow-xl rounded-lg z-[210]"
-                      >
-                        <div className="flex flex-col gap-3">
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">
-                              Asset Types
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {[
-                                { key: 'sounds', label: 'Sounds' },
-                                { key: 'animations', label: 'Animations' },
-                                { key: 'images', label: 'Images' },
-                                { key: 'meshes', label: 'Meshes' },
-                                { key: 'scripts', label: 'Scripts' },
-                              ].map((type) => (
-                                <button
-                                  key={type.key}
-                                  type="button"
-                                  onClick={() => toggleScanType(type.key)}
-                                  className={cn(
-                                    'px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors cursor-pointer',
-                                    scanTypes.has(type.key)
-                                      ? 'bg-primary/15 border-primary/40 text-primary'
-                                      : 'bg-bg-base border-border-subtle text-text-muted hover:text-text-primary hover:border-border',
-                                  )}
-                                >
-                                  {scanTypes.has(type.key) && (
-                                    <Check size={9} className="inline mr-1" />
-                                  )}
-                                  {type.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">
-                              Script Mode
-                            </span>
-                            <div className="flex rounded-md overflow-hidden border border-border-subtle bg-bg-base">
-                              {[
-                                { key: 'assetIds', label: 'Fast IDs' },
-                                { key: 'fullSource', label: 'Full Source' },
-                                { key: 'off', label: 'Off' },
-                              ].map((mode) => (
-                                <button
-                                  key={mode.key}
-                                  type="button"
-                                  onClick={() => setScriptMode(mode.key)}
-                                  className={cn(
-                                    'flex-1 h-7 text-[10px] font-semibold transition-colors cursor-pointer',
-                                    scriptMode === mode.key
-                                      ? 'bg-primary text-primary-foreground'
-                                      : 'text-text-muted hover:text-text-primary hover:bg-bg-elevated',
-                                  )}
-                                >
-                                  {mode.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  {/* Split button container — unifies Scan Studio + settings gear into one widget */}
-                  <div className="flex items-center rounded-lg overflow-hidden border border-primary/20 shadow-sm">
-                    {/* Main action — starts scan with current settings */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!studioConnected) {
-                          showToast(
-                            'error',
-                            'No Roblox Studio plugin connected. Please connect Studio first.',
-                          );
-                          return;
-                        }
-                        const types = [
-                          'sounds',
-                          'animations',
-                          'images',
-                          'meshes',
-                          'scripts',
-                        ].filter((k) => scanTypes.has(k));
-                        document.dispatchEvent(
-                          new CustomEvent('ism-start-scan', {
-                            detail: { scanTypes: types, scriptScanMode: scriptMode },
-                          }),
-                        );
-                      }}
-                      data-tutorial-target="explorer-scan-studio"
-                      disabled={scanTypes.size === 0}
-                      className={cn(
-                        'flex items-center justify-center gap-2 px-6 h-11 bg-primary text-primary-foreground font-bold text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors',
-                        !studioConnected && 'opacity-70',
-                      )}
-                      title={
-                        !studioConnected
-                          ? 'Requires Roblox Studio plugin to be connected'
-                          : undefined
-                      }
-                    >
-                      <ScanSearch size={18} />
-                      {t('spoof.scanStudio')}
-                    </button>
-
-                    {/* Gear split — opens floating popover, zero layout shift */}
-                    <Popover open={showScanOptions} onOpenChange={setShowScanOptions}>
-                      <PopoverTrigger
-                        render={
-                          <button
-                            type="button"
-                            className="h-11 w-10 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors border-l border-primary-foreground/20 flex items-center justify-center"
-                          >
-                            <Settings2 size={16} />
-                          </button>
-                        }
-                      />
-                      <PopoverContent
-                        align="center"
-                        side="bottom"
-                        sideOffset={8}
-                        className="w-72 p-3 bg-bg-surface border border-border shadow-xl rounded-lg z-[210]"
-                      >
-                        <div className="flex flex-col gap-3">
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">
-                              Asset Types
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {[
-                                { key: 'sounds', label: 'Sounds' },
-                                { key: 'animations', label: 'Animations' },
-                                { key: 'images', label: 'Images' },
-                                { key: 'meshes', label: 'Meshes' },
-                                { key: 'scripts', label: 'Scripts' },
-                              ].map((type) => (
-                                <button
-                                  key={type.key}
-                                  type="button"
-                                  onClick={() => toggleScanType(type.key)}
-                                  className={cn(
-                                    'px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors',
-                                    scanTypes.has(type.key)
-                                      ? 'bg-primary/15 border-primary/40 text-primary'
-                                      : 'bg-bg-base border-border-subtle text-text-muted hover:text-text-primary hover:border-border',
-                                  )}
-                                >
-                                  {scanTypes.has(type.key) && (
-                                    <Check size={9} className="inline mr-1" />
-                                  )}
-                                  {type.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">
-                              Script Mode
-                            </span>
-                            <div className="flex rounded-md overflow-hidden border border-border-subtle bg-bg-base">
-                              {[
-                                { key: 'assetIds', label: 'Fast IDs' },
-                                { key: 'fullSource', label: 'Full Source' },
-                                { key: 'off', label: 'Off' },
-                              ].map((mode) => (
-                                <button
-                                  key={mode.key}
-                                  type="button"
-                                  onClick={() => setScriptMode(mode.key)}
-                                  className={cn(
-                                    'flex-1 h-7 text-[10px] font-semibold transition-colors',
-                                    scriptMode === mode.key
-                                      ? 'bg-primary text-primary-foreground'
-                                      : 'text-text-muted hover:text-text-primary hover:bg-bg-elevated',
-                                  )}
-                                >
-                                  {mode.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-              )}
-
-              {/* Text link: Connect to explorer without scanning */}
-              {!((studioConnected && scanStatus?.scanning) || isScanningStudio) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!studioConnected) {
-                      showToast(
-                        'error',
-                        'No Roblox Studio plugin connected. Please connect Studio first.',
-                      );
-                      return;
-                    }
-                    setRootInstances((prev) =>
-                      prev.length > 0
-                        ? prev
-                        : [
+            {(studioConnected && scanStatus?.scanning) || isScanningStudio ? (
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 size={20} className="animate-spin text-primary" />
+                <span className="text-xs font-bold text-primary">{t('misc.scanningStudio')}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center rounded-lg overflow-hidden border border-border-strong shadow-sm bg-bg-surface">
+                  <button
+                    type="button"
+                    data-tutorial-target="explorer-open-file"
+                    onClick={async () => {
+                      try {
+                        const selected = await openFilePicker({
+                          multiple: false,
+                          filters: [
                             {
-                              referent: 'studio-root',
-                              className: 'Place',
-                              name: studioDisplayName,
-                              assets: [],
-                              children: [],
+                              name: 'Roblox Place',
+                              extensions: ['rbxl', 'rbxlx', 'rbxm', 'rbxmx'],
                             },
                           ],
+                        });
+                        const path = Array.isArray(selected) ? selected[0] : selected;
+                        if (!path) return;
+                        const result = await invoke<{ rootInstances: RbxInstance[] }>(
+                          'parse_place_file',
+                          { filePath: path },
+                        );
+
+                        const filterCategory = (type: string) => {
+                          if (type === 'animation' || type === 'raw_keyframe_sequence')
+                            return scanTypes.has('animations');
+                          if (type === 'audio') return scanTypes.has('sounds');
+                          if (type === 'image') return scanTypes.has('images');
+                          if (type === 'mesh') return scanTypes.has('meshes');
+                          if (type === 'script_ref') return scanTypes.has('scripts');
+                          return true;
+                        };
+
+                        const filterTree = (nodes: RbxInstance[]): RbxInstance[] => {
+                          return nodes
+                            .map((node) => ({
+                              ...node,
+                              assets: node.assets.filter((a) => filterCategory(a.type)),
+                              children: filterTree(node.children),
+                            }))
+                            .filter((node) => node.assets.length > 0 || node.children.length > 0);
+                        };
+
+                        const incoming = result.rootInstances ?? [];
+                        const filteredIncoming = filterTree(incoming);
+                        useSpooferStore.getState().setRootInstances(filteredIncoming);
+                        useSpooferStore
+                          .getState()
+                          .setLoadedFileName(path.split(/[\\/]/).pop() ?? path);
+                        setLoadedFilePath(path);
+                        logIsm('success', `Loaded place file: ${path}`);
+                      } catch (err) {
+                        logIsm('error', `Failed to load place file: ${String(err)}`);
+                      }
+                    }}
+                    className="flex items-center justify-center gap-2 px-5 h-11 text-text-primary font-bold text-sm hover:bg-bg-elevated disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    <FolderOpen size={18} />
+                    Open File
+                  </button>
+
+                  <Popover>
+                    <PopoverTrigger
+                      render={
+                        <button
+                          type="button"
+                          className="h-11 w-10 text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors border-l border-border flex items-center justify-center cursor-pointer"
+                          title="File extraction options"
+                        >
+                          <Settings2 size={16} />
+                        </button>
+                      }
+                    />
+                    <PopoverContent
+                      align="center"
+                      side="bottom"
+                      sideOffset={8}
+                      className="w-72 p-3 bg-bg-surface border border-border shadow-xl rounded-lg z-[210]"
+                    >
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">
+                            Asset Types
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { key: 'sounds', label: 'Sounds' },
+                              { key: 'animations', label: 'Animations' },
+                              { key: 'images', label: 'Images' },
+                              { key: 'meshes', label: 'Meshes' },
+                              { key: 'scripts', label: 'Scripts' },
+                            ].map((type) => (
+                              <button
+                                key={type.key}
+                                type="button"
+                                onClick={() => toggleScanType(type.key)}
+                                className={cn(
+                                  'px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors cursor-pointer',
+                                  scanTypes.has(type.key)
+                                    ? 'bg-primary/15 border-primary/40 text-primary'
+                                    : 'bg-bg-base border-border-subtle text-text-muted hover:text-text-primary hover:border-border',
+                                )}
+                              >
+                                {scanTypes.has(type.key) && (
+                                  <Check size={9} className="inline mr-1" />
+                                )}
+                                {type.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="flex items-center rounded-lg overflow-hidden border border-primary/20 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!studioConnected) {
+                        showToast(
+                          'error',
+                          'No Roblox Studio plugin connected. Please connect Studio first.',
+                        );
+                        return;
+                      }
+                      const types = ['sounds', 'animations', 'images', 'meshes', 'scripts'].filter(
+                        (k) => scanTypes.has(k),
+                      );
+                      document.dispatchEvent(
+                        new CustomEvent('ism-start-scan', {
+                          detail: { scanTypes: types },
+                        }),
+                      );
+                    }}
+                    data-tutorial-target="explorer-scan-studio"
+                    disabled={scanTypes.size === 0}
+                    className={cn(
+                      'flex items-center justify-center gap-2 px-6 h-11 bg-primary text-primary-foreground font-bold text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors',
+                      !studioConnected && 'opacity-70',
+                    )}
+                    title={
+                      !studioConnected ? 'Requires Roblox Studio plugin to be connected' : undefined
+                    }
+                  >
+                    <ScanSearch size={18} />
+                    {t('spoof.scanStudio')}
+                  </button>
+
+                  <Popover open={showScanOptions} onOpenChange={setShowScanOptions}>
+                    <PopoverTrigger
+                      render={
+                        <button
+                          type="button"
+                          className="h-11 w-10 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors border-l border-primary-foreground/20 flex items-center justify-center"
+                        >
+                          <Settings2 size={16} />
+                        </button>
+                      }
+                    />
+                    <PopoverContent
+                      align="center"
+                      side="bottom"
+                      sideOffset={8}
+                      className="w-72 p-3 bg-bg-surface border border-border shadow-xl rounded-lg z-[210]"
+                    >
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">
+                            Asset Types
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { key: 'sounds', label: 'Sounds' },
+                              { key: 'animations', label: 'Animations' },
+                              { key: 'images', label: 'Images' },
+                              { key: 'meshes', label: 'Meshes' },
+                              { key: 'scripts', label: 'Scripts' },
+                            ].map((type) => (
+                              <button
+                                key={type.key}
+                                type="button"
+                                onClick={() => toggleScanType(type.key)}
+                                className={cn(
+                                  'px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors',
+                                  scanTypes.has(type.key)
+                                    ? 'bg-primary/15 border-primary/40 text-primary'
+                                    : 'bg-bg-base border-border-subtle text-text-muted hover:text-text-primary hover:border-border',
+                                )}
+                              >
+                                {scanTypes.has(type.key) && (
+                                  <Check size={9} className="inline mr-1" />
+                                )}
+                                {type.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            )}
+
+            {!((studioConnected && scanStatus?.scanning) || isScanningStudio) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!studioConnected) {
+                    showToast(
+                      'error',
+                      'No Roblox Studio plugin connected. Please connect Studio first.',
                     );
-                    setLoadedFileName(studioDisplayName);
-                  }}
-                  className={cn(
-                    'text-xs text-text-muted hover:text-primary underline font-medium transition-colors cursor-pointer mt-1',
-                    !studioConnected && 'opacity-60 cursor-not-allowed hover:text-text-muted',
-                  )}
-                  title={
-                    !studioConnected ? 'Requires Roblox Studio plugin to be connected' : undefined
+                    return;
                   }
-                >
-                  Connect to explorer without scanning
-                </button>
-              )}
-            </motion.div>
-          ) : (
-            <div className="flex-1 flex flex-col overflow-hidden h-full w-full relative">
-              {/* Global spoofing / replacing / permissions progress bar as absolute overlay */}
-              {(isSpoofing || isReplacing || isGrantingPermissions) && (
-                <div className="absolute top-0 left-0 right-0 z-50 pointer-events-none">
-                  <div className="h-1 bg-bg-base w-full overflow-hidden shadow-md">
-                    <div
-                      className="h-full bg-primary transition-all duration-300"
-                      style={{
-                        width: `${
-                          isSpoofing
-                            ? spoofProgress
-                            : isReplacing
-                              ? replaceTotalCount > 0
+                  setRootInstances((prev) =>
+                    prev.length > 0
+                      ? prev
+                      : [
+                          {
+                            referent: 'studio-root',
+                            className: 'Place',
+                            name: studioDisplayName,
+                            assets: [],
+                            children: [],
+                          },
+                        ],
+                  );
+                  setLoadedFileName(studioDisplayName);
+                }}
+                className={cn(
+                  'text-xs text-text-muted hover:text-primary underline font-medium transition-colors cursor-pointer mt-1',
+                  !studioConnected && 'opacity-60 cursor-not-allowed hover:text-text-muted',
+                )}
+                title={
+                  !studioConnected ? 'Requires Roblox Studio plugin to be connected' : undefined
+                }
+              >
+                Connect to explorer without scanning
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col overflow-hidden h-full w-full relative">
+            {(isSpoofing || isReplacing || isGrantingPermissions) && (
+              <div className="absolute top-0 left-0 right-0 z-50 pointer-events-none">
+                <div className="h-1 bg-bg-base w-full overflow-hidden shadow-md">
+                  <div
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{
+                      width: `${
+                        isSpoofing
+                          ? spoofProgress
+                          : isReplacing
+                            ? replaceTotalCount > 0
+                              ? Math.min(
+                                  100,
+                                  Math.max(5, (replaceCurrentCount / replaceTotalCount) * 100),
+                                )
+                              : 50
+                            : isGrantingPermissions
+                              ? permissionsTotalCount > 0
                                 ? Math.min(
                                     100,
-                                    Math.max(5, (replaceCurrentCount / replaceTotalCount) * 100),
+                                    Math.max(
+                                      5,
+                                      (permissionsCurrentCount / permissionsTotalCount) * 100,
+                                    ),
                                   )
                                 : 50
-                              : isGrantingPermissions
-                                ? permissionsTotalCount > 0
-                                  ? Math.min(
-                                      100,
-                                      Math.max(
-                                        5,
-                                        (permissionsCurrentCount / permissionsTotalCount) * 100,
-                                      ),
-                                    )
-                                  : 50
-                                : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
-                  <div className="absolute top-1.5 right-3 px-2.5 py-0.5 rounded bg-bg-surface/90 border border-border-subtle text-[10px] text-text-primary font-mono shadow-sm pointer-events-auto flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                    <span>
-                      {isSpoofing
-                        ? `${spoofStatusText || 'Initializing...'}${spoofTotalCount > 0 ? ` · ${spoofCurrentCount}/${spoofTotalCount}` : ''}${activeEta ? ` · ${activeEta}` : ''}`
-                        : isReplacing
-                          ? `Replacing${replaceTotalCount > 0 ? ` · ${replaceCurrentCount}/${replaceTotalCount}` : '...'}${activeEta ? ` · ${activeEta}` : ''}`
-                          : isGrantingPermissions
-                            ? `Asset Permissions${permissionsTotalCount > 0 ? ` · ${permissionsCurrentCount}/${permissionsTotalCount}` : '...'}${activeEta ? ` · ${activeEta}` : ''}`
-                            : ''}
-                    </span>
-                  </div>
+                              : 0
+                      }%`,
+                    }}
+                  />
                 </div>
-              )}
-              <div className="flex-1 flex overflow-hidden w-full relative min-h-0">
-                {/* Left Panel: Tree Navigator */}
+                <div className="absolute top-1.5 right-3 px-2.5 py-0.5 rounded bg-bg-surface/90 border border-border-subtle text-[10px] text-text-primary font-mono shadow-sm pointer-events-auto flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  <span>
+                    {isSpoofing
+                      ? `${spoofStatusText || 'Initializing...'}${spoofTotalCount > 0 ? ` · ${spoofCurrentCount}/${spoofTotalCount}` : ''}${activeEta ? ` · ${activeEta}` : ''}`
+                      : isReplacing
+                        ? `Replacing${replaceTotalCount > 0 ? ` · ${replaceCurrentCount}/${replaceTotalCount}` : '...'}${activeEta ? ` · ${activeEta}` : ''}`
+                        : isGrantingPermissions
+                          ? `Asset Permissions${permissionsTotalCount > 0 ? ` · ${permissionsCurrentCount}/${permissionsTotalCount}` : '...'}${activeEta ? ` · ${activeEta}` : ''}`
+                          : ''}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="flex-1 flex overflow-hidden w-full relative min-h-0">
+              <div
+                className={cn(
+                  'h-full border-r border-border-subtle flex flex-col overflow-hidden shrink-0 transition-all duration-200',
+                  isRightPanelOpen ? 'w-1/2' : 'w-full border-r-0',
+                )}
+              >
                 <div
-                  className={cn(
-                    'h-full border-r border-border-subtle flex flex-col overflow-hidden shrink-0 transition-all duration-200',
-                    isRightPanelOpen ? 'w-1/2' : 'w-full border-r-0',
-                  )}
+                  data-tutorial-target="explorer-tree"
+                  className="flex flex-col flex-1 p-2 overflow-y-auto scrollbar-hide"
                 >
-                  <div
-                    data-tutorial-target="explorer-tree"
-                    className="flex flex-col flex-1 p-2 overflow-y-auto scrollbar-hide"
-                  >
-                    {stats.total === 0 ? (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center p-6 gap-3 select-none h-full bg-bg-surface/5">
-                        <FolderOpen size={36} className="text-primary/30 animate-pulse" />
-                        <div className="space-y-1 max-w-xs">
-                          <h4 className="text-xs font-bold text-text-primary">
-                            {isScanningStudio || (studioConnected && scanStatus?.scanning)
-                              ? 'Scanning Studio...'
-                              : 'No Assets Scanned Yet'}
-                          </h4>
-                          <p className="text-[11px] text-text-secondary leading-relaxed">
-                            {isScanningStudio || (studioConnected && scanStatus?.scanning)
-                              ? 'Crawling Roblox Studio for spoofable assets...'
-                              : 'You connected without a full scan. You can scan Studio, run a targeted model scan, or add manual IDs.'}
-                          </p>
-                        </div>
+                  {stats.total === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-6 gap-3 select-none h-full bg-bg-surface/5">
+                      <FolderOpen size={36} className="text-primary/30" />
+                      <div className="space-y-1 max-w-xs">
+                        <h4 className="text-xs font-bold text-text-primary">
+                          {isScanningStudio || (studioConnected && scanStatus?.scanning)
+                            ? 'Scanning Studio...'
+                            : 'No Assets Scanned Yet'}
+                        </h4>
+                        <p className="text-[11px] text-text-secondary leading-relaxed">
+                          {isScanningStudio || (studioConnected && scanStatus?.scanning)
+                            ? 'Crawling Roblox Studio for spoofable assets...'
+                            : 'You connected without a full scan. You can scan Studio, run a targeted model scan, or add manual IDs.'}
+                        </p>
+                      </div>
 
-                        {!isScanningStudio && (
-                          <div className="flex flex-col gap-2 w-full max-w-xs mt-2">
-                            {/* Split button: Scan Studio + Settings Gear */}
-                            <div className="flex items-center rounded-lg overflow-hidden border border-primary/20 shadow-sm w-full">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const types = [
-                                    'sounds',
-                                    'animations',
-                                    'images',
-                                    'meshes',
-                                    'scripts',
-                                  ].filter((k) => scanTypes.has(k));
-                                  document.dispatchEvent(
-                                    new CustomEvent('ism-start-scan', {
-                                      detail: { scanTypes: types, scriptScanMode: scriptMode },
-                                    }),
-                                  );
-                                }}
-                                disabled={scanTypes.size === 0 || !studioConnected}
-                                className="flex-1 flex items-center justify-center gap-2 h-8 bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                              >
-                                <ScanSearch size={14} />
-                                <span>Scan Studio</span>
-                              </button>
+                      {!isScanningStudio && (
+                        <div className="flex flex-col gap-2 w-full max-w-xs mt-2">
+                          <div className="flex items-center rounded-lg overflow-hidden border border-primary/20 shadow-sm w-full">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const types = [
+                                  'sounds',
+                                  'animations',
+                                  'images',
+                                  'meshes',
+                                  'scripts',
+                                ].filter((k) => scanTypes.has(k));
+                                document.dispatchEvent(
+                                  new CustomEvent('ism-start-scan', {
+                                    detail: { scanTypes: types },
+                                  }),
+                                );
+                              }}
+                              disabled={scanTypes.size === 0 || !studioConnected}
+                              className="flex-1 flex items-center justify-center gap-2 h-8 bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                            >
+                              <ScanSearch size={14} />
+                              <span>Scan Studio</span>
+                            </button>
 
-                              <Popover>
-                                <PopoverTrigger
-                                  render={
-                                    <button
-                                      type="button"
-                                      className="h-8 w-8 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors border-l border-primary-foreground/20 flex items-center justify-center cursor-pointer"
-                                    >
-                                      <Settings2 size={13} />
-                                    </button>
-                                  }
-                                />
-                                <PopoverContent
-                                  align="end"
-                                  side="bottom"
-                                  sideOffset={6}
-                                  className="w-72 p-3 bg-bg-surface border border-border shadow-xl rounded-lg z-[250]"
-                                >
-                                  <div className="flex flex-col gap-3">
-                                    <div>
-                                      <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">
-                                        Asset Types
-                                      </span>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {[
-                                          { key: 'sounds', label: 'Sounds' },
-                                          { key: 'animations', label: 'Animations' },
-                                          { key: 'images', label: 'Images' },
-                                          { key: 'meshes', label: 'Meshes' },
-                                          { key: 'scripts', label: 'Scripts' },
-                                        ].map((type) => (
-                                          <button
-                                            key={type.key}
-                                            type="button"
-                                            onClick={() => toggleScanType(type.key)}
-                                            className={cn(
-                                              'px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors cursor-pointer',
-                                              scanTypes.has(type.key)
-                                                ? 'bg-primary/15 border-primary/40 text-primary'
-                                                : 'bg-bg-base border-border-subtle text-text-muted hover:text-text-primary hover:border-border',
-                                            )}
-                                          >
-                                            {scanTypes.has(type.key) && (
-                                              <Check size={8} className="inline mr-1" />
-                                            )}
-                                            {type.label}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-
-                                    <div>
-                                      <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">
-                                        Script Mode
-                                      </span>
-                                      <div className="flex rounded-md overflow-hidden border border-border-subtle bg-bg-base">
-                                        {[
-                                          { key: 'assetIds', label: 'Fast IDs' },
-                                          { key: 'fullSource', label: 'Full Source' },
-                                          { key: 'off', label: 'Off' },
-                                        ].map((mode) => (
-                                          <button
-                                            key={mode.key}
-                                            type="button"
-                                            onClick={() => setScriptMode(mode.key)}
-                                            className={cn(
-                                              'flex-1 h-6 text-[9px] font-semibold transition-colors cursor-pointer',
-                                              scriptMode === mode.key
-                                                ? 'bg-primary text-primary-foreground'
-                                                : 'text-text-muted hover:text-text-primary hover:bg-bg-elevated',
-                                            )}
-                                          >
-                                            {mode.label}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-
-                            {/* Targeted Path Scan with Options */}
-                            <Popover open={targetedScanOpen} onOpenChange={setTargetedScanOpen}>
+                            <Popover>
                               <PopoverTrigger
                                 render={
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 text-xs font-medium gap-1.5 w-full"
+                                  <button
+                                    type="button"
+                                    className="h-8 w-8 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors border-l border-primary-foreground/20 flex items-center justify-center cursor-pointer"
                                   >
-                                    <MapPin size={13} />
-                                    <span>Scan Specific Path / Model</span>
-                                  </Button>
+                                    <Settings2 size={13} />
+                                  </button>
                                 }
                               />
                               <PopoverContent
-                                align="center"
+                                align="end"
                                 side="bottom"
                                 sideOffset={6}
-                                className="w-76 p-3 bg-bg-surface border border-border shadow-xl rounded-lg z-[250]"
+                                className="w-72 p-3 bg-bg-surface border border-border shadow-xl rounded-lg z-[250]"
                               >
-                                <div className="flex flex-col gap-2.5">
-                                  <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                                    Targeted Path Scan
-                                  </div>
-                                  <p className="text-[11px] text-text-secondary leading-snug">
-                                    Scan only a specific instance or container instead of the whole
-                                    game:
-                                  </p>
-                                  <Input
-                                    value={targetedPath}
-                                    onChange={(e) => setTargetedPath(e.target.value)}
-                                    placeholder="e.g. game.Workspace.AKAnims or Guns"
-                                    className="h-8 text-xs font-mono bg-bg-base"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleRunTargetedScan()}
-                                  />
-
+                                <div className="flex flex-col gap-3">
                                   <div>
-                                    <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted mb-1.5 block">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2 block">
                                       Asset Types
                                     </span>
-                                    <div className="flex flex-wrap gap-1">
+                                    <div className="flex flex-wrap gap-1.5">
                                       {[
                                         { key: 'sounds', label: 'Sounds' },
                                         { key: 'animations', label: 'Animations' },
@@ -1400,223 +1196,477 @@ export default function AssetExplorer({
                                       ))}
                                     </div>
                                   </div>
-
-                                  <div>
-                                    <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted mb-1.5 block">
-                                      Script Mode
-                                    </span>
-                                    <div className="flex rounded-md overflow-hidden border border-border-subtle bg-bg-base">
-                                      {[
-                                        { key: 'assetIds', label: 'Fast IDs' },
-                                        { key: 'fullSource', label: 'Full Source' },
-                                        { key: 'off', label: 'Off' },
-                                      ].map((mode) => (
-                                        <button
-                                          key={mode.key}
-                                          type="button"
-                                          onClick={() => setScriptMode(mode.key)}
-                                          className={cn(
-                                            'flex-1 h-6 text-[9px] font-semibold transition-colors cursor-pointer',
-                                            scriptMode === mode.key
-                                              ? 'bg-primary text-primary-foreground'
-                                              : 'text-text-muted hover:text-text-primary hover:bg-bg-elevated',
-                                          )}
-                                        >
-                                          {mode.label}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-
-                                  <div className="flex justify-end gap-2 pt-1 border-t border-border-subtle/50">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-7 text-xs"
-                                      onClick={() => setTargetedScanOpen(false)}
-                                    >
-                                      Cancel
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      className="h-7 text-xs font-semibold"
-                                      disabled={!targetedPath.trim() || !studioConnected}
-                                      onClick={() => handleRunTargetedScan()}
-                                    >
-                                      Scan Path
-                                    </Button>
-                                  </div>
                                 </div>
                               </PopoverContent>
                             </Popover>
-
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 text-xs text-text-secondary hover:text-text-primary gap-1.5 w-full"
-                              onClick={() =>
-                                document.dispatchEvent(new CustomEvent('ism-open-paste-ids'))
-                              }
-                            >
-                              <ClipboardPaste size={13} />
-                              <span>Add Manual / Ghost IDs</span>
-                            </Button>
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      displayedInstances.map((node) => (
-                        <ExplorerTreeNode
-                          key={node.referent}
-                          node={node}
-                          level={0}
-                          config={config}
-                          selectedAssetIds={selectedAssetIds}
-                          selectedAssetKeys={selectedAssetKeys}
-                          toggleAsset={toggleAsset}
-                          toggleNode={toggleNode}
-                          getAllAssetIds={getAllAssetIds}
-                          getAllAssetKeys={getAllAssetKeys}
-                          setEnlargedImage={setEnlargedImage}
-                          setPreviewingAnimation={setPreviewingAnimation}
-                          activeAssetFilters={activeAssetFilters}
-                          searchQuery={deferredSearchQuery}
-                          playingAudioId={playingAudioId}
-                          initialExpanded={true}
-                          onInspectAsset={setActiveInspectAsset}
-                          activeInspectAssetId={
-                            activeInspectAsset ? getAssetId(activeInspectAsset) : null
-                          }
-                        />
-                      ))
-                    )}
-                  </div>
-                </div>
 
-                {/* Right Panel: Half-Screen Inspector Panel */}
-                {isRightPanelOpen && (
-                  <div className="w-1/2 h-full flex flex-col bg-bg-surface/10 overflow-hidden">
-                    <AssetInspectorPanel
-                      asset={activeInspectAsset}
-                      onClose={() => {
-                        useSpooferStore.getState().setIsInspectorOpen(false);
-                        useSpooferStore.getState().setIsPropertiesOpen(false);
-                      }}
-                      playingAudioId={playingAudioId}
-                      setPlayingAudioId={setPlayingAudioId}
-                      allInstances={displayedInstances}
-                      showViewport={isInspectorOpen}
-                      showProperties={isPropertiesOpen}
-                    />
-                  </div>
-                )}
-              </div>
+                          <Popover open={targetedScanOpen} onOpenChange={setTargetedScanOpen}>
+                            <PopoverTrigger
+                              render={
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-xs font-medium gap-1.5 w-full"
+                                >
+                                  <MapPin size={13} />
+                                  <span>Scan Specific Path / Model</span>
+                                </Button>
+                              }
+                            />
+                            <PopoverContent
+                              align="center"
+                              side="bottom"
+                              sideOffset={6}
+                              className="w-76 p-3 bg-bg-surface border border-border shadow-xl rounded-lg z-[250]"
+                            >
+                              <div className="flex flex-col gap-2.5">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                                  Targeted Path Scan
+                                </div>
+                                <p className="text-[11px] text-text-secondary leading-snug">
+                                  Scan only a specific instance or container instead of the whole
+                                  game:
+                                </p>
+                                <Input
+                                  value={targetedPath}
+                                  onChange={(e) => setTargetedPath(e.target.value)}
+                                  placeholder="e.g. game.Workspace.AKAnims or Guns"
+                                  className="h-8 text-xs font-mono bg-bg-base"
+                                  onKeyDown={(e) => e.key === 'Enter' && handleRunTargetedScan()}
+                                />
 
-              {/* Bottom Bar: Unified Global Control Bar */}
-              <div className="h-12 shrink-0 border-t border-border-subtle bg-bg-surface/30 px-3 flex items-center justify-between gap-3 font-sans">
-                <div className="flex items-center gap-3">
-                  <Popover open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
-                    <PopoverTrigger
-                      render={
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 border-border-subtle"
-                          title={t('explorer.clearExplorer') ?? 'Clear Explorer'}
-                        />
-                      }
-                    >
-                      <Trash2 size={14} />
-                    </PopoverTrigger>
-                    <PopoverContent
-                      align="start"
-                      side="top"
-                      sideOffset={8}
-                      className="w-56 p-3 bg-bg-surface border border-border rounded-lg shadow-lg"
-                    >
-                      <div className="flex flex-col gap-2.5">
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
-                          {t('explorer.clearExplorer')}
-                        </div>
-                        <div className="text-xs text-text-secondary leading-normal">
-                          {t('common.areYouSure') ?? 'Are you sure?'}{' '}
-                          <span className="text-text-muted">
-                            This will remove all {stats.total} scanned assets.
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 justify-end pt-1">
+                                <div>
+                                  <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted mb-1.5 block">
+                                    Asset Types
+                                  </span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {[
+                                      { key: 'sounds', label: 'Sounds' },
+                                      { key: 'animations', label: 'Animations' },
+                                      { key: 'images', label: 'Images' },
+                                      { key: 'meshes', label: 'Meshes' },
+                                      { key: 'scripts', label: 'Scripts' },
+                                    ].map((type) => (
+                                      <button
+                                        key={type.key}
+                                        type="button"
+                                        onClick={() => toggleScanType(type.key)}
+                                        className={cn(
+                                          'px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors cursor-pointer',
+                                          scanTypes.has(type.key)
+                                            ? 'bg-primary/15 border-primary/40 text-primary'
+                                            : 'bg-bg-base border-border-subtle text-text-muted hover:text-text-primary hover:border-border',
+                                        )}
+                                      >
+                                        {scanTypes.has(type.key) && (
+                                          <Check size={8} className="inline mr-1" />
+                                        )}
+                                        {type.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-1 border-t border-border-subtle/50">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() => setTargetedScanOpen(false)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    className="h-7 text-xs font-semibold"
+                                    disabled={!targetedPath.trim() || !studioConnected}
+                                    onClick={() => handleRunTargetedScan()}
+                                  >
+                                    Scan Path
+                                  </Button>
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 text-xs px-2.5"
-                            onClick={() => setClearConfirmOpen(false)}
+                            className="h-8 text-xs text-text-secondary hover:text-text-primary gap-1.5 w-full"
+                            onClick={() =>
+                              document.dispatchEvent(new CustomEvent('ism-open-paste-ids'))
+                            }
                           >
-                            {t('common.cancel')}
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            className="h-7 text-xs px-3 font-semibold bg-red-500 text-white"
-                            onClick={() => {
-                              setRootInstances([]);
-                              setLoadedFileName(null);
-                              setActiveInspectAsset(null);
-                              useSpooferStore.getState().clearAssetStatuses();
-                              useSpooferStore.getState().setLastReplacements({});
-                              useSpooferStore.getState().setAssetForcePlaceIds({});
-                              useSpooferStore.getState().clearGhostAssets();
-                              localStorage.removeItem('ISpooferMotion_SavedReplacements');
-                              localStorage.removeItem('ISpooferMotion_SavedPlaceIds');
-                              void invoke('clear_plugin_cache').catch(console.warn);
-                              setClearConfirmOpen(false);
-                            }}
-                          >
-                            {t('common.clear') ?? 'Clear'}
+                            <ClipboardPaste size={13} />
+                            <span>Add Manual / Ghost IDs</span>
                           </Button>
                         </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
-                    <span>{stats.total} assets found</span>
-                    {lastScanTime && (
-                      <>
-                        <span>•</span>
-                        <span>
-                          Scanned{' '}
-                          {new Date(lastScanTime).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                      </>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  ) : (
+                    displayedInstances.map((node) => (
+                      <ExplorerTreeNode
+                        key={node.referent}
+                        node={node}
+                        level={0}
+                        config={config}
+                        selectedAssetIds={selectedAssetIds}
+                        selectedAssetKeys={selectedAssetKeys}
+                        toggleAsset={toggleAsset}
+                        toggleNode={toggleNode}
+                        getAllAssetIds={getAllAssetIds}
+                        getAllAssetKeys={getAllAssetKeys}
+                        setEnlargedImage={setEnlargedImage}
+                        setPreviewingAnimation={setPreviewingAnimation}
+                        activeAssetFilters={activeAssetFilters}
+                        searchQuery={deferredSearchQuery}
+                        playingAudioId={playingAudioId}
+                        initialExpanded={true}
+                        onInspectAsset={setActiveInspectAsset}
+                        activeInspectAssetId={
+                          activeInspectAsset ? getAssetId(activeInspectAsset) : null
+                        }
+                      />
+                    ))
+                  )}
                 </div>
+              </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  {/* Selection Actions Pill Group — only shown when assets are selected */}
-                  {selectedCount > 0 && (
-                    <div className="flex items-center rounded-lg border border-border-subtle bg-bg-surface p-0.5 shrink-0 gap-0.5 shadow-sm">
-                      {/* Force Place ID Pin */}
-                      <Popover open={lockOpen} onOpenChange={setLockOpen}>
+              {isRightPanelOpen && (
+                <div className="w-1/2 h-full flex flex-col bg-bg-surface/10 overflow-hidden">
+                  <AssetInspectorPanel
+                    asset={activeInspectAsset}
+                    onClose={() => {
+                      useSpooferStore.getState().setIsInspectorOpen(false);
+                      useSpooferStore.getState().setIsPropertiesOpen(false);
+                    }}
+                    playingAudioId={playingAudioId}
+                    setPlayingAudioId={setPlayingAudioId}
+                    allInstances={displayedInstances}
+                    showViewport={isInspectorOpen}
+                    showProperties={isPropertiesOpen}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="h-12 shrink-0 border-t border-border-subtle bg-bg-surface/30 px-3 flex items-center justify-between gap-3 font-sans">
+              <div className="flex items-center gap-3">
+                <Popover open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 border-border-subtle"
+                        title={t('explorer.clearExplorer') ?? 'Clear Explorer'}
+                      />
+                    }
+                  >
+                    <Trash2 size={14} />
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    side="top"
+                    sideOffset={8}
+                    className="w-56 p-3 bg-bg-surface border border-border rounded-lg shadow-lg"
+                  >
+                    <div className="flex flex-col gap-2.5">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
+                        {t('explorer.clearExplorer')}
+                      </div>
+                      <div className="text-xs text-text-secondary leading-normal">
+                        {t('common.areYouSure') ?? 'Are you sure?'}{' '}
+                        <span className="text-text-muted">
+                          This will remove all {stats.total} scanned assets.
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 justify-end pt-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs px-2.5"
+                          onClick={() => setClearConfirmOpen(false)}
+                        >
+                          {t('common.cancel')}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="h-7 text-xs px-3 font-semibold bg-red-500 text-white"
+                          onClick={() => {
+                            setRootInstances([]);
+                            setLoadedFileName(null);
+                            setActiveInspectAsset(null);
+                            useSpooferStore.getState().clearAssetStatuses();
+                            useSpooferStore.getState().setLastReplacements({});
+                            useSpooferStore.getState().setAssetForcePlaceIds({});
+                            useSpooferStore.getState().clearGhostAssets();
+                            localStorage.removeItem('ISpooferMotion_SavedReplacements');
+                            localStorage.removeItem('ISpooferMotion_SavedPlaceIds');
+                            void invoke('clear_plugin_cache').catch(console.warn);
+                            setClearConfirmOpen(false);
+                          }}
+                        >
+                          {t('common.clear') ?? 'Clear'}
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <div className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                  <span>{stats.total} assets found</span>
+                  {lastScanTime && (
+                    <>
+                      <span>•</span>
+                      <span>
+                        Scanned{' '}
+                        {new Date(lastScanTime).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {selectedCount > 0 && (
+                  <div className="flex items-center rounded-lg border border-border-subtle bg-bg-surface p-0.5 shrink-0 gap-0.5 shadow-sm">
+                    <Popover open={lockOpen} onOpenChange={setLockOpen}>
+                      <PopoverTrigger
+                        render={
+                          <button
+                            type="button"
+                            className="h-7 px-2 flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground rounded transition-colors relative"
+                          >
+                            <Lock
+                              size={13}
+                              className={pinnedCount > 0 ? 'text-primary' : 'text-muted-foreground'}
+                            />
+                            {pinnedCount > 0 && (
+                              <span className="min-w-[12px] h-[12px] px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center">
+                                {pinnedCount}
+                              </span>
+                            )}
+                          </button>
+                        }
+                      />
+                      <PopoverContent
+                        align="end"
+                        side="top"
+                        sideOffset={8}
+                        className="w-64 p-3 bg-bg-surface border border-border shadow-xl rounded-lg"
+                      >
+                        <div className="flex flex-col gap-2">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-text-muted">
+                            {t('settings.forcePlaceIds')} · {selectedCount} selected
+                          </div>
+                          <Input
+                            value={placeIdInput}
+                            onChange={(e) => setPlaceIdInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && applyPin()}
+                            placeholder={t('settings.forcePlaceIdsPlaceholder') || 'e.g. 123456789'}
+                            className="h-8 text-xs bg-bg-base font-mono"
+                          />
+                          <div className="flex items-center justify-between gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-[11px] text-destructive"
+                              disabled={pinnedCount === 0}
+                              onClick={() => setConfirmClearPins(true)}
+                            >
+                              <Trash2 size={12} className="mr-1" />
+                              {t('common.clear')}
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="h-7 text-[11px]"
+                              onClick={applyPin}
+                              disabled={!placeIdInput.trim()}
+                            >
+                              {t('common.apply')}
+                            </Button>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+
+                    {(() => {
+                      const lastReplacements = useSpooferStore.getState().lastReplacements || {};
+                      const selectedArray = Array.from(selectedAssetIds);
+                      const hasAnyReplacement = selectedArray.some((id) => lastReplacements[id]);
+                      const allHaveReplacements = selectedArray.every((id) => lastReplacements[id]);
+
+                      const handleDefaultCopy = () => {
+                        if (allHaveReplacements) {
+                          const pairs = selectedArray.map(
+                            (id) => `${id} -> ${lastReplacements[id]}`,
+                          );
+                          void navigator.clipboard.writeText(pairs.join(',\n'));
+                          showToast('success', `Copied ${pairs.length} replacement pair(s)!`);
+                        } else {
+                          const ids = selectedArray.map((id) => lastReplacements[id] || id);
+                          void navigator.clipboard.writeText(ids.join(',\n'));
+                          showToast('success', `Copied ${ids.length} selected ID(s)!`);
+                        }
+                      };
+
+                      const handleCopySelected = () => {
+                        const ids = selectedArray.map((id) => id);
+                        void navigator.clipboard.writeText(ids.join(',\n'));
+                        showToast('success', `Copied ${ids.length} selected ID(s)!`);
+                      };
+
+                      const handleCopyPairs = () => {
+                        const pairs = selectedArray
+                          .filter((id) => lastReplacements[id])
+                          .map((id) => `${id} -> ${lastReplacements[id]}`);
+                        void navigator.clipboard.writeText(pairs.join(',\n'));
+                        showToast('success', `Copied ${pairs.length} replacement pair(s)!`);
+                      };
+
+                      const handleCopyReplacedOnly = () => {
+                        const replacedIds = selectedArray
+                          .map((id) => lastReplacements[id])
+                          .filter((id): id is string => Boolean(id));
+                        void navigator.clipboard.writeText(replacedIds.join(',\n'));
+                        showToast('success', `Copied ${replacedIds.length} replaced ID(s)!`);
+                      };
+
+                      return (
+                        <Popover>
+                          <div className="flex items-center shrink-0 rounded overflow-hidden">
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <button
+                                    type="button"
+                                    onClick={handleDefaultCopy}
+                                    className="h-7 px-2 flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                                  >
+                                    <Copy size={13} />
+                                    <span>Copy</span>
+                                  </button>
+                                }
+                              />
+                              <TooltipContent>
+                                {allHaveReplacements
+                                  ? 'Copy replacement pairs (orig -> new)'
+                                  : `Copy selected IDs (${selectedCount})`}
+                              </TooltipContent>
+                            </Tooltip>
+
+                            <PopoverTrigger
+                              render={
+                                <button
+                                  type="button"
+                                  className="h-7 px-1 text-muted-foreground hover:text-foreground border-l border-border-subtle/50 flex items-center justify-center transition-colors"
+                                >
+                                  <ChevronDown size={11} />
+                                </button>
+                              }
+                            />
+                          </div>
+
+                          <PopoverContent
+                            align="end"
+                            side="top"
+                            sideOffset={8}
+                            className="w-52 p-1 bg-bg-surface border border-border shadow-xl rounded-lg z-[220]"
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                type="button"
+                                onClick={handleCopySelected}
+                                className="flex items-center gap-2 w-full h-8 px-2 rounded-md text-xs font-medium text-left transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-elevated"
+                              >
+                                <Copy size={13} className="text-muted-foreground" />
+                                <span className="flex-1">Copy Selected IDs ({selectedCount})</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={handleCopyPairs}
+                                disabled={!hasAnyReplacement}
+                                className={cn(
+                                  'flex items-center gap-2 w-full h-8 px-2 rounded-md text-xs font-medium text-left transition-colors',
+                                  hasAnyReplacement
+                                    ? 'text-emerald-400 hover:bg-emerald-500/10'
+                                    : 'text-text-muted/40 cursor-not-allowed',
+                                )}
+                              >
+                                <Copy size={13} />
+                                <span className="flex-1">Copy Replacement Pairs</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={handleCopyReplacedOnly}
+                                disabled={!hasAnyReplacement}
+                                className={cn(
+                                  'flex items-center gap-2 w-full h-8 px-2 rounded-md text-xs font-medium text-left transition-colors',
+                                  hasAnyReplacement
+                                    ? 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated'
+                                    : 'text-text-muted/40 cursor-not-allowed',
+                                )}
+                              >
+                                <Copy size={13} className="text-muted-foreground" />
+                                <span className="flex-1">Copy Replaced IDs Only</span>
+                              </button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                <div className="flex items-center rounded-lg border border-border-subtle bg-bg-surface p-0.5 shrink-0 gap-0.5 shadow-sm">
+                  {config.spoofing.selectedUser !== 'none' && (
+                    <div className="flex items-center rounded overflow-hidden">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              className="h-7 px-2 flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                              onClick={() =>
+                                document.dispatchEvent(
+                                  new CustomEvent('ism-discover-place-ids', {
+                                    detail: { timeoutSecs: discoveryTimeoutSecs },
+                                  }),
+                                )
+                              }
+                              disabled={busy || isDiscoveringPlaceIds}
+                            >
+                              {isDiscoveringPlaceIds ? (
+                                <Loader2 size={13} className="animate-spin text-primary" />
+                              ) : (
+                                <MapPin size={13} />
+                              )}
+                              <span>Discover</span>
+                            </button>
+                          }
+                        />
+                        <TooltipContent>
+                          {isDiscoveringPlaceIds
+                            ? 'Discovering Place IDs...'
+                            : `Discover Place IDs (${discoveryTimeoutSecs}s limit/asset)`}
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <Popover>
                         <PopoverTrigger
                           render={
                             <button
                               type="button"
-                              className="h-7 px-2 flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground rounded transition-colors relative"
+                              className="h-7 px-1 text-muted-foreground hover:text-foreground border-l border-border-subtle/50 flex items-center justify-center transition-colors"
                             >
-                              <Lock
-                                size={13}
-                                className={
-                                  pinnedCount > 0 ? 'text-primary' : 'text-muted-foreground'
-                                }
-                              />
-                              {pinnedCount > 0 && (
-                                <span className="min-w-[12px] h-[12px] px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center">
-                                  {pinnedCount}
-                                </span>
-                              )}
+                              <ChevronDown size={11} />
                             </button>
                           }
                         />
@@ -1624,468 +1674,232 @@ export default function AssetExplorer({
                           align="end"
                           side="top"
                           sideOffset={8}
-                          className="w-64 p-3 bg-bg-surface border border-border shadow-xl rounded-lg"
+                          className="w-64 p-3 bg-bg-surface border border-border shadow-xl rounded-lg z-[220]"
                         >
-                          <div className="flex flex-col gap-2">
-                            <div className="text-[10px] font-semibold uppercase tracking-widest text-text-muted">
-                              {t('settings.forcePlaceIds')} · {selectedCount} selected
+                          <div className="flex flex-col gap-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                                Discovery Timeout
+                              </span>
+                              <span className="text-xs font-mono font-bold text-primary">
+                                {discoveryTimeoutSecs}s / asset
+                              </span>
                             </div>
-                            <Input
-                              value={placeIdInput}
-                              onChange={(e) => setPlaceIdInput(e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && applyPin()}
-                              placeholder={
-                                t('settings.forcePlaceIdsPlaceholder') || 'e.g. 123456789'
-                              }
-                              className="h-8 text-xs bg-bg-base font-mono"
+                            <input
+                              type="range"
+                              min={30}
+                              max={300}
+                              step={10}
+                              value={discoveryTimeoutSecs}
+                              onChange={(e) => setDiscoveryTimeoutSecs(Number(e.target.value))}
+                              className="w-full accent-primary h-1.5 bg-bg-base rounded-lg cursor-pointer"
                             />
-                            <div className="flex items-center justify-between gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-[11px] text-destructive"
-                                disabled={pinnedCount === 0}
-                                onClick={() => setConfirmClearPins(true)}
-                              >
-                                <Trash2 size={12} className="mr-1" />
-                                {t('common.clear')}
-                              </Button>
-                              <Button
-                                size="sm"
-                                className="h-7 text-[11px]"
-                                onClick={applyPin}
-                                disabled={!placeIdInput.trim()}
-                              >
-                                {t('common.apply')}
-                              </Button>
+                            <div className="flex justify-between text-[9px] text-text-muted font-mono">
+                              <span>30s (fast)</span>
+                              <span>120s</span>
+                              <span>300s (deep)</span>
                             </div>
                           </div>
                         </PopoverContent>
                       </Popover>
-
-                      {/* Unified Copy Drop-Up */}
-                      {(() => {
-                        const lastReplacements = useSpooferStore.getState().lastReplacements || {};
-                        const selectedArray = Array.from(selectedAssetIds);
-                        const hasAnyReplacement = selectedArray.some((id) => lastReplacements[id]);
-                        const allHaveReplacements = selectedArray.every(
-                          (id) => lastReplacements[id],
-                        );
-
-                        const handleDefaultCopy = () => {
-                          if (allHaveReplacements) {
-                            const pairs = selectedArray.map(
-                              (id) => `${id} -> ${lastReplacements[id]}`,
-                            );
-                            void navigator.clipboard.writeText(pairs.join(',\n'));
-                            showToast('success', `Copied ${pairs.length} replacement pair(s)!`);
-                          } else {
-                            const ids = selectedArray.map((id) => lastReplacements[id] || id);
-                            void navigator.clipboard.writeText(ids.join(',\n'));
-                            showToast('success', `Copied ${ids.length} selected ID(s)!`);
-                          }
-                        };
-
-                        const handleCopySelected = () => {
-                          const ids = selectedArray.map((id) => id);
-                          void navigator.clipboard.writeText(ids.join(',\n'));
-                          showToast('success', `Copied ${ids.length} selected ID(s)!`);
-                        };
-
-                        const handleCopyPairs = () => {
-                          const pairs = selectedArray
-                            .filter((id) => lastReplacements[id])
-                            .map((id) => `${id} -> ${lastReplacements[id]}`);
-                          void navigator.clipboard.writeText(pairs.join(',\n'));
-                          showToast('success', `Copied ${pairs.length} replacement pair(s)!`);
-                        };
-
-                        const handleCopyReplacedOnly = () => {
-                          const replacedIds = selectedArray
-                            .map((id) => lastReplacements[id])
-                            .filter((id): id is string => Boolean(id));
-                          void navigator.clipboard.writeText(replacedIds.join(',\n'));
-                          showToast('success', `Copied ${replacedIds.length} replaced ID(s)!`);
-                        };
-
-                        return (
-                          <Popover>
-                            <div className="flex items-center shrink-0 rounded overflow-hidden">
-                              <Tooltip>
-                                <TooltipTrigger
-                                  render={
-                                    <button
-                                      type="button"
-                                      onClick={handleDefaultCopy}
-                                      className="h-7 px-2 flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
-                                    >
-                                      <Copy size={13} />
-                                      <span>Copy</span>
-                                    </button>
-                                  }
-                                />
-                                <TooltipContent>
-                                  {allHaveReplacements
-                                    ? 'Copy replacement pairs (orig -> new)'
-                                    : `Copy selected IDs (${selectedCount})`}
-                                </TooltipContent>
-                              </Tooltip>
-
-                              <PopoverTrigger
-                                render={
-                                  <button
-                                    type="button"
-                                    className="h-7 px-1 text-muted-foreground hover:text-foreground border-l border-border-subtle/50 flex items-center justify-center transition-colors"
-                                  >
-                                    <ChevronDown size={11} />
-                                  </button>
-                                }
-                              />
-                            </div>
-
-                            <PopoverContent
-                              align="end"
-                              side="top"
-                              sideOffset={8}
-                              className="w-52 p-1 bg-bg-surface border border-border shadow-xl rounded-lg z-[220]"
-                            >
-                              <div className="flex flex-col gap-0.5">
-                                <button
-                                  type="button"
-                                  onClick={handleCopySelected}
-                                  className="flex items-center gap-2 w-full h-8 px-2 rounded-md text-xs font-medium text-left transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-elevated"
-                                >
-                                  <Copy size={13} className="text-muted-foreground" />
-                                  <span className="flex-1">
-                                    Copy Selected IDs ({selectedCount})
-                                  </span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={handleCopyPairs}
-                                  disabled={!hasAnyReplacement}
-                                  className={cn(
-                                    'flex items-center gap-2 w-full h-8 px-2 rounded-md text-xs font-medium text-left transition-colors',
-                                    hasAnyReplacement
-                                      ? 'text-emerald-400 hover:bg-emerald-500/10'
-                                      : 'text-text-muted/40 cursor-not-allowed',
-                                  )}
-                                >
-                                  <Copy size={13} />
-                                  <span className="flex-1">Copy Replacement Pairs</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={handleCopyReplacedOnly}
-                                  disabled={!hasAnyReplacement}
-                                  className={cn(
-                                    'flex items-center gap-2 w-full h-8 px-2 rounded-md text-xs font-medium text-left transition-colors',
-                                    hasAnyReplacement
-                                      ? 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated'
-                                      : 'text-text-muted/40 cursor-not-allowed',
-                                  )}
-                                >
-                                  <Copy size={13} className="text-muted-foreground" />
-                                  <span className="flex-1">Copy Replaced IDs Only</span>
-                                </button>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        );
-                      })()}
                     </div>
                   )}
 
-                  {/* Studio Tools Pill Group */}
-                  <div className="flex items-center rounded-lg border border-border-subtle bg-bg-surface p-0.5 shrink-0 gap-0.5 shadow-sm">
-                    {/* Discover Place IDs */}
-                    {config.spoofing.selectedUser !== 'none' && (
-                      <div className="flex items-center rounded overflow-hidden">
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <button
-                                type="button"
-                                className="h-7 px-2 flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                                onClick={() =>
-                                  document.dispatchEvent(
-                                    new CustomEvent('ism-discover-place-ids', {
-                                      detail: { timeoutSecs: discoveryTimeoutSecs },
-                                    }),
-                                  )
-                                }
-                                disabled={busy || isDiscoveringPlaceIds}
-                              >
-                                {isDiscoveringPlaceIds ? (
-                                  <Loader2 size={13} className="animate-spin text-primary" />
-                                ) : (
-                                  <MapPin size={13} />
-                                )}
-                                <span>Discover</span>
-                              </button>
-                            }
-                          />
-                          <TooltipContent>
-                            {isDiscoveringPlaceIds
-                              ? 'Discovering Place IDs...'
-                              : `Discover Place IDs (${discoveryTimeoutSecs}s limit/asset)`}
-                          </TooltipContent>
-                        </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer"
+                          onClick={() =>
+                            document.dispatchEvent(new CustomEvent('ism-open-paste-ids'))
+                          }
+                        >
+                          <ClipboardPaste size={13} />
+                        </button>
+                      }
+                    />
+                    <TooltipContent>Manual Replace & Add IDs</TooltipContent>
+                  </Tooltip>
 
-                        <Popover>
-                          <PopoverTrigger
-                            render={
-                              <button
-                                type="button"
-                                className="h-7 px-1 text-muted-foreground hover:text-foreground border-l border-border-subtle/50 flex items-center justify-center transition-colors"
-                              >
-                                <ChevronDown size={11} />
-                              </button>
-                            }
-                          />
-                          <PopoverContent
-                            align="end"
-                            side="top"
-                            sideOffset={8}
-                            className="w-64 p-3 bg-bg-surface border border-border shadow-xl rounded-lg z-[220]"
-                          >
-                            <div className="flex flex-col gap-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                                  Discovery Timeout
-                                </span>
-                                <span className="text-xs font-mono font-bold text-primary">
-                                  {discoveryTimeoutSecs}s / asset
-                                </span>
-                              </div>
-                              <input
-                                type="range"
-                                min={30}
-                                max={300}
-                                step={10}
-                                value={discoveryTimeoutSecs}
-                                onChange={(e) => setDiscoveryTimeoutSecs(Number(e.target.value))}
-                                className="w-full accent-primary h-1.5 bg-bg-base rounded-lg cursor-pointer"
-                              />
-                              <div className="flex justify-between text-[9px] text-text-muted font-mono">
-                                <span>30s (fast)</span>
-                                <span>120s</span>
-                                <span>300s (deep)</span>
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    )}
-
-                    {/* Manual Replace Paste Button */}
+                  {storedReplacementsCount > 0 && (
                     <Tooltip>
                       <TooltipTrigger
                         render={
                           <button
                             type="button"
-                            className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer"
-                            onClick={() =>
-                              document.dispatchEvent(new CustomEvent('ism-open-paste-ids'))
-                            }
+                            disabled={busy}
+                            className="h-7 px-2.5 flex items-center gap-1.5 text-xs text-primary bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded transition-colors disabled:opacity-50 cursor-pointer font-medium"
+                            onClick={() => void handleForceApplyReplacements()}
                           >
-                            <ClipboardPaste size={13} />
+                            <RotateCcw size={12} className={isReplacing ? 'animate-spin' : ''} />
+                            <span>Apply IDs ({storedReplacementsCount})</span>
                           </button>
                         }
                       />
-                      <TooltipContent>Manual Replace & Add IDs</TooltipContent>
+                      <TooltipContent>
+                        Force push stored ID replacements into Studio (Memory Injection + Plugin)
+                        without re-spoofing or downloading.
+                      </TooltipContent>
                     </Tooltip>
-
-                    {/* Dedicated Quick Re-Apply Replacements Button (without spoof/download) */}
-                    {storedReplacementsCount > 0 && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <button
-                              type="button"
-                              disabled={busy}
-                              className="h-7 px-2.5 flex items-center gap-1.5 text-xs text-primary bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded transition-colors disabled:opacity-50 cursor-pointer font-medium"
-                              onClick={() => void handleForceApplyReplacements()}
-                            >
-                              <RotateCcw size={12} className={isReplacing ? 'animate-spin' : ''} />
-                              <span>Apply IDs ({storedReplacementsCount})</span>
-                            </button>
-                          }
-                        />
-                        <TooltipContent>
-                          Force push stored ID replacements into Studio (Memory Injection + Plugin)
-                          without re-spoofing or downloading.
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-
-                  {/* Split Spoof/Download button with mode dropdown */}
-                  <Popover open={spoofModeOpen} onOpenChange={setSpoofModeOpen}>
-                    <div className="flex items-center shrink-0 rounded-md overflow-hidden">
-                      <Button
-                        size="sm"
-                        data-tutorial-target="run-spoofer"
-                        className="h-8 px-3 rounded-r-none rounded-l-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm"
-                        onClick={() => {
-                          const targetPaths = computeTargetPaths();
-                          useSpooferStore.getState().setTargetPathsMap(targetPaths || {});
-                          if (selectedAssetIds.size > 0) {
-                            document.dispatchEvent(
-                              new CustomEvent('ism-run-spoofer', {
-                                detail: {
-                                  assetIds: Array.from(selectedAssetIds),
-                                  targetPaths,
-                                },
-                              }),
-                            );
-                          } else {
-                            document.dispatchEvent(
-                              new CustomEvent('ism-run-spoofer', {
-                                detail: { targetPaths },
-                              }),
-                            );
-                          }
-                        }}
-                        disabled={busy}
-                      >
-                        {config.spoofing.downloadOnly ? (
-                          <Download size={13} />
-                        ) : (
-                          <Play size={13} fill="currentColor" />
-                        )}
-                        {isSpoofing
-                          ? (t('spoof.runSpoofer') ?? 'Run Spoofer') + '…'
-                          : config.spoofing.downloadOnly
-                            ? selectedCount > 0
-                              ? `Download Selected (${selectedCount})`
-                              : `Download All (${stats.displayed})`
-                            : selectedCount > 0
-                              ? `Spoof Selected (${selectedCount})`
-                              : `Spoof All Assets (${stats.displayed})`}
-                      </Button>
-                      <PopoverTrigger
-                        render={
-                          <Button
-                            size="sm"
-                            className="h-8 w-6 rounded-l-none rounded-r-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 border-l border-primary-foreground/20 px-0 flex items-center justify-center"
-                            disabled={busy}
-                          >
-                            <ChevronDown size={12} />
-                          </Button>
-                        }
-                      />
-                    </div>
-                    <PopoverContent
-                      align="end"
-                      side="top"
-                      sideOffset={6}
-                      className="w-48 p-1 bg-bg-surface border border-border shadow-xl flex flex-col gap-0.5"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          updateConfig('spoofing', 'downloadOnly', false);
-                          setSpoofModeOpen(false);
-                        }}
-                        className={cn(
-                          'flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors cursor-pointer',
-                          !config.spoofing.downloadOnly
-                            ? 'text-primary bg-primary/10 font-semibold'
-                            : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
-                        )}
-                      >
-                        <Play
-                          size={12}
-                          className={cn(
-                            !config.spoofing.downloadOnly
-                              ? 'text-primary'
-                              : 'text-muted-foreground',
-                          )}
-                          fill="currentColor"
-                        />
-                        <span className="flex-1">Spoof (Upload)</span>
-                        {!config.spoofing.downloadOnly && (
-                          <Check size={12} className="text-primary" />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          updateConfig('spoofing', 'downloadOnly', true);
-                          setSpoofModeOpen(false);
-                        }}
-                        className={cn(
-                          'flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors cursor-pointer',
-                          config.spoofing.downloadOnly
-                            ? 'text-primary bg-primary/10 font-semibold'
-                            : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
-                        )}
-                      >
-                        <Download
-                          size={12}
-                          className={cn(
-                            config.spoofing.downloadOnly ? 'text-primary' : 'text-muted-foreground',
-                          )}
-                        />
-                        <span className="flex-1">Download Only</span>
-                        {config.spoofing.downloadOnly && (
-                          <Check size={12} className="text-primary" />
-                        )}
-                      </button>
-
-                      <div className="my-0.5 border-t border-border-subtle" />
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSpoofModeOpen(false);
-                          void handleForceApplyReplacements();
-                        }}
-                        className="flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-elevated cursor-pointer"
-                      >
-                        <RotateCcw size={12} className="text-primary" />
-                        <span className="flex-1 font-medium">Re-apply Replacements</span>
-                        {storedReplacementsCount > 0 && (
-                          <span className="text-[10px] text-muted-foreground font-mono bg-bg-base px-1 rounded border border-border-subtle">
-                            {storedReplacementsCount}
-                          </span>
-                        )}
-                      </button>
-
-                      <div className="my-0.5 border-t border-border-subtle" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSpoofModeOpen(false);
-                          useSpooferStore.getState().setIsSpoofing(false);
-                          useSpooferStore.getState().setIsReplacing(false);
-                          useSpooferStore.getState().setIsScanningStudio(false);
-                          useSpooferStore.getState().setIsDiscoveringPlaceIds(false);
-                          // Also clear the Rust-side job lock. If a panic orphaned
-                          // SPOOFER_CONTROL (finish_spoofer_job was never called),
-                          // future run_spoofer_action calls would fail with
-                          // "A spoofing job is already running" until app restart.
-                          import('@tauri-apps/api/core')
-                            .then(({ invoke }) => invoke('force_reset_spoofer_job'))
-                            .catch(() => {});
-                          showToast('info', 'Button state reset. You can start a new spoof.');
-                        }}
-                        className="flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                      >
-                        <X size={12} className="text-red-400" />
-                        <span className="flex-1 font-medium">Force Reset (Stuck?)</span>
-                      </button>
-                    </PopoverContent>
-                  </Popover>
+                  )}
                 </div>
+
+                <Popover open={spoofModeOpen} onOpenChange={setSpoofModeOpen}>
+                  <div className="flex items-center shrink-0 rounded-md overflow-hidden">
+                    <Button
+                      size="sm"
+                      data-tutorial-target="run-spoofer"
+                      className="h-8 px-3 rounded-r-none rounded-l-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm"
+                      onClick={() => {
+                        const targetPaths = computeTargetPaths();
+                        useSpooferStore.getState().setTargetPathsMap(targetPaths || {});
+                        if (selectedAssetIds.size > 0) {
+                          document.dispatchEvent(
+                            new CustomEvent('ism-run-spoofer', {
+                              detail: {
+                                assetIds: Array.from(selectedAssetIds),
+                                targetPaths,
+                              },
+                            }),
+                          );
+                        } else {
+                          document.dispatchEvent(
+                            new CustomEvent('ism-run-spoofer', {
+                              detail: { targetPaths },
+                            }),
+                          );
+                        }
+                      }}
+                      disabled={busy}
+                    >
+                      {config.spoofing.downloadOnly ? (
+                        <Download size={13} />
+                      ) : (
+                        <Play size={13} fill="currentColor" />
+                      )}
+                      {isSpoofing
+                        ? (t('spoof.runSpoofer') ?? 'Run Spoofer') + '…'
+                        : config.spoofing.downloadOnly
+                          ? selectedCount > 0
+                            ? `Download Selected (${selectedCount})`
+                            : `Download All (${stats.displayed})`
+                          : selectedCount > 0
+                            ? `Spoof Selected (${selectedCount})`
+                            : `Spoof All Assets (${stats.displayed})`}
+                    </Button>
+                    <PopoverTrigger
+                      render={
+                        <Button
+                          size="sm"
+                          className="h-8 w-6 rounded-l-none rounded-r-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 border-l border-primary-foreground/20 px-0 flex items-center justify-center"
+                          disabled={busy}
+                        >
+                          <ChevronDown size={12} />
+                        </Button>
+                      }
+                    />
+                  </div>
+                  <PopoverContent
+                    align="end"
+                    side="top"
+                    sideOffset={6}
+                    className="w-48 p-1 bg-bg-surface border border-border shadow-xl flex flex-col gap-0.5"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateConfig('spoofing', 'downloadOnly', false);
+                        setSpoofModeOpen(false);
+                      }}
+                      className={cn(
+                        'flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors cursor-pointer',
+                        !config.spoofing.downloadOnly
+                          ? 'text-primary bg-primary/10 font-semibold'
+                          : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
+                      )}
+                    >
+                      <Play
+                        size={12}
+                        className={cn(
+                          !config.spoofing.downloadOnly ? 'text-primary' : 'text-muted-foreground',
+                        )}
+                        fill="currentColor"
+                      />
+                      <span className="flex-1">Spoof (Upload)</span>
+                      {!config.spoofing.downloadOnly && (
+                        <Check size={12} className="text-primary" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateConfig('spoofing', 'downloadOnly', true);
+                        setSpoofModeOpen(false);
+                      }}
+                      className={cn(
+                        'flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors cursor-pointer',
+                        config.spoofing.downloadOnly
+                          ? 'text-primary bg-primary/10 font-semibold'
+                          : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
+                      )}
+                    >
+                      <Download
+                        size={12}
+                        className={cn(
+                          config.spoofing.downloadOnly ? 'text-primary' : 'text-muted-foreground',
+                        )}
+                      />
+                      <span className="flex-1">Download Only</span>
+                      {config.spoofing.downloadOnly && <Check size={12} className="text-primary" />}
+                    </button>
+
+                    <div className="my-0.5 border-t border-border-subtle" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSpoofModeOpen(false);
+                        void handleForceApplyReplacements();
+                      }}
+                      className="flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors text-text-secondary hover:text-text-primary hover:bg-bg-elevated cursor-pointer"
+                    >
+                      <RotateCcw size={12} className="text-primary" />
+                      <span className="flex-1 font-medium">Re-apply Replacements</span>
+                      {storedReplacementsCount > 0 && (
+                        <span className="text-[10px] text-muted-foreground font-mono bg-bg-base px-1 rounded border border-border-subtle">
+                          {storedReplacementsCount}
+                        </span>
+                      )}
+                    </button>
+
+                    <div className="my-0.5 border-t border-border-subtle" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSpoofModeOpen(false);
+                        useSpooferStore.getState().setIsSpoofing(false);
+                        useSpooferStore.getState().setIsReplacing(false);
+                        useSpooferStore.getState().setIsScanningStudio(false);
+                        useSpooferStore.getState().setIsDiscoveringPlaceIds(false);
+
+                        import('@tauri-apps/api/core')
+                          .then(({ invoke }) => invoke('force_reset_spoofer_job'))
+                          .catch(() => {});
+                        showToast('info', 'Button state reset. You can start a new spoof.');
+                      }}
+                      className="flex items-center gap-2 w-full h-7 px-2 rounded-md text-xs text-left transition-colors text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    >
+                      <X size={12} className="text-red-400" />
+                      <span className="flex-1 font-medium">Force Reset (Stuck?)</span>
+                    </button>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
+          </div>
+        )}
+      </div>
 
       <Dialog open={confirmClearPins} onOpenChange={setConfirmClearPins}>
         <DialogContent className="max-w-sm">
@@ -2116,7 +1930,7 @@ export default function AssetExplorer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </motion.div>
+    </div>
   );
 }
 
@@ -2171,7 +1985,6 @@ function AssetInspectorPanel({
   const assetForcePlaceIds = useSpooferStore((s) => s.assetForcePlaceIds) ?? {};
   const lastReplacements = useSpooferStore((s) => s.lastReplacements) ?? {};
 
-  // Whenever the inspected asset changes, reset the selected property and zoom
   useEffect(() => {
     setSelectedAssetRef(asset);
     setImageZoom(1);
@@ -2186,7 +1999,6 @@ function AssetInspectorPanel({
   const isAnimation =
     activeAsset?.type === 'animation' || activeAsset?.type === 'raw_keyframe_sequence';
 
-  // Listen for secondary native preview window events
   useEffect(() => {
     const unlistenClosed = listen('preview-window-closed', () => {
       setIsPoppedOut(false);
@@ -2202,15 +2014,12 @@ function AssetInspectorPanel({
     };
   }, [activeAsset]);
 
-  // Broadcast asset update whenever activeAsset changes
   useEffect(() => {
     if (activeAsset && isPoppedOut) {
       try {
         localStorage.setItem('preview-current-asset', JSON.stringify(activeAsset));
         void emit('preview-asset-change', activeAsset);
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
   }, [activeAsset, isPoppedOut]);
 
@@ -2220,9 +2029,7 @@ function AssetInspectorPanel({
         const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
         const win = await WebviewWindow.getByLabel('asset-preview');
         if (win) await win.close();
-      } catch {
-        // ignore
-      }
+      } catch {}
       setIsPoppedOut(false);
       return;
     }
@@ -2258,7 +2065,6 @@ function AssetInspectorPanel({
     }
   };
 
-  // Gather all properties on this instance
   const instanceProperties = useMemo(() => {
     if (!asset) return [];
     const props = findPropertiesForInstance(asset.path, allInstances);
@@ -2297,7 +2103,7 @@ function AssetInspectorPanel({
   if (!asset || !activeAsset) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-text-muted text-xs text-center p-6 gap-2 select-none h-full bg-bg-surface/5">
-        <FolderOpen size={36} className="opacity-30 text-primary mb-2 animate-pulse" />
+        <FolderOpen size={36} className="opacity-30 text-primary mb-2" />
         <span className="text-sm font-semibold text-text-secondary">No Instance Selected</span>
         <span className="max-w-[240px] text-[11px] leading-relaxed">
           Select an instance in the Explorer tree to inspect its Roblox properties.
@@ -2398,10 +2204,9 @@ function AssetInspectorPanel({
             </div>
           )}
 
-          {/* Floating Zoom Controls Overlay */}
           {thumbnailUrl && !loading && !error && (
             <div
-              className="absolute bottom-2 right-2 flex items-center gap-1 bg-bg-surface/90 border border-border-subtle rounded-md px-1 py-0.5 shadow-md backdrop-blur-xs select-none z-10"
+              className="absolute bottom-2 right-2 flex items-center gap-1 bg-bg-surface/90 border border-border-subtle rounded-md px-1 py-0.5 shadow-md select-none z-10"
               onMouseDown={(e) => e.stopPropagation()}
             >
               <button
@@ -2504,7 +2309,6 @@ function AssetInspectorPanel({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-bg-surface/10 select-none relative overflow-hidden font-sans">
-      {/* Header Bar */}
       <div className="h-8 px-2.5 bg-bg-surface/60 border-b border-border flex items-center justify-between shrink-0">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           <span className="text-[11px] font-semibold text-text-muted">
@@ -2539,10 +2343,8 @@ function AssetInspectorPanel({
         </div>
       </div>
 
-      {/* Docked Viewport (shown when not popped out and showViewport is true) */}
       {showViewport && !isPoppedOut && renderViewport(false)}
 
-      {/* Studio Properties Grid Table (shown when showProperties is true) */}
       {showProperties && (
         <div
           className={cn(
@@ -2550,7 +2352,6 @@ function AssetInspectorPanel({
             !showViewport || isPoppedOut ? 'flex-1' : 'shrink-0 max-h-[70%]',
           )}
         >
-          {/* Section: Asset Content / Appearance */}
           <div>
             <button
               type="button"
@@ -2585,18 +2386,15 @@ function AssetInspectorPanel({
                         isCurrentActive ? 'bg-primary/10' : 'hover:bg-accent/40',
                       )}
                     >
-                      {/* Left Column: Property Name */}
                       <div className="w-[38%] text-[11px] font-medium text-text-secondary truncate flex items-center gap-1">
                         <span className="truncate">{p.propertyName || 'Asset'}</span>
                       </div>
 
-                      {/* Right Column: Value + Quick Actions */}
                       <div className="flex-1 flex items-center gap-1 min-w-0">
                         <span className="text-[11px] font-mono text-foreground truncate flex-1 select-all">
                           {p.rawValue || `rbxassetid://${propAssetId}`}
                         </span>
 
-                        {/* Active Preview Eye */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -2614,7 +2412,6 @@ function AssetInspectorPanel({
                           <Eye size={11} />
                         </button>
 
-                        {/* Copy Value */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -2631,7 +2428,6 @@ function AssetInspectorPanel({
                           )}
                         </button>
 
-                        {/* Forced Place Pin */}
                         {pinnedPid && (
                           <div
                             className="h-4 px-1 rounded text-[9px] font-mono flex items-center gap-0.5 shrink-0"
@@ -2646,7 +2442,6 @@ function AssetInspectorPanel({
                           </div>
                         )}
 
-                        {/* Spoofed Indicator */}
                         {replId && (
                           <div
                             className="h-4 px-1 rounded text-[9px] font-mono flex items-center gap-0.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 shrink-0"
@@ -2663,7 +2458,6 @@ function AssetInspectorPanel({
             )}
           </div>
 
-          {/* Section: Data / Metadata */}
           <div>
             <button
               type="button"

@@ -1,5 +1,3 @@
-//! Commands that bridge the gap between the Tauri app and the Roblox Studio plugin.
-
 pub(crate) fn parse_replacements_map(
     replacements_map: &crate::commands::AnyValue,
 ) -> Vec<serde_json::Value> {
@@ -70,10 +68,6 @@ pub(crate) fn parse_replacements_map(
         .unwrap_or_default()
 }
 
-/// Dispatches a mapping of original asset IDs to spoofed asset IDs directly into Roblox Studio.
-///
-/// Tries to use the high-performance memory bridge first. If the plugin isn't connected
-/// to the bridge, it falls back to a direct local HTTP POST.
 #[tauri::command]
 #[specta::specta]
 pub async fn push_to_studio(
@@ -117,13 +111,6 @@ pub async fn push_to_studio(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn set_plugin_theme_accent(color: String) -> Result<(), String> {
-    crate::studio_bridge::set_theme_accent(color).await;
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
 pub async fn set_plugin_batch_size(batch_size: u32) -> Result<(), String> {
     crate::studio_bridge::set_batch_size(batch_size).await;
     Ok(())
@@ -142,7 +129,7 @@ mod tests {
         let any_val = crate::commands::AnyValue(json);
 
         let mut parsed = parse_replacements_map(&any_val);
-        // Sort to ensure deterministic order in test
+
         parsed.sort_by(|a, b| {
             a["originalId"].as_str().expect("str").cmp(b["originalId"].as_str().expect("str"))
         });
@@ -169,7 +156,7 @@ mod tests {
 
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0]["originalId"], "123");
-        assert_eq!(parsed[0]["newId"], "456"); // numbers convert to string
+        assert_eq!(parsed[0]["newId"], "456");
         assert_eq!(parsed[1]["originalId"], "789");
         assert_eq!(parsed[1]["newId"], "-100");
     }
@@ -177,10 +164,10 @@ mod tests {
     #[test]
     fn test_parse_replacements_map_filters_invalid() {
         let json = serde_json::json!({
-            "123": "", // empty string rejected
-            "456": "456", // same as original rejected
-            "789": null, // null rejected
-            "abc": ["array"], // array rejected
+            "123": "",
+            "456": "456",
+            "789": null,
+            "abc": ["array"],
             "valid": "yes"
         });
         let any_val = crate::commands::AnyValue(json);

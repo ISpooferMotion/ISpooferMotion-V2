@@ -1,10 +1,11 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import ResultsModal from './ResultsModal';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import * as LanguageContext from '../../contexts/LanguageContext';
-import * as SpooferStore from '../../stores/spooferStore';
 import * as TauriDialog from '@tauri-apps/plugin-dialog';
 import * as TauriFs from '@tauri-apps/plugin-fs';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as LanguageContext from '../../contexts/LanguageContext';
+import * as SpooferStore from '../../stores/spooferStore';
+import ResultsModal from './ResultsModal';
 
 vi.mock('../../contexts/LanguageContext', () => ({
   useLanguage: vi.fn(),
@@ -43,7 +44,6 @@ describe('ResultsModal', () => {
   });
 
   it('renders nothing if not isOpen', () => {
-    // Actually Modal handles isOpen by returning null internally if not open, but we just check if content is there
     render(<ResultsModal isOpen={false} onClose={() => {}} />);
     expect(screen.queryByText('results.title')).not.toBeInTheDocument();
   });
@@ -66,7 +66,6 @@ describe('ResultsModal', () => {
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('123 -> 456\n789 -> 012');
 
-    // Check that button text changes
     expect(screen.getByText('common.copied')).toBeInTheDocument();
   });
 

@@ -1,15 +1,9 @@
-//! Fetches and parses the Roblox API dump to identify asset and string properties.
-//!
-//! Because Roblox's API surface is massive and constantly changing, we cannot hardcode
-//! which properties accept asset IDs. Instead, we pull the community API dump and build
-//! an inheritance tree at runtime to figure out exactly what to scan.
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::RwLock;
 
-/// The endpoint for the community-maintained Roblox Client Tracker API dump.
 const API_DUMP_URL: &str =
     "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/API-Dump.json";
 
@@ -42,7 +36,6 @@ pub struct ApiDump {
     pub Classes: Vec<Class>,
 }
 
-/// The fully resolved map of properties we care about, keyed by ClassName.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiDumpProperties {
@@ -50,7 +43,6 @@ pub struct ApiDumpProperties {
     pub string_scan_properties: HashMap<String, Vec<String>>,
 }
 
-/// Filters out read-only properties that the plugin cannot spoof anyway.
 fn is_writable(member: &Member) -> bool {
     if let Some(tags) = &member.Tags {
         for tag in tags {
@@ -62,7 +54,6 @@ fn is_writable(member: &Member) -> bool {
     true
 }
 
-/// Checks property names against a heuristical list of asset indicators.
 fn is_asset_like_property_name(name: &str) -> bool {
     let lower_name = name.to_lowercase();
     lower_name.ends_with("id")
@@ -93,12 +84,11 @@ fn is_asset_like_property_name(name: &str) -> bool {
         || lower_name.contains("accessory")
 }
 
-/// Specialized hardcoded check for HumanoidDescription clothing and body parts.
 fn is_humanoid_description_asset(class_name: &str, name: &str, val_type: &str) -> bool {
     if class_name != "HumanoidDescription" {
         return false;
     }
-    // Body parts and clothing items are stored as int64 asset IDs.
+
     if val_type == "int64"
         && (name.contains("Animation")
             || name == "Face"
@@ -114,7 +104,7 @@ fn is_humanoid_description_asset(class_name: &str, name: &str, val_type: &str) -
     {
         return true;
     }
-    // Accessories are string arrays of IDs, or arrays of ints.
+
     (val_type == "string" || val_type == "int64" || val_type.contains("Array"))
         && name.contains("Accessory")
 }
@@ -144,7 +134,6 @@ fn is_string_scan_property(member: &Member) -> bool {
     val_type == "string" || val_type == "Content" || val_type == "ContentId"
 }
 
-/// Flattens the inheritance tree to map every class to all of its applicable properties.
 fn build_class_hierarchy<F>(classes: &[Class], pick_property: F) -> HashMap<String, Vec<String>>
 where
     F: FnMut(&str, &Member) -> bool + Copy,
@@ -168,7 +157,6 @@ where
             return props;
         };
 
-        // Inherit properties from parent classes.
         if cls.Superclass != "<<<ROOT>>>" && !cls.Superclass.is_empty() {
             let super_props =
                 get_properties(&cls.Superclass, class_map, resolved_properties, pick_property);
@@ -208,14 +196,9 @@ where
 static CACHED_DUMP: tokio::sync::OnceCell<Arc<RwLock<Option<ApiDumpProperties>>>> =
     tokio::sync::OnceCell::const_new();
 
-/// Pulls the API dump, resolves the hierarchy, and caches it in memory and on disk.
-///
-/// Falls back to a bundled version of the dump if the network fetch fails, ensuring
-/// the scanner can always run even if GitHub is down or the user is offline.
 pub async fn get_api_dump_properties() -> ApiDumpProperties {
     let cell = CACHED_DUMP.get_or_init(|| async { Arc::new(RwLock::new(None)) }).await;
 
-    // Fast path: return cached value without taking a write lock.
     {
         let guard = cell.read().await;
         if let Some(cached) = &*guard {
@@ -226,7 +209,6 @@ pub async fn get_api_dump_properties() -> ApiDumpProperties {
     let mut properties = ApiDumpProperties::default();
     let cache_file = std::env::temp_dir().join("ispoofer_api_dump_v2.json");
 
-    // Cache the API dump to a temporary file for 24 hours.
     let mut should_fetch = true;
     if let Ok(metadata) = tokio::fs::metadata(&cache_file).await {
         if let Ok(modified) = metadata.modified() {
@@ -287,9 +269,8 @@ pub async fn get_api_dump_properties() -> ApiDumpProperties {
             build_class_hierarchy(&dump.Classes, |_, m| is_string_scan_property(m));
     }
 
-    // Commit result: take write lock only now, after all I/O is done.
     let mut guard = cell.write().await;
-    // Another concurrent caller may have already populated the cache.
+
     if let Some(cached) = &*guard {
         return cached.clone();
     }
@@ -364,17 +345,14 @@ mod tests {
 
     #[test]
     fn test_is_humanoid_description_asset() {
-        // True for HumanoidDescription asset properties
         assert!(is_humanoid_description_asset("HumanoidDescription", "Face", "int64"));
         assert!(is_humanoid_description_asset("HumanoidDescription", "Shirt", "int64"));
         assert!(is_humanoid_description_asset("HumanoidDescription", "IdleAnimation", "int64"));
         assert!(is_humanoid_description_asset("HumanoidDescription", "HatAccessory", "string"));
         assert!(is_humanoid_description_asset("HumanoidDescription", "BackAccessory", "int64"));
 
-        // False for wrong class
         assert!(!is_humanoid_description_asset("Part", "Face", "int64"));
 
-        // False for wrong types
         assert!(!is_humanoid_description_asset("HumanoidDescription", "Face", "string"));
     }
 
@@ -444,9 +422,9 @@ mod tests {
         assert!(!instance_strings.contains(&"Archivable".to_string()));
 
         let mesh_part_strings = string_props.get("MeshPart").expect("meshpart properties");
-        // Inherits from Instance
+
         assert!(mesh_part_strings.contains(&"Name".to_string()));
-        // Own properties
+
         assert!(mesh_part_strings.contains(&"TextureID".to_string()));
         assert!(mesh_part_strings.contains(&"MeshId".to_string()));
 

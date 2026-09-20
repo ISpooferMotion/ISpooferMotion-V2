@@ -29,14 +29,10 @@ fn emit_spoofer_log(app: &AppHandle, level: &str, message: &str) {
     );
 }
 
-// Image-family AssetTypeIds (Image, Decal, textures). Matches the mapping in
-// domain::roblox_api (1|11|13|2|21|22|38 => image).
 const fn asset_type_id_is_image(type_id: i64) -> bool {
     matches!(type_id, 1 | 2 | 11 | 13 | 21 | 22 | 38)
 }
 
-// Best-effort AssetTypeId lookup via the economy API. Returns None on failure or
-// inaccessible asset; callers treat None as "unconfirmed".
 async fn fetch_real_asset_type_id(asset_id: &str, cookie: &str) -> Option<i64> {
     let cookie_header = crate::utils::build_roblox_cookie_header(cookie);
     let client = crate::utils::get_http_client();
@@ -83,7 +79,6 @@ struct UploadMetadata {
     pub asset_id: Option<String>,
 }
 
-// Poll the operation endpoint until the uploaded asset completes processing to retrieve the final AssetId.
 async fn poll_roblox_operation(
     app: &AppHandle,
     client: &reqwest::Client,
@@ -230,7 +225,6 @@ fn upload_kind_for_type(asset_type_name: Option<&str>) -> UploadKind {
     }
 }
 
-// Validate the upload file resides within the managed downloads folder to prevent path traversal.
 async fn upload_path_allowed(
     app: &AppHandle,
     file_path: &std::path::Path,
@@ -258,7 +252,7 @@ async fn upload_path_allowed(
 
 #[tauri::command]
 #[specta::specta]
-// Main upload loop: handles Open Cloud API requests, rate limits, retries, and 409 conflicts.
+
 pub async fn publish_asset_with_progress(
     app: AppHandle,
     file_path: String,
@@ -343,21 +337,11 @@ pub async fn publish_asset_with_progress(
                 let is_image_payload =
                     meta.file_type == "image/png" || meta.file_type == "image/jpeg";
 
-                // Mesh slots occasionally hold plain image URIs in-engine (a
-                // Decal id used where a MeshId would normally live). Uploading
-                // the image and swapping the ID keeps Studio functional in
-                // those cases -- this is legit V2 behavior we preserve.
                 if is_image_payload && asset_type_name.as_deref() == Some("Mesh") {
                     upload_kind.asset_type = "Image".into();
                     upload_kind.needs_universe_permissions = true;
                 }
 
-                // An image payload for a non-image type is either a genuinely
-                // image asset (mistyped, e.g. a texture pasted as Animation) or a
-                // placeholder PNG served on access denial. The real AssetTypeId is
-                // the only reliable discriminator. Fetch it only on this mismatch
-                // path: confirmed image -> reclassify and upload; otherwise
-                // (including unconfirmed) -> keep the reject.
                 let mismatch = is_image_payload
                     && !matches!(
                         asset_type_name.as_deref(),
@@ -429,7 +413,6 @@ pub async fn publish_asset_with_progress(
     let file_name = format!("{}.{}", sanitize_filename(&name), upload_kind.extension);
     let _is_plugin = asset_type_name.as_deref() == Some("Plugin");
 
-    // Used for mutating file hashes to bypass 409 Conflicts. Populated lazily.
     let mut fallback_buffer: Option<Vec<u8>> = None;
     let mut final_asset_id = None;
 
@@ -509,7 +492,7 @@ pub async fn publish_asset_with_progress(
         let mut upload_success = false;
         let mut upload_error = None;
         let mut operation_path = None;
-        // Track 400 errors independently to prevent state-ordering bugs.
+
         let mut tried_type_fallback = false;
         let mut tried_name_fallback = false;
 
@@ -586,7 +569,6 @@ pub async fn publish_asset_with_progress(
             }
 
             if status_code == 409 {
-                // Reset fallbacks so they can be tried again with the new payload if it also 400s
                 tried_type_fallback = false;
                 tried_name_fallback = false;
 
@@ -685,7 +667,7 @@ pub async fn publish_asset_with_progress(
                         upload_error = Some("Could not bypass duplicate hash conflict: this file format does not support metadata padding.".to_string());
                         break;
                     }
-                    // Store the mutated buffer back so the next retry uses the modified bytes
+
                     fallback_buffer = Some(mutable_buffer);
                 }
                 continue;
@@ -907,13 +889,10 @@ mod tests {
 
     #[test]
     fn image_family_asset_type_ids_are_recognised() {
-        // Image(1), Decal(13) and the other texture-ish ids are images: an image
-        // payload for these is real content, not a placeholder.
         for image_id in [1, 2, 11, 13, 21, 22, 38] {
             assert!(asset_type_id_is_image(image_id), "id {image_id} should be image");
         }
-        // Animation(24), Audio(3), Mesh(40): an image payload here is a genuine
-        // placeholder and must stay rejected.
+
         for non_image in [24, 3, 40, 10, 0] {
             assert!(!asset_type_id_is_image(non_image), "id {non_image} should not be image");
         }

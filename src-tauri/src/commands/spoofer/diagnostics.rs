@@ -19,7 +19,6 @@ pub fn get_transfer_diagnostics_directory(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_data_dir().map(|p| p.join("failed-transfer-diagnostics")).ok()
 }
 
-// Delete old diagnostic folders to manage disk space.
 pub async fn prune_transfer_diagnostics(dir_path: &Path) {
     if let Ok(mut entries) = tokio::fs::read_dir(dir_path).await {
         let mut dirs = Vec::new();
@@ -41,7 +40,6 @@ pub async fn prune_transfer_diagnostics(dir_path: &Path) {
     }
 }
 
-// Save payload and error details to disk for debugging.
 pub async fn record_failed_transfer_diagnostic(
     app: &AppHandle,
     asset_id: &str,

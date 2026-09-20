@@ -1,4 +1,5 @@
 import { ArrowDownUp } from 'lucide-react';
+
 import { useConfig } from '../../../contexts/ConfigContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { SettingCard, SettingSwitchRow } from '../settings/SettingComponents';

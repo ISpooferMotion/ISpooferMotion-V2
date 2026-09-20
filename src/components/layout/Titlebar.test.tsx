@@ -1,8 +1,8 @@
 import { render } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import Titlebar from './Titlebar';
 
-// Mock contexts and stores
 vi.mock('../../contexts/LanguageContext', () => ({
   useLanguage: () => ({ t: (key: string) => key }),
 }));
@@ -34,7 +34,6 @@ vi.mock('../../stores/spooferStore', () => ({
   }),
 }));
 
-// Mock Tauri utils
 vi.mock('../../utils/tauriRuntime', () => ({
   isTauriRuntime: () => true,
 }));

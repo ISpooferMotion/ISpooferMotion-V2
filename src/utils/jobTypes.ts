@@ -46,7 +46,6 @@ export interface PendingSpoofRetry {
 
 const PENDING_SPOOF_RETRY_KEY = 'ISpooferMotion_PendingSpoofRetry';
 
-// Store retry data in session storage to persist across views.
 export function queueSpoofRetry(retry: PendingSpoofRetry) {
   sessionStorage.setItem(PENDING_SPOOF_RETRY_KEY, JSON.stringify(retry));
 }

@@ -1,14 +1,10 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Tutorial, TutorialStep } from './Tutorial';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
 import { useConfig } from '../../contexts/ConfigContext';
 import { useSpooferStore } from '../../stores/spooferStore';
 import { loadCachedUsers } from '../../utils/robloxProfiles';
+import { Tutorial, TutorialStep } from './Tutorial';
 
-/**
- * Returns true if the user has at least one Roblox account visible to the
- * app: either a manually added account, an auto-detected Studio account, or
- * a cookie already pasted into the spoofer config.
- */
 const hasAnyAccount = (config: ReturnType<typeof useConfig>['config']): boolean => {
   if (config.accounts.length > 0) return true;
   if (config.spoofing.selectedUser !== 'none') return true;
@@ -16,39 +12,23 @@ const hasAnyAccount = (config: ReturnType<typeof useConfig>['config']): boolean 
   try {
     const cached = loadCachedUsers();
     if (cached.length > 0) return true;
-  } catch {
-    // localStorage may be unavailable in some browser preview contexts.
-  }
+  } catch {}
   return false;
 };
 
-/**
- * Owns the first-launch tutorial lifecycle.
- *
- * - Mounts inside the App root so `useConfig()` is available.
- * - Auto-starts the tutorial on first launch (`tutorialCompleted === false`).
- * - Listens for a `ism-start-tutorial` window event so the "Show tutorial"
- *   button in Settings can re-trigger it without resetting config.
- * - Each step's Next button is gated by `isComplete` so the user must actually
- *   perform the action (add account, paste API key, scan Studio, select assets)
- *   rather than just clicking through.
- */
 export const TutorialGate = () => {
   const { config, updateConfig } = useConfig();
   const [open, setOpen] = useState(false);
   const rootInstances = useSpooferStore((s) => s.rootInstances);
   const selectedAssetIds = useSpooferStore((s) => s.selectedAssetIds);
 
-  // Auto-start on first launch.
   useEffect(() => {
     if (!config.ui.tutorialCompleted) {
-      // Slight delay so the app has time to render the targeted elements.
       const t = setTimeout(() => setOpen(true), 600);
       return () => clearTimeout(t);
     }
   }, [config.ui.tutorialCompleted]);
 
-  // Listen for the explicit "Show tutorial" Settings button.
   useEffect(() => {
     const handler = () => setOpen(true);
     window.addEventListener('ism-start-tutorial', handler);
@@ -58,13 +38,10 @@ export const TutorialGate = () => {
   const handleComplete = useCallback(() => {
     setOpen(false);
     updateConfig('ui', 'tutorialCompleted', true);
-    // Return to the explorer view so the user sees their assets.
+
     updateConfig('ui', 'activeTab', 'spoofing');
   }, [updateConfig]);
 
-  // Each step's prerequisite is read fresh every render so the tutorial
-  // unlocks as the user completes real actions. The isComplete callback runs
-  // on every render of the Tutorial primitive.
   const steps: TutorialStep[] = useMemo(
     () => [
       {
@@ -127,9 +104,6 @@ export const TutorialGate = () => {
 
   if (!open) return null;
 
-  // Optional side-effect: jump to the right tab so the user can see the
-  // relevant UI behind the card. The card is positioned in the bottom-right
-  // corner so it never blocks the targeted element.
   const beforeStep = (nextId: string | null) => {
     const targetTab: Record<string, 'accounts' | 'settings' | 'spoofing'> = {
       accounts: 'accounts',

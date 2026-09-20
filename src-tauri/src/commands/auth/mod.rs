@@ -15,12 +15,6 @@ pub use validation::{
     RobloxGroup, RobloxUserInfo, ROBLOX_USER_AGENT,
 };
 
-/// Sanitize a raw ROBLOSECURITY cookie value so it can be safely used as an
-/// HTTP header. Strips leading/trailing whitespace and removes every byte
-/// outside the visible ASCII range (0x20 – 0x7E). Chrome's DPAPI blobs,
-/// Roblox Studio credential entries, and clipboard pastes occasionally contain
-/// non-printable characters that cause `HeaderValue::from_str` to reject an
-/// otherwise valid token.
 pub(crate) fn sanitize_cookie_value(raw: &str) -> String {
     raw.trim().trim_matches('"').chars().filter(|c| *c >= '\x20' && *c <= '\x7E').collect()
 }
@@ -59,7 +53,6 @@ struct GroupIconItem {
 pub async fn get_cookie_from_roblox_studio(
     user_id: Option<String>,
 ) -> crate::error::Result<Option<String>> {
-    // Attempt to extract the cookie from Studio credentials.
     tokio::task::spawn_blocking(move || get_cookie_from_roblox_studio_inner(user_id))
         .await
         .map_err(|e| crate::error::AppError::Custom(format!("Task failed: {e}")))?
@@ -70,7 +63,6 @@ pub async fn get_cookie_from_roblox_studio(
 pub async fn get_cookie_from_auto_detect(
     user_id: Option<String>,
 ) -> crate::error::Result<Option<String>> {
-    // Priority: Studio credentials, followed by browser profiles.
     tokio::task::spawn_blocking(move || {
         if let Some(cookie) = get_cookie_from_roblox_studio_inner(user_id)? {
             return Ok(Some(cookie));
@@ -109,7 +101,6 @@ pub async fn get_authenticated_user_id(
     app: AppHandle,
     cookie: String,
 ) -> crate::error::Result<String> {
-    // Verify cookie validity via the users endpoint and fetch the user ID.
     let url = "https://users.roblox.com/v1/users/authenticated";
     let cookie_val = sanitize_cookie_value(&cookie);
     let cookie_header_str = if cookie_val.starts_with(".ROBLOSECURITY=") {
@@ -361,7 +352,6 @@ pub async fn detect_opencloud_api_key_owner(
 
     let client = crate::utils::get_http_client();
 
-    // Determine the asset owner by triggering an upload error that exposes the user ID.
     let payload = serde_json::json!({
         "assetType": "Decal",
         "displayName": "ownership-probe",
@@ -403,7 +393,6 @@ pub async fn detect_opencloud_api_key_owner(
         });
     }
 
-    // Extract the user ID from the error message.
     if let Some(caps) = opencloud_error_regex().captures(&text) {
         if let Some(owner) = caps.get(1) {
             return Ok(ApiKeyOwnerDetectResult {

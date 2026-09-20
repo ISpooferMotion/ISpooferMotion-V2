@@ -42,7 +42,6 @@ export async function fetchPluginBridge(path: string, port: string, init?: Reque
   return fetch(`${base}${path}`, requestInit);
 }
 
-// Determine the active port for the studio plugin.
 export async function findPluginBridgePort() {
   if (Date.now() - cachedAt < 1000) return cachedPort;
   if (pendingDiscovery) return pendingDiscovery;

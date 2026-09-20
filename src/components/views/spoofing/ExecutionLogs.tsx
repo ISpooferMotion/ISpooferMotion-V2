@@ -49,11 +49,7 @@ export default function ExecutionLogs({
   );
 
   const [eta, setEta] = useState<string | null>(null);
-  // Rolling window of (timestamp, completedCount) samples used for the ETA.
-  // Cumulative-average from job start produced wildly inflated ETAs (users
-  // reported 900+ minute estimates) because early samples are dominated by
-  // one-time setup: batch metadata, place-ID discovery on cold cache, and
-  // rate-limit warmup. A short trailing window reacts to actual throughput.
+
   const samplesRef = useRef<Array<{ t: number; count: number }>>([]);
 
   useEffect(() => {
@@ -78,13 +74,11 @@ export default function ExecutionLogs({
         return;
       }
 
-      // Add a fresh sample and drop anything older than the window.
       samplesRef.current.push({ t: now, count: spoofCurrentCount });
       samplesRef.current = samplesRef.current.filter((s) => now - s.t <= ETA_WINDOW_MS);
 
       const samples = samplesRef.current;
-      // Hold off on displaying an ETA until we have enough signal — otherwise
-      // the number swings wildly during the first few seconds of a job.
+
       if (samples.length < MIN_SAMPLES_FOR_ETA || spoofCurrentCount < MIN_ITEMS_FOR_ETA) {
         setEta(null);
         return;

@@ -1,15 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
-import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { check } from '@tauri-apps/plugin-updater';
 
-/**
- * Orchestrates the startup splash screen sequence.
- *
- * Checks the GitHub Releases API for Tauri bundle updates.
- * Prompts the user to download or skip if an update is found.
- * Triggers the Rust backend to silently copy the `.rbxmx` plugin to Studio.
- * Kills the splash window and boots the main React app.
- */
 async function runSplashFlow() {
   const statusText = document.getElementById('status-text');
 
@@ -23,12 +15,11 @@ async function runSplashFlow() {
     update = await Promise.race([
       check(),
       new Promise<null>((_, reject) =>
-        setTimeout(() => reject(new Error('Updater check timed out')), 5000),
+        setTimeout(() => reject(new Error('Updater check timed out')), 10000),
       ),
     ]);
   } catch (err) {
     console.error('Failed to check for updates:', err);
-    // Continue even if update fails
   }
 
   if (update?.available === true) {
@@ -47,7 +38,6 @@ async function runSplashFlow() {
       updateActions.classList.remove('hidden');
       updateActions.classList.add('flex');
 
-      // Disable dragging on the buttons
       btnSkip.classList.remove('drag-region');
       btnDownload.classList.remove('drag-region');
 
@@ -90,9 +80,8 @@ async function runSplashFlow() {
           statusText.innerText = 'Restarting to apply update...';
         }
         await relaunch();
-        return; // App will restart, no need to continue
+        return;
       } else {
-        // Skip was clicked, continue to normal flow
         spinner.classList.remove('hidden');
       }
     }
@@ -103,8 +92,6 @@ async function runSplashFlow() {
   }
 
   try {
-    // Artificial delay to let the UI paint the new text
-    await new Promise((r) => setTimeout(r, 600));
     await invoke('sync_roblox_plugin');
   } catch (err) {
     console.error('Failed to sync Roblox plugin:', err);
@@ -114,19 +101,13 @@ async function runSplashFlow() {
     statusText.innerText = 'Starting...';
   }
 
-  // Small delay to ensure smooth transition
-  setTimeout(async () => {
-    try {
-      await invoke('close_splashscreen');
-    } catch (err) {
-      console.error('Failed to close splashscreen:', err);
-    }
-  }, 800);
+  try {
+    await invoke('close_splashscreen');
+  } catch (err) {
+    console.error('Failed to close splashscreen:', err);
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  // Wait to ensure the WebView2 has fully painted the first frame on Windows
-  setTimeout(() => {
-    runSplashFlow();
-  }, 1000);
+  void runSplashFlow();
 });

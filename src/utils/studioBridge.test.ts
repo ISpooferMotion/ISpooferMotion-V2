@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { queueStudioReplacements } from './studioBridge';
 import * as tauriCore from '@tauri-apps/api/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as debugLogger from './debugLogger';
 import * as pluginBridge from './pluginBridge';
+import { queueStudioReplacements } from './studioBridge';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),

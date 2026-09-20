@@ -29,15 +29,11 @@ end
 
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
---- Recursively crawls the DataModel looking for spoofable assets.
----
---- To keep Studio responsive and avoid memory spikes on massive places, the
---- scanner yields frequently and streams records back to the daemon in chunks.
+
 local SCAN_CHUNK_BYTES: number = 500000
 local SCAN_MAX_TAGS_PER_OBJECT: number = 100
 local SCAN_MAX_TAG_BYTES: number = 100
 
---- Scans all custom attributes on an instance for asset references.
 local function scanAttributeRecords(records: { Record }, obj: Instance)
 	local okAttrs, attrs = pcall(function()
 		return obj:GetAttributes()
@@ -59,7 +55,6 @@ local function scanAttributeRecords(records: { Record }, obj: Instance)
 	end
 end
 
---- Validates that an array of tags is safe to process.
 local function validScannedTags(tags: any): boolean
 	if type(tags) ~= "table" or #tags == 0 or #tags > SCAN_MAX_TAGS_PER_OBJECT then
 		return false
@@ -74,7 +69,6 @@ local function validScannedTags(tags: any): boolean
 	return true
 end
 
---- Scans CollectionService tags on an instance for asset references.
 local function scanTagRecords(records: { Record }, obj: Instance)
 	local okTags, tags = pcall(function()
 		return CollectionService:GetTags(obj)
@@ -105,7 +99,6 @@ local function scanTagRecords(records: { Record }, obj: Instance)
 	end
 end
 
---- Scans StringValue and IntValue objects for asset references.
 local function scanValueObjectRecord(records: { Record }, obj: Instance)
 	if not (obj:IsA("StringValue") or obj:IsA("IntValue") or obj:IsA("NumberValue")) then
 		return
@@ -129,70 +122,14 @@ local function scanValueObjectRecord(records: { Record }, obj: Instance)
 	end
 end
 
---- Extracts asset IDs from a script source in-place (Luau), without shipping
---- the full source to the daemon. This is the "asset IDs" scan mode: far less
---- payload for large scripts (a few IDs instead of megabytes of source), at the
---- cost of less context than the daemon's full-moon AST extraction. Users who
---- need the full extraction switch to "fullSource" mode.
-local function extractScriptAssetIds(source: string): { string }
-	local ids: { string } = {}
-	local seen: { [string]: boolean } = {}
-
-	local function add(id: string)
-		-- Asset IDs are at least 7 digits; skip repeating-digit runs (e.g. 1111111)
-		-- which are almost never asset IDs.
-		if #id < 7 then
-			return
-		end
-		local first = string.sub(id, 1, 1)
-		local allSame = true
-		for i = 2, #id do
-			if string.sub(id, i, i) ~= first then
-				allSame = false
-				break
-			end
-		end
-		if not allSame and not seen[id] then
-			seen[id] = true
-			table.insert(ids, id)
-		end
-	end
-
-	-- Explicit rbxassetid:// URIs.
-	for id in string.gmatch(source, "rbxassetid://(%d+)") do
-		add(id)
-	end
-	-- roblox.com/asset?id= URIs (case-insensitive-ish, matches the daemon path).
-	for id in string.gmatch(source, "[Aa]sset/%?[Ii][Dd]=(%d+)") do
-		add(id)
-	end
-	-- Bare numbers >= 7 digits preceded by assignment/call/table context, to
-	-- catch LoadAsset(1234567) / local x = 1234567 without matching digits
-	-- embedded inside longer identifiers or strings.
-	for id in string.gmatch(source, "[=:{,(]%s*(%d%d%d%d%d%d%d+)") do
-		add(id)
-	end
-
-	return ids
-end
-
---- Extracts the source code from scripts so the daemon can rewrite raw IDs.
----
---- Scan mode (ISpooferMotion_SCRIPT_SCAN_MODE setting):
----   "assetIds"  (default) — extract IDs locally, send a compact record. Fast,
----                low payload, but less context than the daemon's AST extraction.
----   "fullSource"          — send the full source; the daemon AST-parses it.
----                Most accurate, but ships megabytes for large scripts.
----   "off"                 — skip script scanning entirely.
 local function scanScriptSourceRecord(records: { Record }, obj: Instance)
 	if not obj:IsA("LuaSourceContainer") or obj.ClassName == "CoreScript" then
 		return
 	end
 
-	-- Skip script scanning if the user deselected "scripts" in the scan popup.
 	local scanScripts = false
-	for _, t in ipairs(activeScanTypes) do
-		if t == "scripts" then
+	for _, scanType in ipairs(activeScanTypes) do
+		if scanType == "scripts" then
 			scanScripts = true
 			break
 		end
@@ -201,28 +138,17 @@ local function scanScriptSourceRecord(records: { Record }, obj: Instance)
 		return
 	end
 
-	-- Use the mode pushed from the desktop app (falls back to the plugin setting
-	-- if the app didn't send one, so manual plugin-only scans still work).
-	local mode = activeScriptScanMode
-		or plugin:GetSetting("ISpooferMotion_SCRIPT_SCAN_MODE")
-		or "assetIds"
-	if mode == "off" then
-		return
-	end
-
 	local sourceOk, source = pcall(function()
 		return (obj :: any).Source
 	end)
-
 	if not sourceOk then
 		local fullName = "Unknown"
 		pcall(function()
 			fullName = obj:GetFullName()
 		end)
-		logToPlugin("[Warning] " .. "[ISpooferMotion] Could not read source of " .. fullName)
+		logToPlugin("[Warning] [ISpooferMotion] Could not read source of " .. fullName)
 		return
 	end
-
 	if not source or source == "" then
 		return
 	end
@@ -231,29 +157,15 @@ local function scanScriptSourceRecord(records: { Record }, obj: Instance)
 		pcall(function()
 			fullName = obj:GetFullName()
 		end)
-		logToPlugin(
-			"[Warning] " .. "[ISpooferMotion] Skipping oversized script source: " .. fullName
-		)
+		logToPlugin("[Warning] [ISpooferMotion] Skipping oversized script source: " .. fullName)
 		return
 	end
-
-	if mode == "fullSource" then
-		addRecord(records, obj, "Source", source, false)
-	else
-		-- assetIds: extract IDs locally and send a compact record. The daemon
-		-- builds the script-ref list from these IDs and, at patch time, sends an
-		-- old->new mapping back (the plugin re-reads the source and applies it).
-		local ids = extractScriptAssetIds(source)
-		if #ids > 0 then
-			addRecord(records, obj, "SourceIds", HttpService:JSONEncode(ids), false)
-		end
-	end
+	addRecord(records, obj, "Source", source, false)
 end
 
 local FLUSH_MAX_RETRIES: number = 10
 local FLUSH_RETRY_WAIT: number = 1.5
 
---- Attempts to push the current scan chunk to the daemon, retrying on failure.
 local function flushScanRecordsOrError(records: { Record })
 	for attempt = 1, FLUSH_MAX_RETRIES do
 		if flushRecords(records) then
@@ -275,7 +187,6 @@ local function flushScanRecordsOrError(records: { Record })
 	error("Could not send Studio scan records after " .. FLUSH_MAX_RETRIES .. " attempts")
 end
 
---- Runs all property extractors against a single instance.
 local function processScannedObject(records: { Record }, obj: Instance)
 	if obj:IsA("Sound") or obj:IsA("AudioPlayer") or obj:IsA("AudioEmitter") then
 		if not isScanTypeEnabled("sounds") then
@@ -309,9 +220,6 @@ local function processScannedObject(records: { Record }, obj: Instance)
 	scanAttributeRecords(records, obj)
 	scanTagRecords(records, obj)
 
-	-- scannedProps is created first so scanSpecialInstanceAssets can populate it.
-	-- This prevents scanBundledStringProperties from re-reading properties that
-	-- were already captured (e.g. Sound.SoundId, MeshPart.TextureID).
 	local scannedProps: { [string]: boolean } = {}
 	scanSpecialInstanceAssets(records, obj, scannedProps)
 
@@ -331,7 +239,6 @@ local function processScannedObject(records: { Record }, obj: Instance)
 	scanEmbeddedStringAssets(records, obj)
 end
 
---- Crawls all requested services in the DataModel to find assets.
 local function scanAssets(): ()
 	local bundledAssetClasses = countBundledClasses(ASSET_PROPERTIES)
 	local bundledStringClasses = countBundledClasses(STRING_SCAN_PROPERTIES)
@@ -500,13 +407,11 @@ local function scanAssets(): ()
 		)
 	)
 	if autoReplaceEnabled then
-		-- Clear records after sending
 		table.clear(records)
 		setPluginGuiStatus("Waiting for new scan or replacements...")
 	end
 end
 
---- Kicks off a full workspace scan, managing state locks and error handling.
 local function scan(): ()
 	if scanRunning then
 		logToPlugin("[Warning] Scan already running")

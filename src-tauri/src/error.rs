@@ -1,12 +1,5 @@
-//! Unified error handling types for the application.
-
 use serde::{Serialize, Serializer};
 
-/// Centralized application error enum.
-///
-/// This type is exported to the frontend via Specta and serialized into a structured
-/// JSON string containing both a user-facing message and debug details. It wraps
-/// common underlying errors (IO, Network, JSON) to avoid scattered `.unwrap()` calls.
 #[derive(thiserror::Error, Debug, specta::Type)]
 #[specta(type = String)]
 pub enum AppError {
@@ -41,10 +34,6 @@ impl From<String> for AppError {
     }
 }
 
-/// Redacts local PC usernames from path patterns before logging or displaying errors.
-///
-/// We strip Windows, macOS, and Linux home directory paths so that stack traces or
-/// log exports do not inadvertently leak the user's real name.
 fn redact_user_paths(message: &str) -> String {
     use std::sync::OnceLock;
 
@@ -62,7 +51,6 @@ fn redact_user_paths(message: &str) -> String {
                 "[REDACTED_PATH]",
             ),
             (
-                // Handle Linux paths.
                 regex::Regex::new(r"(?i)/home/[^/\s]+(?:/[^\s]*)*").expect("invalid regex"),
                 "[REDACTED_PATH]",
             ),
@@ -81,8 +69,6 @@ impl Serialize for AppError {
     where
         S: Serializer,
     {
-        // Serialize as a JSON string with both a user-facing message and a redacted debug
-        // representation. The frontend (notifyError.ts) parses this shape to display errors.
         let display = redact_user_paths(&self.to_string());
         let debug = redact_user_paths(&format!("{:#?}", self));
         let json = serde_json::json!({ "message": display, "debug": debug });

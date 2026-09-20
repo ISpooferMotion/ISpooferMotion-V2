@@ -27,7 +27,6 @@ export default function PasteIdsModal({
   const addGhostAssets = useSpooferStore((s) => s.addGhostAssets);
   const showToast = useSpooferStore((s) => s.showToast);
 
-  // Mode: Replace IDs parsing (pairs)
   const parsePairsInput = (text: string): { pairs: Record<string, string>; badLines: number } => {
     const pairs: Record<string, string> = {};
     let badLines = 0;
@@ -53,7 +52,6 @@ export default function PasteIdsModal({
     return { pairs, badLines };
   };
 
-  // Mode: Add IDs parsing (standalone list of IDs)
   const parseSingleIdsInput = (text: string): string[] => {
     const ids = new Set<string>();
     const tokens = text.split(/[\s,;\n\r\t]+/);
@@ -102,10 +100,8 @@ export default function PasteIdsModal({
         setIsApplying(false);
       }
     } else {
-      // Add IDs mode
       if (singleIds.length === 0) return;
 
-      // Extract all asset IDs existing in Studio scan tree
       const existingStudioIds = new Set<string>();
       const collectStudioIds = (nodes: typeof rootInstances) => {
         for (const node of nodes) {
@@ -129,12 +125,10 @@ export default function PasteIdsModal({
         }
       }
 
-      // Add ghost IDs to store
       if (ghostIds.length > 0) {
         addGhostAssets(ghostIds);
       }
 
-      // Select all provided IDs (both matched and ghosts)
       setSelectedAssetIds((prev) => {
         const next = new Set(prev);
         for (const id of singleIds) next.add(id);
@@ -165,7 +159,6 @@ export default function PasteIdsModal({
           </DialogTitle>
         </DialogHeader>
 
-        {/* Mode Switcher Tabs */}
         <div className="flex rounded-lg overflow-hidden border border-border-subtle bg-bg-base p-1 gap-1">
           <button
             type="button"

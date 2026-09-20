@@ -1,10 +1,11 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import AnimationPreview from './AnimationPreview';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as tauriCore from '@tauri-apps/api/core';
-import * as LanguageContext from '../../contexts/LanguageContext';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as ConfigContext from '../../contexts/ConfigContext';
+import * as LanguageContext from '../../contexts/LanguageContext';
 import * as robloxAnimParser from '../../utils/robloxAnimParser';
+import AnimationPreview from './AnimationPreview';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -22,14 +23,12 @@ vi.mock('../../utils/robloxAnimParser', () => ({
   parseAnimationXml: vi.fn(),
 }));
 
-// Mock ResizeObserver
 globalThis.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}
   disconnect() {}
 };
 
-// Mock THREE.js to prevent webgl context errors in jsdom
 vi.mock('three', () => {
   return {
     WebGLRenderer: vi.fn().mockImplementation(function () {
@@ -162,7 +161,6 @@ vi.mock('three/examples/jsm/loaders/OBJLoader.js', () => ({
   OBJLoader: vi.fn().mockImplementation(function () {
     return {
       load: vi.fn((_url, onLoad) => {
-        // Just immediately call onLoad with a dummy Object3D
         onLoad({
           traverse: vi.fn(),
         });
@@ -190,7 +188,7 @@ describe('AnimationPreview', () => {
   });
 
   it('shows error if xml fetch fails', async () => {
-    vi.mocked(tauriCore.invoke).mockResolvedValue(null); // Returns null
+    vi.mocked(tauriCore.invoke).mockResolvedValue(null);
 
     render(<AnimationPreview assetId="123" onClose={() => {}} />);
 
@@ -238,20 +236,16 @@ describe('AnimationPreview', () => {
     const onClose = vi.fn();
     render(<AnimationPreview assetId="123" onClose={onClose} />);
 
-    // In a portal, find the button by getting the close icon or just button inside the portal
-    screen.getByRole('button'); // Since loading state only has the modal overlay and close button
-    // wait for loading state to finish so close button appears
+    screen.getByRole('button');
+
     await waitFor(() => {
       expect(screen.getByText('misc.animationLoadFailed')).toBeInTheDocument();
     });
 
-    // Actually, there's a close button in the header.
-    // It's the only button in the header.
     const buttons = screen.getAllByRole('button');
-    // The close button is usually the last one in the header, or we can just find it
-    fireEvent.click(buttons[0]); // If there's multiple, let's just click the overlay
 
-    // The overlay is the first div.
+    fireEvent.click(buttons[0]);
+
     const overlay = document.body.querySelector('.fixed.inset-0');
     if (overlay) fireEvent.click(overlay);
 

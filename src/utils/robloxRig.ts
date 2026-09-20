@@ -1,4 +1,3 @@
-// Hardcoded rig data for R6 and R15.
 export interface RigBone {
   name: string;
   parent: string | null;
@@ -192,7 +191,6 @@ export function getBones(rigType: RigType): RigBone[] {
   return rigType === 'R6' ? R6_BONES : R15_BONES;
 }
 
-// Infer R6 or R15 based on touched bones.
 export function detectRigType(poseNames: Set<string>): RigType {
   const r15Bones = new Set([
     'LowerTorso',

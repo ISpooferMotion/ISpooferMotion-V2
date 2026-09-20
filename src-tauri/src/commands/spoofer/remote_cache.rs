@@ -12,15 +12,12 @@ pub struct CachedContext {
     pub is_invalidated: bool,
 }
 
-// The push URL is write-only: we POST discoveries to it, we never GET from it.
 static PUSH_URL: OnceLock<std::sync::RwLock<Option<String>>> = OnceLock::new();
 
 fn get_push_url_lock() -> &'static std::sync::RwLock<Option<String>> {
     PUSH_URL.get_or_init(|| std::sync::RwLock::new(None))
 }
 
-// Internal-only: exposes the configured push URL for use within push_discovery.
-// Not pub - nothing outside this module should ever branch on the remote URL value.
 fn read_push_url() -> Option<String> {
     get_push_url_lock().read().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
 }
@@ -30,15 +27,12 @@ fn set_push_url(push_url: Option<String>) {
     *guard = push_url;
 }
 
-// The local in-process cache. This is the ONLY data source for read lookups.
 static LOCAL_CACHE: OnceLock<DashMap<String, CachedContext>> = OnceLock::new();
 
 fn get_local_cache() -> &'static DashMap<String, CachedContext> {
     LOCAL_CACHE.get_or_init(DashMap::new)
 }
 
-/// Read a place ID from the **local** session cache only.
-/// Never reads from the remote community API - see module-level comment.
 pub fn get_local_context(asset_id: &str) -> Option<String> {
     let cache = get_local_cache();
     if let Some(entry) = cache.get(asset_id) {
@@ -110,7 +104,6 @@ fn retryable_status(status: reqwest::StatusCode) -> bool {
 fn retry_delay(attempt: usize, response: Option<&reqwest::Response>) -> Duration {
     if let Some(response) = response {
         if let Some(delay_ms) = crate::utils::extract_retry_after(response, Some(attempt as u32)) {
-            // Cache contributions must not hold a completed spoofing job open indefinitely.
             return Duration::from_millis(delay_ms.min(30_000));
         }
     }
@@ -165,8 +158,6 @@ pub async fn push_discovery(asset_id: String, place_id: String) -> Result<(), St
         CachedContext { place_id: place_id.clone(), is_invalidated: false },
     );
 
-    // Simple eviction: if the cache grows above 50k entries, drop the oldest-iterated 10k.
-    // Note: DashMap iteration order is unspecified, so this is not true LRU.
     if cache.len() > 50_000 {
         let to_remove: Vec<String> = cache.iter().take(10_000).map(|e| e.key().clone()).collect();
         for key in to_remove {
@@ -184,11 +175,7 @@ pub async fn push_discovery(asset_id: String, place_id: String) -> Result<(), St
 
 #[tauri::command]
 #[specta::specta]
-/// Configure the push URL for the community asset cache.
-///
-/// This sets the endpoint that newly discovered (asset_id, place_id) pairs are POSTed to.
-/// Reading from the community cache is explicitly NOT supported - users resolve assets
-/// from their own local session cache only.
+
 pub async fn initialize_remote_cache(
     app: tauri::AppHandle,
     push_url: Option<String>,
@@ -199,8 +186,6 @@ pub async fn initialize_remote_cache(
         validate_cache_url(pu)?;
     }
 
-    // Update this before starting migrations so disabling telemetry also
-    // cancels queued attempts and retries that still hold an older URL.
     set_push_url(push_url.clone());
 
     if let Some(ref pu) = push_url {
@@ -209,7 +194,6 @@ pub async fn initialize_remote_cache(
             let cache_path = app_dir.join("local_remote_cache.json");
             let migrated_lock_path = app_dir.join("local_remote_cache_migrated.lock");
 
-            // Only process the historical cache ONCE. If the lock file exists, skip.
             if !migrated_lock_path.exists() {
                 if let Ok(content) = tokio::fs::read_to_string(&cache_path).await {
                     if let Ok(existing) =
@@ -235,7 +219,6 @@ pub async fn initialize_remote_cache(
                             }
 
                             if migration_succeeded {
-                                // Only mark migration complete once every entry was accepted.
                                 if let Err(error) =
                                     tokio::fs::write(&migrated_lock_path, "migrated").await
                                 {
@@ -251,7 +234,7 @@ pub async fn initialize_remote_cache(
                         });
                     }
                 }
-            } // End of migrated_lock_path.exists()
+            }
         }
     }
 

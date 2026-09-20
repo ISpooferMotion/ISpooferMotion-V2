@@ -35,23 +35,19 @@ struct JobContext {
     enable_archive_recovery: bool,
     operation_poll_interval_ms: Option<u32>,
 
-    // Shared tracking state
     success_count: AtomicUsize,
     skip_count: AtomicUsize,
     fail_count: AtomicUsize,
     interrupted: AtomicBool,
 
-    // Thread-safe caches & outputs
     creator_place_ids_cache: dashmap::DashMap<String, Vec<String>>,
     replacements: dashmap::DashMap<String, serde_json::Value>,
     asset_results: Mutex<Vec<serde_json::Value>>,
     log_file: Mutex<Option<File>>,
 
-    // Concurrency controls
     download_semaphore: Arc<Semaphore>,
     discoveries: Mutex<Vec<(String, String)>>,
 
-    // External handles
     client: reqwest::Client,
     app: AppHandle,
 }
@@ -109,10 +105,6 @@ fn first_valid_place_id(raw: Option<&str>) -> Option<String> {
     valid_place_ids(raw).into_iter().next()
 }
 
-// Abort a job early only when there is no realistic path to the assets. The
-// batch endpoints return empty for recoverable assets too, so batch-emptiness
-// alone is insufficient. A forced place (direct URLs) or a discovery probe that
-// finds candidate places both rule out the abort.
 const fn should_fast_fail_on_empty_batches(
     preserve_metadata: bool,
     total_assets: usize,
@@ -129,9 +121,6 @@ const fn should_fast_fail_on_empty_batches(
         && !discovery_found_places
 }
 
-// Reachability probe: does per-asset discovery find any candidate place for the
-// sample asset? Mirrors the download loop's resolution. Best-effort; errors ->
-// false.
 async fn sample_discovery_reachable(app: &AppHandle, cookie: &str, sample_asset_id: &str) -> bool {
     match crate::commands::spoofer::get_asset_creator_for_asset(
         app.clone(),
@@ -140,21 +129,17 @@ async fn sample_discovery_reachable(app: &AppHandle, cookie: &str, sample_asset_
     )
     .await
     {
-        Ok((creator_type, creator_id)) => {
-            // Cap at 3 places -- we only need to know whether ANY exist. Result is
-            // cached, so the real download loop reuses it rather than refetching.
-            crate::commands::spoofer::get_place_id_from_creator(
-                app.clone(),
-                creator_type,
-                creator_id,
-                cookie.to_string(),
-                Some(3),
-                None,
-            )
-            .await
-            .map(|places| !places.is_empty())
-            .unwrap_or(false)
-        }
+        Ok((creator_type, creator_id)) => crate::commands::spoofer::get_place_id_from_creator(
+            app.clone(),
+            creator_type,
+            creator_id,
+            cookie.to_string(),
+            Some(3),
+            None,
+        )
+        .await
+        .map(|places| !places.is_empty())
+        .unwrap_or(false),
         Err(_) => false,
     }
 }
@@ -191,9 +176,6 @@ async fn fetch_asset_details(
     Some(AssetDetails { name, description })
 }
 
-/// Returned alongside [`AssetDetails`] so discovery can skip the per-asset
-/// `/v2/assets/{id}/details` fetch. `creator_type` is `"User"` or `"Group"`;
-/// `creator_id` is the corresponding numeric id.
 type BatchCreatorInfo = HashMap<String, (String, u64)>;
 
 async fn batch_fetch_asset_details(
@@ -204,7 +186,7 @@ async fn batch_fetch_asset_details(
 ) -> (HashMap<String, AssetDetails>, BatchCreatorInfo) {
     let mut details = HashMap::new();
     let mut creators: BatchCreatorInfo = HashMap::new();
-    // Roblox Catalog API hard limit is max 30 items per request
+
     let chunks = asset_ids.chunks(30);
 
     for chunk in chunks {
@@ -252,10 +234,6 @@ async fn batch_fetch_asset_details(
                                 .to_string();
                             details.insert(id.to_string(), AssetDetails { name, description });
 
-                            // Same response also carries the creator info we
-                            // would otherwise refetch per-asset inside the
-                            // discovery pass. Capture it now so the first-per-
-                            // creator discovery skips that extra HTTP call.
                             let creator_type = item
                                 .get("creatorType")
                                 .and_then(|v| v.as_str())
@@ -274,8 +252,6 @@ async fn batch_fetch_asset_details(
         }
     }
 
-    // For developer assets not listed in the catalog (e.g. Animations, private sounds),
-    // query develop.roblox.com/v1/assets in batches of 50
     let missing_ids: Vec<String> =
         asset_ids.iter().filter(|id| !details.contains_key(*id)).cloned().collect();
 
@@ -360,7 +336,6 @@ pub async fn process_spoofer_action(
 
     let log_file = OpenOptions::new().create(true).append(true).open(&job_log_path).ok();
 
-    // Provide a minimal temporary context just for early logging before the full JobContext is built.
     let proxy_url = data.proxy_url.clone();
     let temp_log_file = Mutex::new(log_file);
     let temp_log = |msg: &str, level: &str| {
@@ -556,11 +531,7 @@ pub async fn process_spoofer_action(
         let (fetched_metadata, fetched_creators) =
             batch_fetch_asset_details(&asset_ids, &cookie, &csrf_token, &client).await;
         batch_metadata = fetched_metadata;
-        // Warm the discovery cache with the creator info the batch already
-        // returned. Without this, the first discovery pass per creator would
-        // do its own serial `/v2/assets/{id}/details` fetch to learn who the
-        // creator is -- one extra HTTP hop per unique creator that we can
-        // skip entirely now that we already have the data.
+
         if !fetched_creators.is_empty() {
             let creator_count = fetched_creators.len();
             crate::commands::spoofer::download::resolution::prewarm_creator_info_cache(
@@ -599,9 +570,6 @@ pub async fn process_spoofer_action(
         }
     }
 
-    // Abort only when no path to the assets remains. Empty batch endpoints alone
-    // are insufficient (recoverable assets return empty too), so the probe below
-    // runs only once the cheap gates hold. See should_fast_fail_on_empty_batches.
     let total_pre = parsed_assets.len();
     let forced_place_present = !forced_place_ids.is_empty();
     let cheap_gate = preserve_metadata
@@ -721,13 +689,6 @@ pub async fn process_spoofer_action(
     let skip_owned = data.skip_owned.unwrap_or(false);
     let stream = stream::iter(parsed_assets.into_iter().enumerate());
 
-    // Belt-and-braces cap so a single asset's HTTP retry cascade cannot
-    // stall the whole job. Individual HTTP requests have their own 15s
-    // client timeout and retry-after values are now capped at 2 minutes,
-    // but a task could still legitimately need ~5 minutes for a rate-
-    // limited multi-step upload. 10 minutes is a comfortable ceiling
-    // above that while still being far below the 20+ minute hangs users
-    // have reported.
     const PER_ASSET_TIMEOUT_SECS: u64 = 600;
 
     stream
@@ -959,18 +920,14 @@ pub async fn process_spoofer_action(
                                 let e_str = e.to_string();
                                 ctx.log(&format!("Upload error for {asset_id}: {e_str}"), "error");
                                 ctx.record_result(serde_json::json!({ "id": asset_id, "name": exact_name, "type": asset_type, "success": false, "stage": "upload", "errorReason": e_str }));
-                                if e_str.contains("403 Forbidden") || e_str.contains("401 Unauthorized") {
-                                    // Only fire the "halting job" message the
-                                    // FIRST time we set the flag, otherwise a
-                                    // burst of parallel-upload 403s spams the
-                                    // log with the same halt message.
-                                    if !ctx.interrupted.swap(true, Ordering::Relaxed) {
+                                if (e_str.contains("403 Forbidden") || e_str.contains("401 Unauthorized"))
+
+                                    && !ctx.interrupted.swap(true, Ordering::Relaxed) {
                                         ctx.log(
                                             "Halting the rest of this job -- the Open Cloud API key was rejected. Fix the key (Assets = Write, IP whitelist = 0.0.0.0/0) in the Creator Dashboard, then retry. Assets that hadn't been reached yet were NOT processed.",
                                             "warn",
                                         );
                                     }
-                                }
                             }
                         }
                     }
@@ -996,9 +953,7 @@ pub async fn process_spoofer_action(
                     Err(e) => {
                         ctx.fail_count.fetch_add(1, Ordering::Relaxed);
                         let raw = e.to_string();
-                        // Translate common reqwest jargon into something a
-                        // tester can act on. Everything else falls through
-                        // with the original message.
+
                         let human = if raw.contains("error decoding response body") {
                             "Roblox cut the connection mid-download (or sent a corrupt/gzipped body). Retries didn't recover -- try again in a moment.".to_string()
                         } else if raw.contains("timed out") || raw.contains("timeout") {
@@ -1027,11 +982,7 @@ pub async fn process_spoofer_action(
                 .await
                 .is_err()
                 {
-                    // Task exceeded the per-asset ceiling. If the task had already
-                    // recorded a replacement (i.e. the upload succeeded and the
-                    // hang was in the trailing cleanup) we must NOT count it as
-                    // failed too — that would double-count against fail_count and
-                    // flip the job to "partially_finished" when everything worked.
+
                     if ctx_for_timeout.replacements.contains_key(&asset_id_for_timeout) {
                         ctx_for_timeout.log(
                             &format!(
@@ -1113,8 +1064,6 @@ pub async fn process_spoofer_action(
     );
     ctx.log(&summary, if completed_successfully { "success" } else { "warn" });
 
-    // If the job effectively failed across the board, surface the most likely
-    // root cause instead of leaving the user staring at a wall of red warnings.
     if total > 0 && success == 0 && failed > 0 {
         ctx.log(
             "Every asset failed. This is almost always an auth problem, not a bug -- the cookie or forced Place ID can't access these assets on Roblox. Try: (1) refreshing the ROBLOSECURITY cookie in Accounts, (2) picking a Place you actually own for the forced Place ID, (3) confirming the Open Cloud API key belongs to the same account/group.",
@@ -1138,8 +1087,6 @@ pub async fn process_spoofer_action(
             "info",
         );
     } else if success > 0 {
-        // Successful uploads but no replacements queued -- almost always means
-        // the mapping got dropped somewhere. Flag it clearly.
         ctx.log(
             "Uploads succeeded but no replacements got queued to the plugin. If this reproduces please share the log -- it means the mapping-collection step failed.",
             "warn",
@@ -1219,18 +1166,17 @@ mod tests {
 
     #[test]
     fn fast_fail_requires_no_recovery_path() {
-        // No forced place, both batches empty, discovery found nothing -> abort.
         assert!(should_fast_fail_on_empty_batches(true, 10, false, true, true, false));
-        // Discovery found places -> recoverable, no abort.
+
         assert!(!should_fast_fail_on_empty_batches(true, 10, false, true, true, true));
-        // Forced place -> direct URLs available, no abort.
+
         assert!(!should_fast_fail_on_empty_batches(true, 10, true, true, true, false));
-        // A batch endpoint returned data -> no abort.
+
         assert!(!should_fast_fail_on_empty_batches(true, 10, false, false, true, false));
         assert!(!should_fast_fail_on_empty_batches(true, 10, false, true, false, false));
-        // Fewer than 5 assets -> no abort.
+
         assert!(!should_fast_fail_on_empty_batches(true, 4, false, true, true, false));
-        // Metadata preservation off -> signal doesn't apply.
+
         assert!(!should_fast_fail_on_empty_batches(false, 10, false, true, true, false));
     }
 

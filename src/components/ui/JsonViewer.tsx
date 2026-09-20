@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronRight, Copy } from 'lucide-react';
 import { useState } from 'react';
 
@@ -12,13 +11,6 @@ interface JsonViewerProps {
   level?: number;
 }
 
-/**
- * A recursive, interactive JSON viewer component.
- *
- * Built with Framer Motion for smooth expand/collapse animations. It's used
- * heavily in the debug console to inspect raw API responses and payload structures
- * without cluttering the UI.
- */
 export function JsonViewer({ data, name, defaultExpanded = false, level = 0 }: JsonViewerProps) {
   const { t } = useLanguage();
 
@@ -73,13 +65,9 @@ export function JsonViewer({ data, name, defaultExpanded = false, level = 0 }: J
         className="flex items-center gap-1.5 cursor-pointer hover:bg-bg-elevated/40 rounded px-1 -mx-1 group select-none"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <motion.div
-          animate={{ rotate: isExpanded ? 90 : 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-          className="text-text-muted shrink-0"
-        >
+        <div className={cn('text-text-muted shrink-0', isExpanded && 'rotate-90')}>
           <ChevronRight size={12} />
-        </motion.div>
+        </div>
         {name && <span className="text-text-primary/90 font-medium">{name}:</span>}
         <span className="text-text-muted/80">{brackets[0]}</span>
         {!isExpanded && (
@@ -100,28 +88,20 @@ export function JsonViewer({ data, name, defaultExpanded = false, level = 0 }: J
         )}
       </div>
 
-      <AnimatePresence initial={false}>
-        {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="overflow-hidden"
-          >
-            <div className="pl-4 border-l border-border-subtle/50 ml-1.5 my-0.5 flex flex-col gap-0.5">
-              {keys.map((key) => (
-                <JsonViewer
-                  key={key}
-                  name={isArray ? null : key}
-                  data={(data as Record<string, unknown>)[key]}
-                  level={level + 1}
-                />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isExpanded && (
+        <div className="overflow-hidden">
+          <div className="pl-4 border-l border-border-subtle/50 ml-1.5 my-0.5 flex flex-col gap-0.5">
+            {keys.map((key) => (
+              <JsonViewer
+                key={key}
+                name={isArray ? null : key}
+                data={(data as Record<string, unknown>)[key]}
+                level={level + 1}
+              />
+            ))}
+          </div>
+        </div>
+      )}
       {isExpanded && <div className="text-text-muted/80 pl-1">{brackets[1]}</div>}
     </div>
   );

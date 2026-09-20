@@ -117,9 +117,6 @@ interface SpooferState {
   showAdvanced: boolean;
   setShowAdvanced: (val: boolean | ((prev: boolean) => boolean)) => void;
 
-  // True while a Studio scan is in progress. Lives in the store (not local
-  // component state) so the explorer action bar can read it without prop
-  // drilling from the (now hidden) SpoofingView logic host.
   isScanningStudio: boolean;
   setIsScanningStudio: (val: boolean) => void;
 
@@ -132,26 +129,20 @@ interface SpooferState {
   assetMetadataMap: Record<string, { name: string; type: string }>;
   setAssetMetadataMap: (val: Record<string, { name: string; type: string }>) => void;
 
-  // Per-asset forced place IDs. Maps an asset id to a place id that should be
-  // used as the asset-delivery place hint when spoofing that asset. Absent key
-  // means "use the global forcePlaceIds / studio fallback" for that asset.
   assetForcePlaceIds: Record<string, string>;
   setAssetForcePlaceIds: (
     val: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>),
   ) => void;
   clearAssetForcePlaceIds: (ids: string[]) => void;
 
-  // Per-asset status during spoofing
   assetStatuses: Record<string, { stage: AssetStage; message?: string }>;
   setAssetStatus: (assetId: string, status: { stage: AssetStage; message?: string }) => void;
   clearAssetStatuses: () => void;
 
-  // Bottom-right toast for one-off notifications (job finished, etc).
   toast: { id: number; level: 'success' | 'error' | 'info'; message: string } | null;
   showToast: (level: 'success' | 'error' | 'info', message: string, ttlMs?: number) => void;
   dismissToast: () => void;
 
-  // True while place ID discovery is running (pre-spoof step)
   isDiscoveringPlaceIds: boolean;
   setIsDiscoveringPlaceIds: (val: boolean) => void;
 
@@ -173,7 +164,6 @@ interface SpooferState {
   forceSpoof: boolean;
   setForceSpoof: (val: boolean) => void;
 
-  // Ghost IDs state (IDs added manually without an instance in Studio)
   ghostAssetIds: Set<string>;
   addGhostAssets: (ids: string[]) => void;
   removeGhostAssets: (ids: string[]) => void;
@@ -201,13 +191,6 @@ const loadSavedPlaceIds = (): Record<string, string> => {
   }
 };
 
-/**
- * Ephemeral state manager for the active spoofing job, asset explorer, and Studio integration.
- *
- * Kept strictly separate from the config store because none of this data needs to be
- * persisted to disk. It tracks live IPC events, progress bars, and temporary session data,
- * wiping itself clean on every app restart.
- */
 export const useSpooferStore = create<SpooferState>((set) => ({
   rootInstances: [],
   setRootInstances: (val) =>
@@ -453,13 +436,6 @@ export const useSpooferStore = create<SpooferState>((set) => ({
   clearGhostAssets: () => set({ ghostAssetIds: new Set() }),
 }));
 
-/**
- * Dispatches a set of generated asset IDs to either the Studio Plugin Bridge or
- * directly into Studio's memory, depending on user settings.
- *
- * This is the final step of the spoofing pipeline. It translates our successful
- * web API uploads into actual game modifications.
- */
 export const applyReplacements = async (
   replacements: Record<string, string>,
   skipPersist = false,
@@ -498,21 +474,6 @@ export const applyReplacements = async (
 
     setSpoofingLogs((prev) => appendSpoofingLog(prev, '\nApplying replacements to Studio...'));
 
-    // Memory injection and the plugin bridge are complementary, not
-    // exclusive. Memory injection can only patch length-matching id pairs
-    // (WriteProcessMemory writes bytes in-place, so 10-digit -> 15-digit
-    // pairs get skipped). The plugin bridge handles those length-mismatched
-    // cases plus anything memory injection missed. Running only one leaves
-    // gaps -- length-mismatched pairs silently don't get replaced.
-    //
-    // Order matters: memory injection first (fast, in-process), then queue
-    // to the plugin bridge. If memory injection already replaced a value,
-    // the plugin's scan will see the new id and plan_patches produces no
-    // patch for it -- idempotent, no double work.
-    //
-    // skipPersist=true when called from ConfigContext, which already
-    // persisted the full merged history (including previous runs).
-    // For all other callers (PasteIdsModal, AssetExplorer) persist here.
     if (!skipPersist) {
       setLastReplacements(replacements);
     }
@@ -560,10 +521,7 @@ export const applyReplacements = async (
       );
     } catch (bridgeErr: unknown) {
       const msg = String(bridgeErr);
-      // Plugin/Studio not being reachable isn't a spoof failure. The upload
-      // side already completed; the user can apply the mappings later by
-      // opening Studio and hitting the Retry Replacement button, or by
-      // copying the IDs from the Results panel and pasting them wherever.
+
       if (msg.includes('plugin') || msg.includes('Studio') || msg.includes('bridge')) {
         setSpoofingLogs((prev) =>
           appendSpoofingLog(
@@ -577,7 +535,7 @@ export const applyReplacements = async (
     }
   } catch (e: unknown) {
     const errorStr = String(e);
-    // These are expected non-fatal outcomes - log as info rather than showing an error toast.
+
     const isExpectedOutcome =
       errorStr.includes('No usable replacements') ||
       errorStr.includes('did not accept any mappings') ||

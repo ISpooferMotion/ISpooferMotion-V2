@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { triggerStudioScan } from './studioScan';
-import * as pluginBridge from './pluginBridge';
 import * as tauriCore from '@tauri-apps/api/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as pluginBridge from './pluginBridge';
+import { triggerStudioScan } from './studioScan';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -27,7 +28,6 @@ describe('studioScan', () => {
     vi.mocked(pluginBridge.findPluginBridgePort).mockResolvedValue('5555');
     vi.mocked(pluginBridge.fetchPluginBridge).mockResolvedValue({ ok: true } as Response);
 
-    // Mock invoke to return scanning = true once, then scanning = false
     let callCount = 0;
     vi.mocked(tauriCore.invoke).mockImplementation(() => {
       callCount++;
@@ -39,10 +39,8 @@ describe('studioScan', () => {
 
     const scanPromise = triggerStudioScan();
 
-    // Advance time to allow the first invoke to resolve and timeout to start
-    await vi.advanceTimersByTimeAsync(0); // process microtasks
+    await vi.advanceTimersByTimeAsync(0);
 
-    // Advance timers by 1500 to trigger the next poll
     await vi.advanceTimersByTimeAsync(1500);
 
     await scanPromise;
@@ -67,7 +65,6 @@ describe('studioScan', () => {
     vi.mocked(pluginBridge.findPluginBridgePort).mockResolvedValue('5555');
     vi.mocked(pluginBridge.fetchPluginBridge).mockResolvedValue({ ok: true } as Response);
 
-    // Mock invoke to return scanning = true, synced = false
     vi.mocked(tauriCore.invoke).mockResolvedValue({
       scanStatus: { scanning: true },
       synced: false,
@@ -76,10 +73,9 @@ describe('studioScan', () => {
     const scanPromise = triggerStudioScan();
     const expectPromise = expect(scanPromise).rejects.toThrow(/Roblox Studio is not connected/);
 
-    // Wait for the first poll
     await vi.advanceTimersByTimeAsync(1500);
-    // Wait for the next polls
-    await vi.advanceTimersByTimeAsync(4500); // Total > 5000ms
+
+    await vi.advanceTimersByTimeAsync(4500);
 
     await expectPromise;
   });
@@ -93,7 +89,6 @@ describe('studioScan', () => {
     const scanPromise = triggerStudioScan();
     const expectPromise = expect(scanPromise).rejects.toThrow(/no progress for 5 minutes/);
 
-    // 5 minutes = 300,000ms
     await vi.advanceTimersByTimeAsync(300000);
 
     await expectPromise;

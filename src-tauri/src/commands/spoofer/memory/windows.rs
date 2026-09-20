@@ -50,13 +50,12 @@ fn is_process_alive(pid: u32) -> bool {
     let mut exit_code: u32 = 0;
     let success = unsafe { GetExitCodeProcess(handle, &mut exit_code) };
     unsafe { CloseHandle(handle) };
-    success != 0 && exit_code == 259 // STILL_ACTIVE
+    success != 0 && exit_code == 259
 }
 
 #[tauri::command]
 #[specta::specta]
 #[must_use]
-// Scan for a running Roblox Studio instance and cache the PID.
 pub fn find_studio_process() -> Option<u32> {
     static LAST_SCAN_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -87,8 +86,7 @@ pub fn find_studio_process() -> Option<u32> {
     for (sys_pid, process) in sys.processes() {
         if process.name().to_string_lossy().as_ref() == "RobloxStudioBeta.exe" {
             let pid_u32 = sys_pid.as_u32();
-            // Re-check the cache inside the write lock to prevent a TOCTOU race
-            // between two concurrent callers doing the same scan simultaneously.
+
             if let Ok(mut guard) = STUDIO_CACHE.get_or_init(|| std::sync::RwLock::new(None)).write()
             {
                 if guard.as_ref().map_or(true, |c| c.pid != pid_u32) {
@@ -127,7 +125,7 @@ unsafe extern "system" fn enum_windows_proc(
 
 #[tauri::command]
 #[specta::specta]
-// Force the Studio window to the foreground and emit an autosave keystroke.
+
 pub async fn focus_and_save_studio(pid: u32) -> crate::error::Result<()> {
     tokio::task::spawn_blocking(move || {
         let mut target_hwnd = std::ptr::null_mut();
@@ -226,7 +224,6 @@ struct MemoryRegion {
 unsafe impl Send for MemoryRegion {}
 unsafe impl Sync for MemoryRegion {}
 
-// Request Windows kernel permissions to read/write target process memory.
 fn open_process_for_memory(pid: u32) -> Result<ProcessHandle, String> {
     let handle = unsafe { OpenProcess(PROCESS_MEMORY_ACCESS, 0, pid) };
     if !handle.is_null() {
@@ -244,7 +241,6 @@ fn open_process_for_memory(pid: u32) -> Result<ProcessHandle, String> {
     })
 }
 
-// Validate the match is bounded by non-numeric characters to prevent partial replacement.
 const fn is_bounded_numeric_match(buffer: &[u8], offset: usize, len: usize) -> bool {
     if len == 0 {
         return false;
@@ -342,7 +338,7 @@ fn read_process_chunk(
 
 #[tauri::command]
 #[specta::specta]
-// Scan all read/write pages in the target process and replace UTF-8 and UTF-16 strings.
+
 pub async fn scan_and_replace_multiple_strings(
     app: AppHandle,
     pid: u32,
@@ -359,7 +355,7 @@ pub async fn scan_and_replace_multiple_strings(
         let mut results = HashMap::new();
 
         for (target, replacement) in &replacements {
-            // Validate IDs are numeric.
+
             if target.is_empty() || !target.chars().all(|c| c.is_ascii_digit()) {
                 return Err(format!(
                     "Memory injection only supports numeric Roblox asset IDs, got: '{target}'"
@@ -370,8 +366,7 @@ pub async fn scan_and_replace_multiple_strings(
                     "Replacement value must be a numeric Roblox asset ID, got: '{replacement}'"
                 ));
             }
-            // Length mismatches cannot be patched in memory (WriteProcessMemory overwrites
-            // in-place). Skip the pair and let the plugin bridge handle it instead.
+
             if target.len() != replacement.len() {
                 log::warn!(
                     "Memory injection: skipping {target} -> {replacement} (length mismatch: {} vs {}). \
@@ -382,9 +377,6 @@ pub async fn scan_and_replace_multiple_strings(
             }
         }
 
-        // Security check: the supplied PID must match the cached Studio process.
-        // Perform a fresh scan if the cache is cold rather than silently skipping
-        // validation - this prevents the frontend from targeting arbitrary processes.
         let studio_pid = find_studio_process().ok_or_else(|| {
             format!("Security error: could not verify that PID {pid} belongs to Roblox Studio. Ensure Studio is running.")
         })?;
@@ -408,10 +400,7 @@ pub async fn scan_and_replace_multiple_strings(
 
         let mut data_items = Vec::with_capacity(replacements.len());
         for (target, replacement) in replacements {
-            // WriteProcessMemory patches bytes in-place: the replacement must be the exact
-            // same number of bytes as the target. Skip pairs that cannot be patched in memory;
-            // they are handled by the plugin bridge instead. A zeroed result entry is still
-            // inserted so callers get a complete map back.
+
             if target.len() != replacement.len() || target.encode_utf16().count() != replacement.encode_utf16().count() {
                 results.insert(
                     target,
@@ -510,8 +499,7 @@ pub async fn scan_and_replace_multiple_strings(
             while region_offset < region.region_size {
                 let primary_size =
                     MEMORY_SCAN_CHUNK_SIZE.min(region.region_size.saturating_sub(region_offset));
-                // Prefix must cover the full overlap window so cross-chunk matches
-                // are never missed regardless of the longest pattern length.
+
                 let prefix_size = chunk_overlap.min(region_offset);
                 let read_offset = region_offset - prefix_size;
                 let read_size = (prefix_size + primary_size + chunk_overlap)
@@ -658,8 +646,6 @@ pub async fn scan_and_replace_multiple_strings(
 mod tests {
     use super::is_bounded_numeric_match;
 
-    // Inline validation inside scan_and_replace_multiple_strings now rejects non-numeric IDs.
-    // These tests mirror that logic directly.
     #[test]
     fn non_numeric_target_is_invalid() {
         let target = "abc";
@@ -691,8 +677,7 @@ mod tests {
     fn different_length_pair_is_skipped_not_errored() {
         let target = "12345";
         let replacement = "123456";
-        // Different-length pairs are now skipped gracefully (logged, zeroed result).
-        // This asserts the skip condition - the batch must NOT hard-fail on this.
+
         assert_ne!(target.len(), replacement.len(), "different-length pairs should be skipped");
     }
 

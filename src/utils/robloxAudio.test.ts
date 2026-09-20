@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { playRobloxAudio, stopRobloxAudio } from './robloxAudio';
 import * as tauriCore from '@tauri-apps/api/core';
-import * as robloxProfiles from './robloxProfiles';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { AppConfig } from '../contexts/ConfigContext';
+import { playRobloxAudio, stopRobloxAudio } from './robloxAudio';
+import * as robloxProfiles from './robloxProfiles';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -79,7 +80,6 @@ describe('robloxAudio', () => {
     vi.mocked(tauriCore.invoke).mockResolvedValue('/temp/audio.mp3');
     await playRobloxAudio('123', dummyConfig);
 
-    // Trigger error event
     mockAudio.onerror();
     expect(robloxProfiles.logIsm).toHaveBeenCalledWith(
       'error',
@@ -91,9 +91,8 @@ describe('robloxAudio', () => {
     vi.mocked(tauriCore.invoke).mockResolvedValue('/temp/audio.mp3');
     await playRobloxAudio('123', dummyConfig);
 
-    // Trigger ended event
     mockAudio.onended();
-    // It should clear currentAudio, which we can implicitly test by ensuring no crash.
-    stopRobloxAudio(); // Safe to call again
+
+    stopRobloxAudio();
   });
 });

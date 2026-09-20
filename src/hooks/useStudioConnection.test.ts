@@ -1,8 +1,9 @@
-import { renderHook, act } from '@testing-library/react';
-import { useStudioConnection } from './useStudioConnection';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as tauriCore from '@tauri-apps/api/core';
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as pluginBridge from '../utils/pluginBridge';
+import { useStudioConnection } from './useStudioConnection';
 
 vi.mock('../utils/pluginBridge', () => ({
   findPluginBridgePort: vi.fn(),
@@ -119,22 +120,17 @@ describe('useStudioConnection', () => {
 
     renderHook(() => useStudioConnection());
 
-    // First check completes
     await vi.advanceTimersByTimeAsync(100);
 
-    // Advance 1300ms, total elapsed = 1400ms. Shouldn't trigger (needs 1500ms)
     await vi.advanceTimersByTimeAsync(1300);
     expect(pluginBridge.findPluginBridgePort).toHaveBeenCalledTimes(1);
 
-    // Advance 200ms, total elapsed = 1600ms. Should trigger.
     await vi.advanceTimersByTimeAsync(200);
     expect(pluginBridge.findPluginBridgePort).toHaveBeenCalledTimes(2);
 
-    // Next delay is 2250. Advance 2100ms. Shouldn't trigger.
     await vi.advanceTimersByTimeAsync(2100);
     expect(pluginBridge.findPluginBridgePort).toHaveBeenCalledTimes(2);
 
-    // Advance 200ms. Should trigger.
     await vi.advanceTimersByTimeAsync(200);
     expect(pluginBridge.findPluginBridgePort).toHaveBeenCalledTimes(3);
   });

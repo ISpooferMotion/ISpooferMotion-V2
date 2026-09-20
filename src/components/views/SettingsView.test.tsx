@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import SettingsView from './SettingsView';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as LanguageContext from '../../contexts/LanguageContext';
+import SettingsView from './SettingsView';
 
 vi.mock('../../contexts/LanguageContext', () => ({
   useLanguage: vi.fn(),
@@ -46,7 +47,6 @@ vi.mock('../../stores/configStore', () => ({
   useConfigStore: vi.fn(() => ({})),
 }));
 
-// Mock ResizeObserver and IntersectionObserver for Lenis/Scrollspy
 globalThis.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}

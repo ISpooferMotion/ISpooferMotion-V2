@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { getBones, detectRigType } from './robloxRig';
+import { describe, expect, it } from 'vitest';
+
+import { detectRigType, getBones } from './robloxRig';
 
 describe('robloxRig', () => {
   it('returns R6 bones', () => {

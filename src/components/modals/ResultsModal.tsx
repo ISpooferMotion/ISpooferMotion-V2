@@ -1,6 +1,5 @@
 import { save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
-import { motion, type Variants } from 'framer-motion';
 import {
   AlertTriangle,
   ArrowRight,
@@ -18,16 +17,6 @@ import { appendSpoofingLog } from '../../utils/spoofingLogs';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 
-/**
- * Renders the final spoofing results and any error logs after a job completes.
- *
- * Provides quick actions to copy the mapping table or directly inject the spoofed IDs
- * back into a raw `.rbxlx` file if the user didn't use the Studio plugin.
- *
- * Also breaks down every skipped / failed asset with its reason and offers a
- * "Retry only these" button so users don't have to re-run the whole job to
- * catch the ones that didn't land.
- */
 export default function ResultsModal({
   isOpen,
   onClose,
@@ -48,10 +37,6 @@ export default function ResultsModal({
 
   const replacementsArray = Object.entries(lastReplacements);
 
-  // Split the raw asset-result list into three visually-distinct buckets so
-  // users can see exactly which assets skipped vs failed and why. `skipped`
-  // covers dedupe hits and filter matches (kept the existing spoofed id).
-  // `failed` covers assets we actually couldn't spoof this run.
   const { skipped, failed } = useMemo(() => {
     const skipped: typeof lastAssetResults = [];
     const failed: typeof lastAssetResults = [];
@@ -80,7 +65,7 @@ export default function ResultsModal({
       });
       if (!savePath) {
         setIsSaving(false);
-        return; // user cancelled
+        return;
       }
 
       setSpoofingLogs((prev) =>
@@ -89,7 +74,6 @@ export default function ResultsModal({
       let content = await readTextFile(loadedFilePath);
       let count = 0;
       for (const [oldId, newId] of Object.entries(lastReplacements)) {
-        // Avoid replacing substring matches (e.g., 123 inside 12345).
         const regex = new RegExp(`(?<!\\d)${oldId}(?!\\d)`, 'g');
         const matchCount = (content.match(regex) || []).length;
         if (matchCount > 0) {
@@ -104,26 +88,13 @@ export default function ResultsModal({
           `[SUCCESS] Saved spoofed file! Replaced ${count} ID occurrences.\n`,
         ),
       );
-      onClose(); // auto close modal so they can see logs
+      onClose();
     } catch (err) {
       setSpoofingLogs((prev) =>
         appendSpoofingLog(prev, `[ERROR] Failed to save .rbxlx: ${String(err)}\n`),
       );
     }
     setIsSaving(false);
-  };
-
-  const stagger: Variants = {
-    hidden: {},
-    show: { transition: { staggerChildren: 0.05 } },
-  };
-  const item: Variants = {
-    hidden: { opacity: 0, y: 10 },
-    show: {
-      opacity: 1,
-      y: 0,
-      transition: { type: 'spring', stiffness: 400, damping: 28 },
-    },
   };
 
   return (
@@ -151,18 +122,12 @@ export default function ResultsModal({
           </div>
 
           {replacementsArray.length > 0 ? (
-            <motion.div
-              variants={stagger}
-              initial="hidden"
-              animate="show"
-              className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-2"
-            >
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-2">
               {replacementsArray.slice(0, 100).map(([oldId, newId]) => {
                 const meta = assetMetadataMap[oldId];
                 return (
-                  <motion.div
+                  <div
                     key={oldId}
-                    variants={item}
                     className="flex items-center justify-between p-3 rounded-md bg-muted border border-border gap-4"
                   >
                     <div className="flex flex-col flex-1 min-w-0">
@@ -183,7 +148,7 @@ export default function ResultsModal({
                       </span>
                       <span className="text-sm font-mono font-semibold text-success">{newId}</span>
                     </div>
-                  </motion.div>
+                  </div>
                 );
               })}
               {replacementsArray.length > 100 && (
@@ -194,7 +159,7 @@ export default function ResultsModal({
                   )}
                 </div>
               )}
-            </motion.div>
+            </div>
           ) : (
             <div className="p-8 text-center text-muted-foreground bg-muted rounded-lg border border-border border-dashed">
               {t('results.noReplacements')}
@@ -222,12 +187,7 @@ export default function ResultsModal({
                   </Button>
                 )}
               </div>
-              <motion.div
-                variants={stagger}
-                initial="hidden"
-                animate="show"
-                className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-2"
-              >
+              <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-2">
                 {[...failed, ...skipped].slice(0, 200).map((r) => {
                   const isFailed = r.success === false;
                   const id = String(r.id ?? '');
@@ -235,9 +195,8 @@ export default function ResultsModal({
                   const typeLabel = (r.type || r.assetType || '').toUpperCase();
                   const reason = r.errorReason || (isFailed ? 'Unknown failure' : 'Skipped');
                   return (
-                    <motion.div
+                    <div
                       key={`${isFailed ? 'f' : 's'}-${id}-${r.stage ?? 'x'}`}
-                      variants={item}
                       className={`flex flex-col gap-1 p-3 rounded-md border ${
                         isFailed
                           ? 'bg-destructive/10 border-destructive/30'
@@ -265,7 +224,7 @@ export default function ResultsModal({
                       >
                         {reason}
                       </span>
-                    </motion.div>
+                    </div>
                   );
                 })}
                 {failed.length + skipped.length > 200 && (
@@ -274,7 +233,7 @@ export default function ResultsModal({
                     list).
                   </div>
                 )}
-              </motion.div>
+              </div>
             </div>
           )}
 

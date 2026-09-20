@@ -23,10 +23,6 @@ pub(super) fn get_secrets_keyring_entry() -> crate::error::Result<Entry> {
     })
 }
 
-// The Open Cloud API key lives in its own credential entry, separate from the
-// potentially much larger profile-secrets blob. This prevents a cookie-heavy
-// profile set from making the irreplaceable API key exceed an OS credential
-// entry's size limit.
 pub(super) fn get_opencloud_api_key_entry() -> crate::error::Result<Entry> {
     Entry::new("ISpooferMotion.OpenCloudApiKey", "default").map_err(|e| {
         crate::error::AppError::Custom(format!("Failed to open API key credential store: {e}"))
@@ -39,8 +35,6 @@ fn chunk_entry(index: usize) -> crate::error::Result<Entry> {
     })
 }
 
-/// Splits a UTF-8 string into chunks that are each at most `max_bytes` bytes,
-/// while preserving character boundaries.
 fn split_chunks_by_bytes(value: &str, max_bytes: usize) -> Vec<String> {
     assert!(max_bytes > 0, "chunk size must be non-zero");
     if value.is_empty() {
@@ -102,9 +96,6 @@ fn save_secrets_chunked(json_str: &str) -> crate::error::Result<()> {
         ));
     }
 
-    // Write all new chunks before publishing the manifest. The operation is
-    // serialized in-process; a future storage redesign should add generations if
-    // crash-atomic multi-entry commits are required.
     for (index, chunk) in chunks.iter().enumerate() {
         let entry = chunk_entry(index)?;
         entry.set_password(chunk).map_err(|e| {
@@ -117,9 +108,6 @@ fn save_secrets_chunked(json_str: &str) -> crate::error::Result<()> {
         crate::error::AppError::Custom(format!("Failed to save secrets manifest: {e}"))
     })?;
 
-    // Stale chunks are no longer referenced after the manifest commit. Failure
-    // to delete a stale entry does not corrupt the current value, but report it
-    // so credential-store problems are visible instead of silently accumulating.
     for index in chunks.len()..previous_count {
         let entry = chunk_entry(index)?;
         match entry.delete_credential() {
@@ -177,7 +165,6 @@ fn load_keyring_blob() -> crate::error::Result<Option<Value>> {
         return Ok(Some(serde_json::from_str(&combined)?));
     }
 
-    // Legacy pre-chunking entry.
     Ok(Some(parsed))
 }
 
@@ -213,8 +200,6 @@ async fn load_profile_secrets_inner(app: &AppHandle) -> crate::error::Result<Val
 
     let legacy_path = get_profile_secrets_path(app)?;
     let mut value = if let Some(value) = keyring_value {
-        // A successful keyring migration should not leave plaintext credentials
-        // behind indefinitely.
         match tokio::fs::remove_file(&legacy_path).await {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -314,9 +299,6 @@ pub async fn save_profile_secrets(
     let api_key = all_secrets.get("apiKey").and_then(Value::as_str).map(str::to_string);
     let json_str = serde_json::to_string(&all_secrets)?;
     tokio::task::spawn_blocking(move || {
-        // Commit the merged blob first, then update the dedicated API-key entry that
-        // has precedence on load. If the final key update fails, the operation
-        // returns an error while the previously effective key remains authoritative.
         save_secrets_chunked(&json_str)?;
         save_opencloud_api_key(api_key.as_deref())
     })
@@ -372,9 +354,6 @@ pub async fn clear_profile_secrets(
                 }
             }
             None => {
-                // A crash can leave sequential chunks behind before the manifest
-                // is committed. Remove that orphan prefix, but stop at the first
-                // missing entry instead of probing every possible chunk slot.
                 for index in 0..MAX_SECRET_CHUNKS {
                     let entry = chunk_entry(index)?;
                     match entry.delete_credential() {

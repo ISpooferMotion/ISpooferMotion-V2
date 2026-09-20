@@ -29,9 +29,7 @@ input[type='number'] {
       color 150ms ease,
       background-color 150ms ease,
       border-color 150ms ease,
-      box-shadow 150ms ease,
-      opacity 150ms ease,
-      transform 150ms ease;
+      opacity 150ms ease;
   }
 }
 
@@ -80,14 +78,6 @@ input[type='number'] {
   background: var(--text-primary);
   border: 2px solid var(--bg-base);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
-  transition:
-    transform 140ms ease,
-    box-shadow 140ms ease;
-}
-
-.theme-range:hover::-webkit-slider-thumb {
-  transform: scale(1.08);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34);
 }
 
 .theme-range:focus-visible::-webkit-slider-thumb {
@@ -200,29 +190,23 @@ input[type='number'] {
 }
 
 .dark {
-  /* Base Surfaces */
   --bg-base: #0b0b0c;
   --bg-surface: #111113;
   --bg-elevated: #18181b;
   --bg-hover: #202024;
 
-  /* Typography */
   --text-primary: #fafafa;
   --text-secondary: #c7c7cc;
   --text-muted: #8d8d94;
 
-  /* Accent */
   --primary: #ffffff;
   --primary-foreground: #0b0b0c;
 
-  /* Status */
   --danger: #e5484d;
 
-  /* Borders */
   --border-subtle: #232327;
   --border-strong: #323238;
 
-  /* shadcn Variables */
   --background: var(--bg-base);
   --foreground: var(--text-primary);
 
@@ -248,14 +232,12 @@ input[type='number'] {
   --input: var(--border-strong);
   --ring: #ffffff;
 
-  /* Charts */
   --chart-1: oklch(0.88 0 0);
   --chart-2: oklch(0.74 0 0);
   --chart-3: oklch(0.58 0 0);
   --chart-4: oklch(0.42 0 0);
   --chart-5: oklch(0.28 0 0);
 
-  /* Sidebar */
   --sidebar: var(--bg-surface);
   --sidebar-foreground: var(--text-primary);
   --sidebar-primary: #ffffff;

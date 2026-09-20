@@ -1,8 +1,3 @@
-//! Heuristic parsing for asset references inside Studio inputs.
-//!
-//! Because Roblox Studio cannot reliably report asset IDs deeply embedded in script
-//! source code, rich text, or JSON strings, this module contains regex patterns and
-//! recursive string scanners to extract, classify, and validate them.
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
@@ -12,7 +7,6 @@ use std::sync::OnceLock;
 
 use std::time::Instant;
 
-/// Compiled once at first use; matches bare asset IDs inside Luau table blocks.
 static LOOSE_NUM_RE: OnceLock<Regex> = OnceLock::new();
 
 #[inline]
@@ -23,7 +17,6 @@ fn loose_num_re() -> &'static Regex {
     })
 }
 
-/// Stores extracted assets for a specific category (e.g., Sounds, Meshes).
 #[derive(Clone, Default, Serialize, Debug, specta::Type)]
 pub struct AssetStore {
     #[specta(type = Vec<String>)]
@@ -41,10 +34,6 @@ impl AssetStore {
     }
 }
 
-/// The central state container for the Studio bridge daemon.
-///
-/// Keeps track of what the frontend has requested, the latest scan results,
-/// and pending patches waiting for the plugin to poll them.
 #[derive(Debug)]
 pub struct AssetServerStateData {
     pub request_sounds: bool,
@@ -66,12 +55,10 @@ pub struct AssetServerStateData {
     pub scan_status: Option<Value>,
     pub studio_place_id: Option<String>,
     pub studio_place_name: Option<String>,
-    pub theme_accent: Option<String>,
     pub keyframe_warning_count: usize,
     pub scan_records_truncated: bool,
     pub notify: std::sync::Arc<tokio::sync::Notify>,
     pub scan_types: Vec<String>,
-    pub script_scan_mode: String,
     pub scan_path: Option<String>,
     pub batch_size: Option<u32>,
 }
@@ -98,7 +85,6 @@ impl Default for AssetServerStateData {
             scan_status: None,
             studio_place_id: None,
             studio_place_name: None,
-            theme_accent: None,
             keyframe_warning_count: 0,
             scan_records_truncated: false,
             notify: std::sync::Arc::new(tokio::sync::Notify::new()),
@@ -109,7 +95,6 @@ impl Default for AssetServerStateData {
                 "meshes".into(),
                 "scripts".into(),
             ],
-            script_scan_mode: "assetIds".into(),
             scan_path: None,
             batch_size: None,
         }
@@ -127,7 +112,6 @@ pub struct StudioRecord {
     pub value: String,
 }
 
-/// Returns a regex that matches valid Roblox asset URLs or raw numerical IDs.
 fn asset_id_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
@@ -173,7 +157,6 @@ fn rich_text_pattern() -> &'static Regex {
     })
 }
 
-/// Returns a regex that captures runtime asset loads via `require`, `InsertService`, etc.
 fn runtime_load_pattern() -> &'static Regex {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
@@ -196,17 +179,12 @@ fn runtime_load_pattern() -> &'static Regex {
 
 fn infer_category_from_property(property: &str) -> Option<&'static str> {
     match property {
-        // AnimationContent is the newer Content-typed alias for AnimationId --
-        // Roblox's runtime reads whichever is set, so we scan and categorize
-        // both.
         "AnimationId" | "AnimationContent" | "ClimbAnimation" | "FallAnimation"
         | "IdleAnimation" | "JumpAnimation" | "RunAnimation" | "SwimAnimation"
         | "WalkAnimation" | "MoodAnimation" => Some("animation"),
         "SoundId" | "AudioContent" | "Asset" => Some("sound"),
         "Video" => Some("image"),
-        // MeshPart.TextureID (all-caps ID) is a *texture* asset, not a mesh.
-        // Keeping it in the mesh category pushes image IDs into the mesh bucket
-        // and shows up to the user as "I asked for meshes and got images".
+
         "MeshId" | "MeshContent" | "ReferenceMeshId" | "CageMeshId" => Some("mesh"),
         "TextureID" => Some("image"),
         "BackAccessory" | "FaceAccessory" | "FrontAccessory" | "HairAccessory" | "HatAccessory"
@@ -241,10 +219,6 @@ fn infer_category_from_attribute_name(property: &str) -> &'static str {
         || lower.contains("decal")
         || lower.contains("icon")
     {
-        // Deliberately no `contains("id")` fallback here -- it swept any
-        // attribute with "Id" in the name (PlayerId, BadgeId, MatchId, etc.)
-        // into the image bucket regardless of what asset type the value
-        // actually pointed at.
         "image"
     } else {
         "unknown"
@@ -434,7 +408,6 @@ fn extract_table_block_ids_with_context(
             if source.is_char_boundary(end_idx) {
                 let block_text = &source[match_whole.end()..end_idx];
 
-                // Inside a table block, any bare number is highly likely an asset ID.
                 for id_cap in loose_num_re().captures_iter(block_text) {
                     if let Some(asset_id) = id_cap.get(1) {
                         if !is_blocked_asset_id(asset_id.as_str())
@@ -456,17 +429,17 @@ fn extract_table_block_ids_with_context(
 
 fn find_line_containing(source: &str, index: usize) -> &str {
     let bytes = source.as_bytes();
-    // Walk back to the start of this line.
+
     let mut start = index;
     while start > 0 && bytes[start - 1] != b'\n' {
         start -= 1;
     }
-    // Walk forward to the end of this line.
+
     let mut end = index;
     while end < source.len() && bytes[end] != b'\n' && bytes[end] != b'\r' {
         end += 1;
     }
-    // Ensure the slice boundaries are on valid UTF-8 char boundaries.
+
     while start > 0 && !source.is_char_boundary(start) {
         start -= 1;
     }
@@ -599,30 +572,6 @@ pub fn analyze_records(
                     "resolvedType": "unuploaded",
                     "warning": "This animation has not been uploaded to Roblox yet and cannot be spoofed."
                 }));
-            }
-            continue;
-        }
-
-        // Plugin-side extraction (asset-IDs scan mode): the plugin found asset IDs
-        // in the script locally and sent them as a JSON array instead of shipping
-        // the full source. Build script_refs directly from them. Less context than
-        // the full-source AST path, but a fraction of the payload for large scripts.
-        if record.property == "SourceIds"
-            && matches!(record.class_name.as_str(), "Script" | "LocalScript" | "ModuleScript")
-        {
-            if let Ok(ids) = serde_json::from_str::<Vec<String>>(&record.value) {
-                for asset_id in ids {
-                    if seen.insert(("script".to_string(), record.token.clone(), asset_id.clone())) {
-                        script_refs.assets.push(json!({
-                            "kind": "ScriptReference",
-                            "script": record.full_name,
-                            "scriptType": record.class_name,
-                            "assetId": asset_id,
-                            "rawUrl": format!("rbxassetid://{asset_id}"),
-                            "resolvedType": "unknown"
-                        }));
-                    }
-                }
             }
             continue;
         }
@@ -966,9 +915,6 @@ pub fn analyze_records(
                 || lower.contains("texture")
                 || lower.contains("video")
             {
-                // See `infer_category_from_attribute_name`: `contains("id")`
-                // used to live here as a fallback and mis-bucketed every
-                // Value named "SomethingId" into images.
                 "image"
             } else {
                 "unknown"
@@ -1099,8 +1045,6 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
     let mut patches = Vec::new();
     let mut mesh_patches: HashMap<String, Value> = HashMap::new();
 
-    // Pre-compile bounded-replace regexes once per unique asset ID to avoid
-    // O(n * records) regex compilations inside the per-record loop.
     let bounded_re_cache: HashMap<&str, Regex> = mapping_map
         .keys()
         .filter_map(|id| {
@@ -1111,34 +1055,6 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
         .collect();
 
     for record in records {
-        // asset-IDs scan mode: the record carries a JSON array of IDs, not a
-        // source. Send back an old->new mapping (a JSON object); the plugin re-reads
-        // the source and applies it locally. This avoids shipping the full source
-        // both ways for large scripts.
-        if record.property == "SourceIds"
-            && matches!(record.class_name.as_str(), "Script" | "LocalScript" | "ModuleScript")
-        {
-            if let Ok(ids) = serde_json::from_str::<Vec<String>>(&record.value) {
-                let mut mapping = serde_json::Map::new();
-                for id in ids {
-                    if is_path_allowed(id.as_str(), &record.full_name) {
-                        if let Some(new_id) = mapping_map.get(id.as_str()) {
-                            mapping.insert(id, json!(*new_id));
-                        }
-                    }
-                }
-                if !mapping.is_empty() {
-                    patches.push(json!({
-                        "action": "replaceScriptSource",
-                        "token": record.token,
-                        "fullName": record.full_name,
-                        "value": mapping
-                    }));
-                }
-            }
-            continue;
-        }
-
         if matches!(
             record.property.as_str(),
             "Source" | "__Tags__" | "__Emotes__" | "__Accessories__"
@@ -1196,8 +1112,6 @@ pub fn plan_patches(records: &[StudioRecord], mappings: &[Value]) -> Vec<Value> 
             continue;
         }
 
-        // Use the pre-compiled bounded regex to avoid substring corruption.
-        // Falls back to plain replace if the regex was not built (should not happen).
         let do_bounded_replace = |value: &str| -> String {
             bounded_re_cache
                 .get(asset_id)
@@ -1294,7 +1208,6 @@ fn extract_script_asset_ids(source: &str) -> Vec<String> {
         return extractor.ids.into_iter().collect();
     }
 
-    // Fallback to regex if AST parsing fails.
     let pattern = script_ref_pattern();
     let mut ids = HashSet::new();
     for captures in pattern.captures_iter(source) {
@@ -1311,7 +1224,6 @@ fn replace_script_asset_ids<'a>(
     source: &'a str,
     mappings: &HashMap<&str, &str>,
 ) -> std::borrow::Cow<'a, str> {
-    // Regex fallback is preferred over full_moon AST parsing to avoid stack overflows from deeply nested scripts.
     script_rewrite_pattern().replace_all(source, |captures: &Captures<'_>| {
         let prefix = captures.get(1).map_or("", |item| item.as_str());
         let asset_id = captures.get(2).map_or("", |item| item.as_str());
@@ -1522,8 +1434,6 @@ mod tests {
 
     #[test]
     fn set_property_replacement_does_not_corrupt_longer_ids() {
-        // "12345" is a substring of "123456789". Plain str::replace would corrupt the longer ID.
-        // The bounded-regex replace must only replace the exact ID "12345", leaving "123456789" intact.
         let records = vec![StudioRecord {
             token: "10".into(),
             class_name: "Sound".into(),
@@ -1539,18 +1449,15 @@ mod tests {
 
     #[test]
     fn script_rewrite_does_not_replace_short_numbers() {
-        // 4-6 digit numbers (game constants, dates) must NOT be replaced by the script rewriter
-        // since script_rewrite_pattern now requires 7+ digits.
         let mappings = HashMap::from([("1234", "9999")]);
         let source = "local LEVEL_CAP = 1234\nlocal score = 9999999";
         let rewritten = replace_script_asset_ids(source, &mappings);
-        // "1234" is only 4 digits so must NOT be rewritten; "9999999" has no mapping so unchanged.
+
         assert_eq!(rewritten.into_owned(), source);
     }
 
     #[test]
     fn attribute_replacement_does_not_corrupt_longer_ids() {
-        // Ensure that replacing attribute value "12345" doesn't touch "123456789".
         let records = vec![StudioRecord {
             token: "11".into(),
             class_name: "Part".into(),
@@ -1561,7 +1468,7 @@ mod tests {
         }];
         let patches = plan_patches(&records, &[json!({"originalId": "12345", "newId": "67890"})]);
         assert_eq!(patches.len(), 1);
-        // The value should be replaced cleanly to the numeric new_id.
+
         assert_eq!(patches[0]["value"], 67890u64);
     }
 

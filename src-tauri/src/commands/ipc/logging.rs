@@ -5,7 +5,6 @@ use super::{
 use crate::commands::AnyValue;
 
 pub(super) fn cleanup_logs_dir(logs_dir: &Path) {
-    // Delete log files older than 30 days to manage disk space.
     const MAX_LOG_AGE: std::time::Duration = std::time::Duration::from_secs(60 * 60 * 24 * 30);
 
     let Ok(entries) = std::fs::read_dir(logs_dir) else {
@@ -33,7 +32,6 @@ pub(super) fn cleanup_logs_dir(logs_dir: &Path) {
     }
 }
 
-// Recursively redact tokens and secrets from JSON objects to prevent logging leaks.
 fn redact_json_value(value: &mut Value) {
     match value {
         Value::String(text) => *text = redact_log_message(text),
@@ -91,7 +89,6 @@ pub async fn append_debug_log(
 #[tauri::command]
 #[specta::specta]
 pub async fn open_logs_folder(app: AppHandle) -> crate::error::Result<bool> {
-    // Open the local logs directory.
     let logs_dir = app.path().app_data_dir()?.join("ispoofer_logs");
     let _ = std::fs::create_dir_all(&logs_dir);
     cleanup_logs_dir(&logs_dir);

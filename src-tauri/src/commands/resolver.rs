@@ -1,12 +1,8 @@
-//! Tauri commands that wrap the Roblox API domain logic for the UI.
-
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 
 use crate::domain::roblox_api::{self, ResolverAsset, ResolverProgress, ScriptRefProgress};
 
-/// Queries Roblox to resolve the creator of a batch of assets, emitting progress
-/// events to the UI so the user isn't staring at a frozen loading screen.
 #[tauri::command]
 #[specta::specta]
 pub async fn resolve_asset_creators(
@@ -27,7 +23,6 @@ pub async fn resolve_asset_creators(
     roblox_api::resolve_asset_creators(assets, cookie, on_progress, on_cookie).await
 }
 
-/// Queries Roblox to filter out false-positive numeric IDs found inside scripts.
 #[tauri::command]
 #[specta::specta]
 pub async fn resolve_script_references(
@@ -41,7 +36,6 @@ pub async fn resolve_script_references(
     roblox_api::resolve_script_references(asset_ids, on_progress).await
 }
 
-/// Validates if parsed asset IDs actually exist and what category they belong to.
 #[tauri::command]
 #[specta::specta]
 pub async fn validate_asset_ids(

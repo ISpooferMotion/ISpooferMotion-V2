@@ -9,7 +9,6 @@ export type RobloxAssetType =
   | 'ghost'
   | 'unknown';
 
-// A single external asset reference from a place file.
 export interface ParsedAssetRef {
   type: RobloxAssetType;
 
@@ -45,7 +44,6 @@ export interface PlaceParseResult {
   warnings: string[];
 }
 
-// AST node holding instance hierarchy and found assets.
 export interface RbxInstance {
   referent: string;
   className: string;

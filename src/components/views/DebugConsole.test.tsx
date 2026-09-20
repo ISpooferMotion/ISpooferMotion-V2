@@ -1,8 +1,9 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import DebugConsole from './DebugConsole';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as LanguageContext from '../../contexts/LanguageContext';
 import * as debugLogger from '../../utils/debugLogger';
+import DebugConsole from './DebugConsole';
 
 vi.mock('../../contexts/LanguageContext', () => ({
   useLanguage: vi.fn(),
@@ -18,7 +19,6 @@ vi.mock('../ui/JsonViewer', () => ({
   JsonViewer: ({ data }: any) => <div data-testid="json-viewer">{JSON.stringify(data)}</div>,
 }));
 
-// We must mock ResizeObserver for framer-motion or standard react components if they use it
 globalThis.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}
@@ -65,26 +65,20 @@ describe('DebugConsole', () => {
 
     expect(screen.getByText('debug.title')).toBeInTheDocument();
 
-    // Check if first-line messages render in collapsed rows
     expect(screen.getByText('Test message')).toBeInTheDocument();
     expect(screen.getByText('Error message')).toBeInTheDocument();
 
-    // Click the error log row to expand it (payload is hidden when collapsed)
     const errorRow = screen
       .getByText('Error message')
       .closest('div[onclick], div[class*="rounded border"]');
     fireEvent.click(errorRow!);
 
-    // Check if JsonViewer is rendered for payload after expanding
     expect(screen.getByTestId('json-viewer')).toBeInTheDocument();
     expect(screen.getByText('{"foo":"bar"}')).toBeInTheDocument();
   });
 
   it('filters logs by level', async () => {
     render(<DebugConsole isOpen={true} onClose={() => {}} />);
-
-    // The multi-select dropdown needs interaction, but this might be complex if it's a custom component.
-    // Instead we can just check if clear logs works.
 
     const clearBtn = screen.getByLabelText('debug.clearLogs');
     fireEvent.click(clearBtn);

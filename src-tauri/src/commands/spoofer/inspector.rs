@@ -13,7 +13,6 @@ pub async fn inspect_payload(path: &Path) -> crate::error::Result<PayloadMeta> {
     let bytes_read = file.read(&mut buffer).await.unwrap_or(0);
     let sample = &buffer[..bytes_read];
 
-    // Detect HTML/XML error pages
     if sample.starts_with(b"<!doctype html")
         || sample.starts_with(b"<!DOCTYPE html")
         || sample.starts_with(b"<html")
@@ -27,7 +26,6 @@ pub async fn inspect_payload(path: &Path) -> crate::error::Result<PayloadMeta> {
         return Err("Roblox returned a JSON error response instead of an asset file.".into());
     }
 
-    // Validate magic numbers.
     if sample.starts_with(b"OggS") {
         return Ok(PayloadMeta { file_type: "audio/ogg".into(), extension: "ogg".into() });
     }
@@ -56,12 +54,10 @@ pub async fn inspect_payload(path: &Path) -> crate::error::Result<PayloadMeta> {
         return Ok(PayloadMeta { file_type: "model/x-rbxm".into(), extension: "rbxmx".into() });
     }
 
-    // PNG magic number
     if sample.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
         return Ok(PayloadMeta { file_type: "image/png".into(), extension: "png".into() });
     }
 
-    // JPEG magic number
     if sample.starts_with(&[0xFF, 0xD8, 0xFF]) {
         return Ok(PayloadMeta { file_type: "image/jpeg".into(), extension: "jpeg".into() });
     }

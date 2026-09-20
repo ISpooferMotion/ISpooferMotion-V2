@@ -1,13 +1,14 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
-import { ErrorBoundary } from './ErrorBoundary';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as apiClient from '../../utils/apiClient';
-import * as tauriRuntime from '../../utils/tauriRuntime';
-import { useConfigStore } from '../../stores/configStore';
 import * as tauriApp from '@tauri-apps/api/app';
 import * as tauriOs from '@tauri-apps/plugin-os';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-declare var process: any;
+import { useConfigStore } from '../../stores/configStore';
+import * as apiClient from '../../utils/apiClient';
+import * as tauriRuntime from '../../utils/tauriRuntime';
+import { ErrorBoundary } from './ErrorBoundary';
+
+declare let process: any;
 
 vi.mock('../../utils/apiClient', () => ({
   fetchTelemetry: vi.fn().mockResolvedValue(undefined),
@@ -61,7 +62,6 @@ describe('ErrorBoundary', () => {
   });
 
   it('renders fallback UI when an error occurs', async () => {
-    // Suppress console.error for the intentional throw
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     render(
@@ -85,7 +85,6 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>,
     );
 
-    // Error boundary does fetch async in componentDidCatch
     await vi.waitFor(() => {
       expect(apiClient.fetchTelemetry).toHaveBeenCalled();
     });
@@ -142,7 +141,6 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>,
     );
 
-    // Wait a tick just in case
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
     });
@@ -156,7 +154,6 @@ describe('ErrorBoundary', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const reloadMock = vi.fn();
 
-    // Backup original location
     const originalLocation = window.location;
     delete (window as any).location;
     window.location = { ...originalLocation, reload: reloadMock } as any;
@@ -172,7 +169,6 @@ describe('ErrorBoundary', () => {
 
     expect(reloadMock).toHaveBeenCalled();
 
-    // Restore location
     window.location = originalLocation as any;
     consoleError.mockRestore();
   });

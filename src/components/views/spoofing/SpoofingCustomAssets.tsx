@@ -1,8 +1,9 @@
 import { ScanSearch } from 'lucide-react';
-import { useLanguage } from '../../../contexts/LanguageContext';
+
 import { useConfig } from '../../../contexts/ConfigContext';
-import { Textarea } from '../../ui/textarea';
+import { useLanguage } from '../../../contexts/LanguageContext';
 import { Label } from '../../ui/label';
+import { Textarea } from '../../ui/textarea';
 
 export function SpoofingCustomAssets() {
   const { t } = useLanguage();

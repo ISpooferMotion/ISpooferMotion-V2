@@ -1,4 +1,3 @@
-// No-op stub: memory injection is Windows-only.
 #[tauri::command]
 #[specta::specta]
 #[must_use]

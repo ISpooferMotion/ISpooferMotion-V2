@@ -9,25 +9,13 @@ const MAX_GROUP_CRAWL_LIMIT: usize = 5;
 const MAX_GROUP_FRIEND_CRAWL_LIMIT: usize = 8;
 const MAX_FRIEND_CRAWL_LIMIT: usize = 15;
 
-// Per-process caches for the social-graph discovery.
-//
-// Without these, every asset in a job triggers the full graph walk:
-// auth-user lookup, auth-user's groups, auth-user's group games, plus the
-// creator's groups/friends/games. For a place with 777 assets sharing a
-// handful of creators, that's hundreds of redundant Roblox calls that
-// dominated wall time (~40s per asset in tester logs).
-//
-// The caches are keyed by ID (not cookie) — we can't tell one cookie from
-// another safely, so we assume the currently signed-in user doesn't
-// change mid-process. Restarting the app clears everything.
 type AuthUserCache = dashmap::DashMap<String, u64>;
 type UserGroupsCache = dashmap::DashMap<u64, Vec<(u64, Option<u64>)>>;
 type UserFriendsCache = dashmap::DashMap<u64, Vec<u64>>;
 type CreatorGamesCache = dashmap::DashMap<(String, u64), Vec<String>>;
 type CreatorInfoCache = dashmap::DashMap<String, (String, u64)>;
 type SocialGraphCache = dashmap::DashMap<u64, Vec<String>>;
-// Cached owner-of-group lookups. `None` means the API returned no owner
-// (deleted or ownerless) -- we still cache to avoid re-hitting the endpoint.
+
 type GroupOwnerCache = dashmap::DashMap<u64, Option<u64>>;
 
 static AUTH_USER_ID_CACHE: OnceLock<AuthUserCache> = OnceLock::new();
@@ -60,11 +48,6 @@ fn group_owner_cache() -> &'static GroupOwnerCache {
     GROUP_OWNER_CACHE.get_or_init(dashmap::DashMap::new)
 }
 
-/// Bulk-populates the per-asset creator cache from an upstream batch fetch
-/// (typically the job processor's `/catalog/items/details` response). Every
-/// entry that lands here means the first discovery pass for that asset skips
-/// its own `/v2/assets/{id}/details` HTTP call -- the single serial network
-/// hit that used to dominate first-per-creator wall time.
 pub fn prewarm_creator_info_cache<I>(entries: I)
 where
     I: IntoIterator<Item = (String, (String, u64))>,
@@ -78,7 +61,6 @@ where
     }
 }
 
-// Request direct URL from standard v1 asset delivery API.
 pub async fn resolve_asset_id_location(
     app: &AppHandle,
     _client: &reqwest::Client,
@@ -117,7 +99,6 @@ pub async fn resolve_asset_id_location(
     }
 }
 
-// Extract alternate CDN links or asset version IDs from the economy API.
 pub async fn resolve_asset_economy_urls(asset_id: &str, cookie_header: &str) -> Vec<String> {
     let mut urls = Vec::new();
     let client = crate::utils::get_http_client();
@@ -274,7 +255,6 @@ pub async fn build_saved_versions_urls(asset_id: &str, cookie_header: &str) -> V
     urls
 }
 
-// Discover games utilizing the asset to emulate a server context and bypass copylocks.
 pub async fn attempt_asset_usage_place_id_discovery(
     asset_id: &str,
     cookie_header: &str,
@@ -414,13 +394,6 @@ pub async fn get_groups_for_user(user_id: u64, cookie_header: &str) -> Vec<(u64,
     results
 }
 
-/// Fetches the current owner of a specific group. Unlike
-/// [`get_groups_for_user`] which returns groups a user *belongs to* (with
-/// each group's owner attached), this hits the group's own detail endpoint
-/// so we can walk from a Group-owned asset back to the human behind it.
-///
-/// Returns `Ok(None)` for ownerless / deleted groups; the cache still stores
-/// the negative so we don't re-hit the endpoint.
 pub async fn get_group_owner(group_id: u64, cookie_header: &str) -> Option<u64> {
     if let Some(cached) = group_owner_cache().get(&group_id) {
         return *cached;
@@ -537,14 +510,10 @@ pub async fn get_games_for_creator(
     results
 }
 
-// Discover Place IDs by crawling the asset creator's social graph.
 pub async fn attempt_social_graph_place_id_discovery(
     asset_id: &str,
     cookie_header: &str,
 ) -> Vec<String> {
-    // Fast path: same creator → same graph. Most jobs are hundreds of assets
-    // that share a handful of creators, so this collapses the vast majority
-    // of calls to a single lookup.
     if let Some((_, creator_id_only)) = creator_info_cache().get(asset_id).map(|v| v.clone()) {
         if let Some(cached) = social_graph_cache().get(&creator_id_only) {
             return cached.clone();
@@ -552,7 +521,6 @@ pub async fn attempt_social_graph_place_id_discovery(
     }
     let client = crate::utils::get_http_client();
 
-    // Auth user is stable for the whole session — resolve once per cookie.
     let auth_key = cookie_header.to_string();
     let mut auth_user_id = auth_user_id_cache().get(&auth_key).map(|v| *v);
     if auth_user_id.is_none() {
@@ -573,8 +541,6 @@ pub async fn attempt_social_graph_place_id_discovery(
         }
     }
 
-    // Creator lookup is asset-specific but stable. Cache the (type, id)
-    // per asset so retries and multi-attempt runs skip the fetch.
     let (creator_type, creator_id) = if let Some(entry) = creator_info_cache().get(asset_id) {
         entry.clone()
     } else {
@@ -623,7 +589,6 @@ pub async fn attempt_social_graph_place_id_discovery(
         return vec![];
     }
 
-    // Second cache check now that we know the creator — same creator = same graph.
     if let Some(cached) = social_graph_cache().get(&creator_id) {
         return cached.clone();
     }
@@ -669,10 +634,6 @@ pub async fn attempt_social_graph_place_id_discovery(
             }
         }
     } else if creator_type.eq_ignore_ascii_case("group") {
-        // Walk from the group back to the human behind it. Assets owned by a
-        // group often live in the group owner's personal places (or in other
-        // groups they also run), so adding the owner's User + Group games to
-        // the candidate pool catches assets the group's own game list misses.
         if let Some(owner_id) = get_group_owner(creator_id, cookie_header).await {
             let mut seen_owners = HashSet::new();
             if let Some(uid) = auth_user_id {
@@ -682,8 +643,6 @@ pub async fn attempt_social_graph_place_id_discovery(
 
             queue_games_fetch("User", owner_id);
 
-            // Reuse the same limits as the User-creator branch so a Group
-            // creator and its owner cost the same as a User creator.
             let owner_groups = get_groups_for_user(owner_id, cookie_header).await;
             for (gid, gid_owner) in owner_groups.into_iter().take(MAX_GROUP_FRIEND_CRAWL_LIMIT) {
                 queue_games_fetch("Group", gid);
@@ -703,7 +662,6 @@ pub async fn attempt_social_graph_place_id_discovery(
         }
     }
 
-    // First: get the asset creator's own games directly so they are always prioritized first.
     let mut ordered_places: Vec<String> = Vec::new();
     let mut seen_places = HashSet::new();
 
@@ -714,7 +672,6 @@ pub async fn attempt_social_graph_place_id_discovery(
         }
     }
 
-    // Spawn social graph queries for remaining candidates (groups, friends, auth user).
     let cookie_header_str = cookie_header.to_string();
     let mut futures = Vec::with_capacity(tasks.len());
     for (ct, cid) in tasks {
@@ -740,7 +697,6 @@ pub async fn attempt_social_graph_place_id_discovery(
     ordered_places
 }
 
-// Query the Internet Archive Wayback Machine for historical download URLs.
 pub async fn attempt_deep_place_id_discovery(
     app: &AppHandle,
     asset_id: &str,

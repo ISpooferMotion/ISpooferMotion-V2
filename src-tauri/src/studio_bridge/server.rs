@@ -1,8 +1,3 @@
-//! Axum route handlers for the bridge server.
-//!
-//! Handles endpoints for polling, health checks, scan data uploads, and patch orchestration.
-//! All mutable state is guarded by `RwLock` and `Mutex` bounds to prevent race conditions
-//! between concurrent Studio requests.
 use axum::extract::{Json, Query, State};
 use serde::Deserialize;
 use serde_json::Value;
@@ -20,11 +15,9 @@ pub struct PollQuery {
     pub place_name: Option<String>,
 }
 
-/// Responds to the health check ping from the frontend UI.
 pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> {
     let guard = state.data.read().await;
-    // /poll can legitimately wait for up to 8 seconds. Keep the health window comfortably
-    // above one complete long-poll cycle so direct HTTP health checks do not flicker offline.
+
     let synced =
         guard.last_plugin_poll_time.is_some_and(|poll| poll.elapsed() < Duration::from_secs(30));
     Json(serde_json::json!({
@@ -33,12 +26,10 @@ pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> 
         "scanStatus": guard.scan_status,
         "studioPlaceId": guard.studio_place_id,
         "studioPlaceName": guard.studio_place_name,
-        "themeAccent": guard.theme_accent.clone(),
         "batchSize": guard.batch_size
     }))
 }
 
-/// Handles the start of a Studio workspace scan, resetting bridge state.
 pub async fn handle_scan_start(
     State(state): State<AppState>,
     Json(payload): Json<Value>,
@@ -80,7 +71,6 @@ pub async fn handle_scan_start(
     Json(serde_json::json!({"success": true}))
 }
 
-/// Updates the active scan progress in the frontend UI.
 pub async fn handle_scan_progress(
     State(state): State<AppState>,
     Json(mut payload): Json<Value>,
@@ -94,7 +84,6 @@ pub async fn handle_scan_progress(
     Json(serde_json::json!({"success": true}))
 }
 
-/// Accumulates chunks of asset records sent by the Studio plugin during a scan.
 pub async fn handle_scan_records(
     State(state): State<AppState>,
     Json(payload): Json<Value>,
@@ -112,10 +101,6 @@ pub async fn handle_scan_records(
         }
     }
 
-    // Keep the state write guard until the current pending buffer is updated. If we cloned
-    // the Arc and dropped this guard first, a concurrent /scan-start could replace the buffer
-    // and this chunk would be appended to an orphaned Arc and silently lost. All code that
-    // takes both locks uses this state -> pending-records order.
     let mut guard = state.data.write().await;
     guard.last_plugin_poll_time = Some(Instant::now());
 
@@ -142,7 +127,6 @@ pub async fn handle_scan_records(
     Json(serde_json::json!({"success": true}))
 }
 
-/// Triggers analysis and patch planning when the Studio plugin finishes a scan.
 pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> {
     let (records, mappings) = {
         let mut guard = state.data.write().await;
@@ -159,10 +143,6 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
     let record_count = records.len();
     let mapping_count = mappings.len();
 
-    // Analysis and patch planning are independent CPU-heavy passes over the same immutable
-    // record snapshot. Start both before awaiting either one so /scan-complete spends roughly
-    // the slower pass, rather than the sum of both passes, reducing Studio RequestAsync timeouts
-    // on large places without changing completion semantics.
     let records_for_analysis = std::sync::Arc::clone(&records);
     let analysis_task = tokio::task::spawn_blocking(move || analyze_records(&records_for_analysis));
     let patch_task = if mappings.is_empty() {
@@ -195,11 +175,6 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
         Vec::new()
     };
 
-    // Diagnostics for the "replace works unstable" reports: these three
-    // numbers tell us exactly where the pipeline is losing assets. If
-    // records = 0, the plugin scan collected nothing. If mappings > 0 but
-    // patches = 0, plan_patches couldn't match any mapping id against any
-    // record value (categorization / pattern issue).
     let patch_count = patches.len();
     log::info!(
         "handle_scan_complete: records={record_count} mappings={mapping_count} patches={patch_count}"
@@ -268,7 +243,6 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
     }))
 }
 
-/// Gracefully aborts a scan if the user cancels or Studio crashes.
 pub async fn handle_scan_abort(State(state): State<AppState>) -> Json<Value> {
     let mut guard = state.data.write().await;
     guard.scan_status = None;
@@ -296,17 +270,12 @@ pub async fn handle_scan_abort(State(state): State<AppState>) -> Json<Value> {
     Json(serde_json::json!({"success": true}))
 }
 
-/// Long-poll endpoint for the Studio plugin.
-///
-/// Keeps the connection open for up to 8 seconds waiting for the desktop daemon
-/// to request an action (like a new scan).
 pub async fn handle_poll(
     State(state): State<AppState>,
     Query(query): Query<PollQuery>,
 ) -> Json<Value> {
     let timeout = tokio::time::Duration::from_secs(8);
-    // Heartbeat interval: refresh last_plugin_poll_time while we're waiting so
-    // the frontend health check never sees a stale timestamp during a quiet poll.
+
     let heartbeat_interval = tokio::time::Duration::from_secs(5);
     let start = Instant::now();
     let notify = std::sync::Arc::clone(&state.data.read().await.notify);
@@ -335,13 +304,11 @@ pub async fn handle_poll(
                 guard.request_meshes = false;
                 guard.request_script_refs = false;
                 let scan_types = guard.scan_types.clone();
-                let script_scan_mode = guard.script_scan_mode.clone();
                 let scan_path = guard.scan_path.take();
                 let batch_size = guard.batch_size;
                 return Json(serde_json::json!({
                     "requestAssets": true,
                     "scanTypes": scan_types,
-                    "scriptScanMode": script_scan_mode,
                     "scanPath": scan_path,
                     "batchSize": batch_size,
                 }));
@@ -351,16 +318,13 @@ pub async fn handle_poll(
             let batch_size = state.data.read().await.batch_size;
             return Json(serde_json::json!({ "requestAssets": false, "batchSize": batch_size }));
         }
-        // Wait for a notification OR the heartbeat interval, whichever comes first.
-        // This ensures last_plugin_poll_time is refreshed regularly even during a
-        // long idle wait, preventing the frontend from falsely reading "disconnected".
+
         let remaining = timeout.saturating_sub(start.elapsed());
         let wait = remaining.min(heartbeat_interval);
         let _ = tokio::time::timeout(wait, notify.notified()).await;
     }
 }
 
-/// Long-poll endpoint waiting for queued replacement patches.
 pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Value> {
     let timeout = tokio::time::Duration::from_secs(8);
     let heartbeat_interval = tokio::time::Duration::from_secs(5);
@@ -406,7 +370,6 @@ pub async fn handle_poll_replacements(State(state): State<AppState>) -> Json<Val
     }
 }
 
-/// Receives live patch progress updates from the Studio plugin.
 pub async fn handle_patch_progress(
     State(state): State<AppState>,
     Json(payload): Json<Value>,
@@ -417,7 +380,6 @@ pub async fn handle_patch_progress(
     Json(serde_json::json!({"success": true}))
 }
 
-/// Sets batch size from the desktop application HTTP API.
 pub async fn handle_set_batch_size(
     State(state): State<AppState>,
     Json(body): Json<Value>,
@@ -427,7 +389,6 @@ pub async fn handle_set_batch_size(
     Json(serde_json::json!({"success": true}))
 }
 
-/// Queues ID replacement patches for Studio retrieval.
 pub async fn handle_replace_ids(
     State(state): State<AppState>,
     Json(payload): Json<Value>,
@@ -482,15 +443,10 @@ pub async fn handle_replace_ids(
     Json(serde_json::json!({ "ok": true, "truncated": over_limit }))
 }
 
-/// Relays patch results (success/fail logs) back to the frontend UI.
 pub async fn handle_patch_results(
     State(state): State<AppState>,
     Json(payload): Json<Value>,
 ) -> Json<Value> {
-    // Log a summary line in the app so users can tell whether the plugin
-    // actually applied patches. Without this, patches could silently fail
-    // in the plugin (rate limit, permissions, missing instance) and the
-    // user would just see the daemon report success with no follow-up.
     let succeeded = payload.get("succeeded").and_then(Value::as_u64).unwrap_or(0);
     let failed = payload.get("failed").and_then(Value::as_u64).unwrap_or(0);
     let total = payload.get("total").and_then(Value::as_u64).unwrap_or(succeeded + failed);
@@ -572,9 +528,6 @@ request_handler!(request_images, request_images, last_images);
 request_handler!(request_meshes, request_meshes, last_meshes);
 request_handler!(request_script_refs, request_script_refs, last_script_refs);
 
-/// Receives scan options from the desktop app before a scan starts so the
-/// plugin can pick them up via the /poll response (which types to scan and
-/// the script scan mode).
 pub async fn set_scan_options(
     State(state): State<AppState>,
     Json(body): Json<Value>,
@@ -582,9 +535,6 @@ pub async fn set_scan_options(
     let mut guard = state.data.write().await;
     if let Some(types) = body.get("scanTypes").and_then(|v| v.as_array()) {
         guard.scan_types = types.iter().filter_map(|v| v.as_str().map(String::from)).collect();
-    }
-    if let Some(mode) = body.get("scriptScanMode").and_then(|v| v.as_str()) {
-        guard.script_scan_mode = mode.to_string();
     }
     if let Some(path) = body.get("scanPath").and_then(|v| v.as_str()) {
         guard.scan_path = if path.trim().is_empty() { None } else { Some(path.trim().to_string()) };
@@ -594,8 +544,7 @@ pub async fn set_scan_options(
 
 async fn legacy_poll(State(state): State<AppState>, kind: &'static str) -> Json<Value> {
     let timeout = tokio::time::Duration::from_secs(8);
-    // Heartbeat keeps last_plugin_poll_time fresh during a quiet idle wait,
-    // matching the behaviour of handle_poll to prevent false "disconnected" readings.
+
     let heartbeat_interval = tokio::time::Duration::from_secs(5);
     let start = Instant::now();
     let notify = std::sync::Arc::clone(&state.data.read().await.notify);
@@ -682,7 +631,6 @@ legacy_complete_handler!(handle_images_complete, last_images);
 legacy_complete_handler!(handle_meshes_complete, last_meshes);
 legacy_complete_handler!(handle_script_refs_complete, last_script_refs);
 
-/// Serves the cached Roblox API dump properties to the Studio plugin.
 pub async fn handle_api_dump() -> Json<crate::api_dump::ApiDumpProperties> {
     Json(crate::api_dump::get_api_dump_properties().await)
 }

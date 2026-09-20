@@ -1,8 +1,3 @@
-//! Local HTTP server that interfaces with the Roblox Studio plugin.
-//!
-//! Because Roblox Studio cannot initiate arbitrary WebSockets or IPC, it relies
-//! on a long-polling HTTP client. This module binds an ephemeral local port and
-//! routes incoming scan data, status checks, and patch instructions.
 pub mod messages;
 pub mod middleware;
 pub mod server;
@@ -42,9 +37,7 @@ use server::{
 
 const PLUGIN_PORT_START: u16 = 14285;
 const PLUGIN_PORT_END: u16 = 14289;
-/// Upper bound of the incremental port search. If every port from
-/// PLUGIN_PORT_START through this value is occupied, the bridge fails loudly
-/// instead of binding to a random OS port the Studio plugin could never reach.
+
 const PLUGIN_PORT_FALLBACK_END: u16 = 14320;
 const STUDIO_PROTOCOL_VERSION: u8 = 3;
 const MAX_STUDIO_RECORDS: usize = 2_000_000;
@@ -61,11 +54,6 @@ pub(crate) fn active_bridge_port() -> &'static RwLock<Option<u16>> {
     ACTIVE_BRIDGE_PORT.get_or_init(|| RwLock::new(None))
 }
 
-// Snapshot of how the plugin HTTP server's port binding went: whether it landed
-// on the default 14285-14289 range or had to move past it, and which processes
-// are squatting on the defaults. The Studio plugin can't read this until it
-// connects (it needs the port to connect), so the desktop app surfaces it as a
-// banner instructing the user to widen the plugin's Daemon Port Scan Range.
 static PORT_DIAGNOSTIC: OnceLock<RwLock<Value>> = OnceLock::new();
 
 fn port_diagnostic() -> &'static RwLock<Value> {
@@ -79,9 +67,6 @@ fn port_diagnostic() -> &'static RwLock<Value> {
     })
 }
 
-/// Toggles whether the plugin should skip checking if the user actually owns the assets.
-///
-/// This is used during testing or offline spoofing scenarios.
 #[tauri::command]
 #[specta::specta]
 #[must_use]
@@ -93,16 +78,6 @@ pub async fn set_bridge_skip_owned_check(skip_owned: bool) -> bool {
     false
 }
 
-/// Pushes a batch of replacement mappings to the bridge state.
-///
-/// If scan records are already present, this immediately generates patch instructions
-/// so the plugin can fetch them on its next poll cycle.
-///
-/// When no records exist yet (Studio hasn't scanned since the daemon started
-/// or since the last cache reset), we can't produce patches -- but we MUST
-/// signal the plugin to run a scan, otherwise the mappings sit forever with
-/// no way to turn into patches and the user sees nothing replace. This
-/// matches the HTTP path in `handle_replace_ids`.
 #[must_use]
 pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
     let Some(data) = bridge_data() else {
@@ -118,9 +93,6 @@ pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
     guard.stored_mappings = mappings;
     guard.stored_patches = patches;
     if records_empty {
-        // Prompt the plugin to scan every asset kind on its next poll of
-        // /poll-scan-requests. Without this, a fresh Studio session receives
-        // mappings but never produces the records needed to plan patches.
         guard.request_sounds = true;
         guard.request_animations = true;
         guard.request_images = true;
@@ -133,7 +105,6 @@ pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
 
 use messages::AssetServerStateData;
 
-/// The shared state injected into all axum route handlers.
 #[derive(Clone)]
 pub struct AppState {
     pub data: Arc<RwLock<AssetServerStateData>>,
@@ -142,7 +113,6 @@ pub struct AppState {
     pub app_handle: AppHandle,
 }
 
-/// Bootstraps the local HTTP server and binds to the first available port.
 pub async fn start_server(app_handle: AppHandle) {
     let data = Arc::new(RwLock::new(AssetServerStateData::default()));
     let _ = BRIDGE_DATA.set(Arc::clone(&data));
@@ -189,15 +159,11 @@ pub async fn start_server(app_handle: AppHandle) {
     };
     *active_bridge_port().write().await = Some(bound_port);
 
-    // Allow localhost/tauri origins to enable web frontend access.
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::predicate(
             |origin: &HeaderValue, _req_parts: &axum::http::request::Parts| {
                 let bytes = origin.as_bytes();
-                // Requests with no Origin header are not subject to browser CORS checks and
-                // still work for the Roblox plugin. Do not explicitly trust Origin: null: that
-                // origin is shared by sandboxed/local documents and should not receive bridge
-                // access from a browser context.
+
                 if bytes.is_empty() {
                     return true;
                 }
@@ -286,7 +252,6 @@ pub async fn start_server(app_handle: AppHandle) {
     });
 }
 
-/// Returns the ephemeral port the bridge server successfully bound to.
 #[tauri::command]
 #[specta::specta]
 #[must_use]
@@ -294,16 +259,12 @@ pub async fn get_plugin_bridge_port() -> Option<u16> {
     *active_bridge_port().read().await
 }
 
-/// A default plugin port (14285-14289) that is already in use, with the name of
-/// the process holding it (when it can be determined).
 #[derive(serde::Serialize, Clone)]
 struct OccupiedPort {
     port: u16,
     exe: String,
 }
 
-/// Resolves the owning process name for each occupied default port. Windows uses
-/// the native TCP table + process image query; macOS/Linux shell out to `lsof`.
 async fn detect_occupied_ports(ports: &[u16]) -> Vec<OccupiedPort> {
     if ports.is_empty() {
         return Vec::new();
@@ -323,8 +284,6 @@ async fn detect_occupied_ports(ports: &[u16]) -> Vec<OccupiedPort> {
     .unwrap_or_default()
 }
 
-/// Maps the given default ports to the process name holding each one. Returns an
-/// empty entry for ports whose owner can't be determined.
 #[cfg(windows)]
 fn port_owners(ports: &[u16]) -> std::collections::HashMap<u16, String> {
     use windows_sys::Win32::NetworkManagement::IpHelper::{
@@ -332,12 +291,12 @@ fn port_owners(ports: &[u16]) -> std::collections::HashMap<u16, String> {
     };
 
     const AF_INET: u32 = 2;
-    // TCP_TABLE_OWNER_PID_ALL returns every TCP row with its owning PID.
+
     const TCP_TABLE_OWNER_PID_ALL: i32 = 5;
 
     let mut map = std::collections::HashMap::new();
     let mut size: u32 = 0;
-    // First call discovers the required buffer size.
+
     unsafe {
         GetExtendedTcpTable(
             std::ptr::null_mut(),
@@ -371,8 +330,7 @@ fn port_owners(ports: &[u16]) -> std::collections::HashMap<u16, String> {
         let rows = std::slice::from_raw_parts((*table).table.as_ptr(), count);
         for row in rows {
             let addr = row.dwLocalAddr.to_ne_bytes();
-            // A bind to 127.0.0.1 is blocked by a listener on loopback or on
-            // 0.0.0.0 (any interface), so match both.
+
             if addr != [127, 0, 0, 1] && addr != [0, 0, 0, 0] {
                 continue;
             }
@@ -419,12 +377,11 @@ fn port_owners(ports: &[u16]) -> std::collections::HashMap<u16, String> {
         (Some(&lo), Some(&hi)) => (lo, hi),
         _ => return map,
     };
-    // `lsof -iTCP:lo-hi -sTCP:LISTEN` lists listeners in the range. -n -P skip
-    // the DNS/port name resolution that would slow it down and change the format.
+
     let filter = format!("-iTCP:{lo}-{hi}");
     let out = match Command::new("lsof").args(["-nP", filter.as_str(), "-sTCP:LISTEN"]).output() {
         Ok(o) => o,
-        Err(_) => return map, // lsof missing (rare on macOS; common on minimal Linux).
+        Err(_) => return map,
     };
     let stdout = String::from_utf8_lossy(&out.stdout);
     for line in stdout.lines().skip(1) {
@@ -450,15 +407,6 @@ fn extract_listen_port(line: &str) -> Option<u16> {
     num.parse().ok()
 }
 
-/// Iterates over the port range to accommodate multiple Studio instances.
-///
-/// We try 14285-14289 first (the plugin's default scan range), then keep
-/// incrementing up to PLUGIN_PORT_FALLBACK_END rather than asking the OS for a
-/// random port. A random port lands in the 49152+ ephemeral range, far outside
-/// any scan range the plugin can reach, so the desktop app would look alive
-/// while the plugin could never find it. Returns the listener, its address, and
-/// the default ports (14285-14289) that were already occupied, used to report
-/// which process is squatting on them.
 async fn bind_available_listener() -> Option<(tokio::net::TcpListener, SocketAddr, Vec<u16>)> {
     let mut occupied_defaults: Vec<u16> = Vec::new();
     for port in PLUGIN_PORT_START..=PLUGIN_PORT_FALLBACK_END {
@@ -475,8 +423,6 @@ async fn bind_available_listener() -> Option<(tokio::net::TcpListener, SocketAdd
     None
 }
 
-/// Reports whether the plugin HTTP server landed on its default ports or had to
-/// move past them, and which processes are occupying the defaults.
 #[tauri::command]
 #[specta::specta]
 #[must_use]
@@ -485,7 +431,6 @@ pub async fn get_port_diagnostic() -> AnyValue {
     AnyValue((*guard).clone())
 }
 
-/// Checks if the Studio plugin has polled the daemon recently.
 #[tauri::command]
 #[specta::specta]
 #[must_use]
@@ -498,10 +443,6 @@ pub async fn get_studio_health_status() -> AnyValue {
     let guard = data.read().await;
     let synced = guard
         .last_plugin_poll_time
-        // The plugin uses an 8-second long-poll on /poll, so the timestamp is only
-        // refreshed at the START of each poll iteration - not while it's waiting.
-        // A 3-second window causes the frontend to flash "disconnected" mid-poll.
-        // 30s gives one full poll cycle + a safety margin.
         .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(30));
     AnyValue(json!({
         "synced": synced,
@@ -512,7 +453,6 @@ pub async fn get_studio_health_status() -> AnyValue {
     }))
 }
 
-/// Returns the current state of asset discovery for the frontend UI.
 #[tauri::command]
 #[specta::specta]
 #[must_use]
@@ -536,14 +476,6 @@ pub async fn get_studio_asset_snapshots() -> AnyValue {
     }))
 }
 
-/// Sets the UI accent color so the plugin can adopt it.
-pub async fn set_theme_accent(color: String) {
-    if let Some(data) = bridge_data() {
-        data.write().await.theme_accent = Some(color);
-    }
-}
-
-/// Sets the replacement batch size so the plugin can adopt it.
 pub async fn set_batch_size(size: u32) {
     if let Some(data) = bridge_data() {
         data.write().await.batch_size = Some(size);

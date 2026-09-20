@@ -1,30 +1,16 @@
-//! Miscellaneous shared utility functions.
-//!
-//! Provides thread-safe HTTP client initialization, rate-limit header parsing,
-//! file path sanitization, and generic error string extraction.
-
 use log::warn;
 use reqwest::Response;
 use std::path::Path;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Emitter};
 
-// A no-proxy client for loopback only. The Studio plugin bridge runs on
-// 127.0.0.1 and must never be routed through a proxy, or Studio communication
-// breaks. Everything else uses `get_http_client()`, which is proxy-aware.
 static LOCAL_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
-// The user's explicitly-configured proxy URL (Settings -> Routing -> Proxy URL),
-// which overrides the OS system proxy. Set from the frontend via `set_proxy_url`.
 static EXPLICIT_PROXY: OnceLock<std::sync::RwLock<Option<String>>> = OnceLock::new();
 
-// Cached proxy-aware client keyed by the effective proxy URL, so connection
-// pools are reused while the proxy is unchanged and rebuilt on hot-swap.
 static PROXY_CLIENT: OnceLock<std::sync::RwLock<(Option<String>, reqwest::Client)>> =
     OnceLock::new();
 
-/// Sets the user's explicit proxy URL, or `None` to fall back to the OS system
-/// proxy. Called from the frontend on startup and whenever the setting changes.
 pub fn set_explicit_proxy(url: Option<String>) {
     let lock = EXPLICIT_PROXY.get_or_init(|| std::sync::RwLock::new(None));
     if let Ok(mut guard) = lock.write() {
@@ -40,12 +26,6 @@ pub fn set_explicit_proxy(url: Option<String>) {
     }
 }
 
-/// The effective proxy URL: the user's explicit setting if present, otherwise
-/// the OS system proxy. On Windows the system proxy is the WinINET registry
-/// value (the one browsers and VPN "proxy mode" apps like Happ set); reqwest
-/// does not read it by default, which is why the app failed under Happ's Proxy
-/// mode while TUN mode worked. On other platforms reqwest reads HTTP_PROXY /
-/// HTTPS_PROXY env vars itself, so we return None here and let reqwest handle it.
 fn effective_proxy_url() -> Option<String> {
     if let Some(lock) = EXPLICIT_PROXY.get() {
         if let Ok(guard) = lock.read() {
@@ -57,16 +37,11 @@ fn effective_proxy_url() -> Option<String> {
     system_proxy()
 }
 
-/// Returns a `reqwest::Proxy` for the effective proxy, for custom client
-/// builders (per-call timeouts, no-redirect) that can't use the shared client.
 pub fn effective_reqwest_proxy() -> Option<reqwest::Proxy> {
     let url = effective_proxy_url()?;
     reqwest::Proxy::all(&url).ok()
 }
 
-/// Builds a reqwest client with a custom timeout and the effective proxy applied.
-/// For calls that need a different timeout than the shared 15s client but still
-/// must respect the proxy (e.g. quick validation calls with a 5s timeout).
 pub fn build_client_with_timeout(timeout: std::time::Duration) -> reqwest::Client {
     let mut builder = reqwest::Client::builder()
         .timeout(timeout)
@@ -78,10 +53,8 @@ pub fn build_client_with_timeout(timeout: std::time::Duration) -> reqwest::Clien
     builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
-/// Builds a new reqwest client, optionally configuring a proxy.
 fn build_client(proxy_url: Option<&str>) -> reqwest::Client {
     let mut builder = reqwest::Client::builder()
-        // Use a 15-second timeout.
         .timeout(std::time::Duration::from_secs(15))
         .pool_idle_timeout(std::time::Duration::from_secs(90))
         .pool_max_idle_per_host(32);
@@ -96,10 +69,6 @@ fn build_client(proxy_url: Option<&str>) -> reqwest::Client {
     builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
 
-/// Returns a cached, proxy-aware HTTP client for outbound calls (Roblox APIs,
-/// asset downloads, etc.). The proxy is the user's explicit proxyUrl if set,
-/// otherwise the OS system proxy. The client is rebuilt only when the effective
-/// proxy changes, so connection pools are preserved between calls.
 pub fn get_http_client() -> reqwest::Client {
     let proxy = effective_proxy_url();
     let lock = PROXY_CLIENT.get_or_init(|| std::sync::RwLock::new((None, build_client(None))));
@@ -123,9 +92,6 @@ pub fn get_http_client() -> reqwest::Client {
     build_client(proxy.as_deref())
 }
 
-/// Returns a cached client with NO proxy, for loopback only (the Studio plugin
-/// bridge at 127.0.0.1). Routing localhost through a proxy would break Studio
-/// communication.
 pub fn get_local_http_client() -> &'static reqwest::Client {
     LOCAL_CLIENT.get_or_init(|| {
         reqwest::Client::builder()
@@ -138,9 +104,6 @@ pub fn get_local_http_client() -> &'static reqwest::Client {
     })
 }
 
-/// Returns a cached HTTP client bound to an explicit proxy URL. Used by the
-/// spoofer job, which carries proxyUrl in the job config so a mid-run proxy
-/// change doesn't swap the client out from under an active job.
 pub fn get_http_client_with_proxy(proxy_url: Option<&str>) -> reqwest::Client {
     let lock = PROXY_CLIENT.get_or_init(|| std::sync::RwLock::new((None, build_client(None))));
 
@@ -164,9 +127,6 @@ pub fn get_http_client_with_proxy(proxy_url: Option<&str>) -> reqwest::Client {
     build_client(proxy_url)
 }
 
-/// Reads the OS system proxy. On Windows this is the WinINET registry setting
-/// (`ProxyEnable` + `ProxyServer`) that browsers and VPN proxy-mode apps use.
-/// Returns None when no system proxy is configured.
 #[cfg(windows)]
 fn system_proxy() -> Option<String> {
     use windows_sys::Win32::System::Registry::{
@@ -188,7 +148,6 @@ fn system_proxy() -> Option<String> {
             return None;
         }
 
-        // ProxyEnable is a DWORD (0/1).
         let mut enabled: u32 = 0;
         let mut enabled_len: u32 = 4;
         let mut enabled_type: u32 = 0;
@@ -204,8 +163,6 @@ fn system_proxy() -> Option<String> {
 
         let mut server: Option<String> = None;
         if proxy_enabled {
-            // ProxyServer is a REG_SZ like "127.0.0.1:8080" or
-            // "http=127.0.0.1:8080;https=127.0.0.1:8080".
             let mut buf = [0u16; 512];
             let mut buf_len: u32 = (buf.len() * 2) as u32;
             let mut server_type: u32 = 0;
@@ -230,9 +187,6 @@ fn system_proxy() -> Option<String> {
     }
 }
 
-/// Normalizes a WinINET `ProxyServer` string into a single proxy URL suitable
-/// for `reqwest::Proxy::all`. Handles both the all-protocols form ("host:port")
-/// and the per-protocol form ("http=h:p;https=h:p"), preferring `https=`/`http=`.
 fn parse_wininet_proxy(raw: &str) -> Option<String> {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -260,24 +214,15 @@ fn parse_wininet_proxy(raw: &str) -> Option<String> {
     entry.map(|addr| if addr.contains("://") { addr.to_string() } else { format!("http://{addr}") })
 }
 
-/// On non-Windows, reqwest reads HTTP_PROXY/HTTPS_PROXY/ALL_PROXY env vars by
-/// default (the `system-proxy` feature), so there's nothing to do here —
-/// returning None lets reqwest apply that env-var proxy itself.
 #[cfg(not(windows))]
 fn system_proxy() -> Option<String> {
     None
 }
 
-/// Parses rate-limit headers to determine if we need to back off.
-///
-/// Returns the number of milliseconds to sleep if a limit was hit or the
-/// `x-ratelimit-remaining` count fell dangerously low. If headers are missing
-/// but the status is 429, this falls back to a standard exponential backoff.
 #[must_use]
 pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -> Option<u64> {
     let mut needs_wait = false;
 
-    // Back off when rate limit is nearly empty (< 2 remaining).
     if let Some(remaining) = response.headers().get("x-ratelimit-remaining") {
         if let Ok(rem_str) = remaining.to_str() {
             if rem_str.parse::<i64>().is_ok_and(|n| n < 2) {
@@ -291,12 +236,6 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
     }
 
     if needs_wait {
-        // Hard cap on server-suggested waits. Roblox occasionally returns
-        // Retry-After values of an hour or more, which used to leave
-        // individual asset tasks sleeping for that entire duration and
-        // stalling the whole job (`for_each_concurrent` waits for every
-        // future). 2 minutes is long enough for genuine rate-limit
-        // windows to reset but short enough that a stuck task recovers.
         const MAX_RETRY_AFTER_MS: u64 = 120_000;
 
         if let Some(reset) = response.headers().get("x-ratelimit-reset") {
@@ -310,25 +249,17 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
                             let ms = (reset_secs - now_secs).saturating_mul(1000);
                             return Some(ms.min(MAX_RETRY_AFTER_MS));
                         }
-                        // Reset time is in the past. Falling back to None lets
-                        // the caller use its own default wait (typically 2s) —
-                        // returning Some(0) here caused every caller's
-                        // `.unwrap_or(2_000)` to be bypassed, producing an
-                        // immediate-retry loop that spammed logs and freed no
-                        // actual rate-limit budget.
+
                         return None;
                     }
                 }
             }
         }
 
-        // Fallback to standard Retry-After header.
         if let Some(retry) = response.headers().get("retry-after") {
             if let Ok(retry_str) = retry.to_str() {
                 if let Ok(retry_secs) = retry_str.parse::<u64>() {
                     if retry_secs == 0 {
-                        // Same rationale as x-ratelimit-reset above — a 0 wait
-                        // triggers immediate retries that get 429'd again.
                         return None;
                     }
                     let ms = retry_secs.saturating_mul(1000);
@@ -337,7 +268,6 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
             }
         }
 
-        // Fallback to exponential backoff.
         let attempt = attempt.unwrap_or(1);
         let base_ms = 30_000.0;
         let exp_ms = base_ms * (1.5_f64).powi(attempt.saturating_sub(1) as i32);
@@ -349,7 +279,6 @@ pub fn extract_retry_after(response: &reqwest::Response, attempt: Option<u32>) -
     None
 }
 
-/// Formats a raw Roblox cookie value into a valid HTTP Cookie header string.
 #[must_use]
 pub fn build_roblox_cookie_header(cookie_value: &str) -> String {
     let normalized = normalize_roblox_cookie(cookie_value);
@@ -360,18 +289,12 @@ pub fn build_roblox_cookie_header(cookie_value: &str) -> String {
     }
 }
 
-/// Sanitizes raw Roblox cookie strings by stripping headers and quotes.
-///
-/// Users frequently paste cookies with the `.ROBLOSECURITY=` prefix or enclosed
-/// in browser-specific quotes. This strips all of that away so we are left with
-/// just the raw auth token.
 #[must_use]
 pub fn normalize_roblox_cookie(cookie_value: &str) -> String {
     let trimmed = cookie_value.trim().trim_matches(|c| c == '\'' || c == '"');
 
     let prefix = ".ROBLOSECURITY=";
     let normalized = if let Some(idx) = trimmed.find(prefix) {
-        // Remove prefix and truncate at the first semicolon.
         let rest = &trimmed[idx + prefix.len()..];
         if let Some(end_idx) = rest.find(';') {
             &rest[..end_idx]
@@ -385,16 +308,10 @@ pub fn normalize_roblox_cookie(cookie_value: &str) -> String {
     normalized.trim().to_string()
 }
 
-/// Sanitizes file names by replacing invalid characters with underscores.
-///
-/// Prevents path traversal or OS-level file creation errors when saving
-/// assets downloaded from Roblox (since user-generated asset names can contain
-/// arbitrary characters).
 #[must_use]
 pub fn sanitize_filename(filename: &str) -> String {
     let mut safe = String::new();
     for c in filename.chars() {
-        // Use a match arm so the compiler emits a jump table - O(1) per char vs O(n) string scan.
         if matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' | '\x00'..='\x1F') {
             safe.push('_');
         } else {
@@ -402,19 +319,14 @@ pub fn sanitize_filename(filename: &str) -> String {
         }
     }
 
-    // Remove trailing dots or whitespace to satisfy Windows path rules.
     let trimmed = safe.trim_end_matches(|c: char| c == '.' || c.is_whitespace());
     if trimmed.is_empty() {
         "untitled".to_string()
     } else {
-        // Truncate file name.
         trimmed.chars().take(180).collect()
     }
 }
 
-/// Recursively deletes all files and folders inside the given directory path.
-///
-/// Used to wipe the `downloads` cache before a new patching run starts.
 pub async fn clear_downloads_directory(dir_path: &Path) -> Result<bool, String> {
     if !dir_path.exists() {
         if let Err(e) = tokio::fs::create_dir_all(dir_path).await {
@@ -442,18 +354,12 @@ pub async fn clear_downloads_directory(dir_path: &Path) -> Result<bool, String> 
     }
 }
 
-/// Detects updated cookies provided mid-request and synchronizes them with the frontend.
-///
-/// Roblox occasionally rotates the `.ROBLOSECURITY` token via a `Set-Cookie` header
-/// on API responses. This catches the new token and immediately blasts it to the React
-/// UI so the user does not get silently logged out.
 pub fn check_for_roblosecurity_update(app: &AppHandle, resp: &Response, original_cookie: &str) {
     let original_val = original_cookie.strip_prefix(".ROBLOSECURITY=").unwrap_or(original_cookie);
 
     for val in &resp.headers().get_all(reqwest::header::SET_COOKIE) {
         if let Ok(cookie_str) = val.to_str() {
             if let Some(rest) = cookie_str.strip_prefix(".ROBLOSECURITY=") {
-                // Truncate at the first semicolon to isolate the token value.
                 let new_cookie = rest.split_once(';').map_or(rest, |(v, _)| v);
                 if !new_cookie.is_empty() && new_cookie != original_val {
                     let _ = app.emit("roblosecurity-updated", new_cookie);
@@ -463,11 +369,6 @@ pub fn check_for_roblosecurity_update(app: &AppHandle, resp: &Response, original
     }
 }
 
-/// Digs through an arbitrary JSON error payload to find a human-readable message.
-///
-/// Different Roblox endpoints return errors in wildly different JSON structures
-/// (`errors[0].message`, `userFacingMessage`, plain strings, etc). This attempts
-/// to gracefully extract the most relevant string for the user.
 pub fn extract_human_error(err_val: &serde_json::Value, status: Option<u16>) -> String {
     extract_human_error_inner(err_val, status, 0)
 }
@@ -508,7 +409,6 @@ fn extract_human_error_inner(
         }
     }
 
-    // Limit recursion depth to prevent stack overflow on adversarial input.
     if depth < 3 {
         if let Some(obj) = err_val.as_object() {
             for (_, value) in obj {

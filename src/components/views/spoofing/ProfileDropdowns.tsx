@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { Loader2, Users, UserSquare2 } from 'lucide-react';
 
 import type { AppConfig } from '../../../contexts/ConfigContext';
@@ -8,15 +7,6 @@ import { useConfigStore } from '../../../stores/configStore';
 import { normalizeId, type RobloxGroup, type RobloxUserInfo } from '../../../utils/robloxProfiles';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../ui/select';
 
-/**
- * Compact account switcher for the Spoofing view.
- *
- * Lists every account saved on the Accounts tab and lets the user switch
- * the active credentials without leaving Spoofing. Selecting an account
- * mirrors what the Accounts tab's Select button does: pushes that
- * account's cookie/API key into the active spoofing config and disables
- * auto-detect so a manual choice sticks.
- */
 export function AccountSwitcher({ accounts }: { accounts: AppConfig['accounts'] }) {
   const { t } = useLanguage();
   const { accountSecrets, updateConfig, updateCategory } = useConfigStore();
@@ -102,8 +92,6 @@ export type AudioQuotaDisplay =
   | { status: 'ready'; remaining: number; capacity: number };
 
 export function parseAudioQuota(payload: unknown): AudioQuotaDisplay | null {
-  // Quota limits are returned as nested arrays depending on the endpoint version.
-  // Parse safely to display remaining uploads.
   if (!payload || typeof payload !== 'object') return null;
 
   const response = payload as Record<string, unknown>;
@@ -182,12 +170,7 @@ export function AvatarDropdown({
         {t('spoof.selectedUser')}
       </span>
       <div className="flex items-center gap-3 h-12 w-full">
-        <motion.div
-          key={`${selected?.id || 'none'}-img`}
-          initial={{ opacity: 0, scale: 0.85 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="relative w-8 h-8 shrink-0"
-        >
+        <div key={`${selected?.id || 'none'}-img`} className="relative w-8 h-8 shrink-0">
           {selected?.avatarUrl ? (
             <img
               src={selected.avatarUrl}
@@ -197,18 +180,13 @@ export function AvatarDropdown({
           ) : (
             <EmptyAvatar size={14} />
           )}
-        </motion.div>
-        <motion.div
-          key={`${selected?.id || 'none'}-info`}
-          initial={{ opacity: 0, x: 6 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="min-w-0 flex-1"
-        >
+        </div>
+        <div key={`${selected?.id || 'none'}-info`} className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold text-text-primary leading-4">{label}</div>
           <div className="truncate text-[10px] leading-3 font-medium text-text-muted mt-0.5">
             {audioQuotaLabel}
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   );

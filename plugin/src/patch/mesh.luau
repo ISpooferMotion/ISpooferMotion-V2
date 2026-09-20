@@ -2,18 +2,7 @@
 --!nolint
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
---- MeshPart replacement helpers.
----
---- MeshId cannot be assigned directly, but Roblox supports replacing the mesh data
---- on an existing MeshPart via CreateMeshPartAsync + ApplyMesh. Keeping the original
---- instance avoids breaking joints, children, references, attributes, tags, and physics
---- state by destroying and recreating the part.
 
---- Replaces a MeshPart's mesh data without replacing the Instance itself.
----
---- targetMeshUri must be a normalized asset URI. targetTextureUri is optional; if it
---- is omitted, the existing texture is restored after ApplyMesh copies the temporary
---- part's texture data.
 local function applyMeshPartInPlace(
 	meshObj: MeshPart,
 	targetMeshUri: string,
@@ -39,8 +28,6 @@ local function applyMeshPartInPlace(
 		originalTexture = meshObj.TextureID
 	end)
 
-	-- CreateMeshPartAsync yields. Yield once before it as well so bulk replacements
-	-- cannot hammer Studio's mesh creation path in a single scheduler slice.
 	task.wait()
 	local maxAttempts = 5
 	local attempt = 0

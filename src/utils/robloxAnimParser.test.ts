@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { parseAnimationXml } from './robloxAnimParser';
 import * as tauriCore from '@tauri-apps/api/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { parseAnimationXml } from './robloxAnimParser';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),

@@ -1,10 +1,10 @@
 import { ScanSearch } from 'lucide-react';
 import { useState } from 'react';
 
-import { Button } from '../ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { useLanguage } from '../../contexts/LanguageContext';
 import type { ScanOptions } from '../../utils/studioScan';
+import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 
 const ASSET_TYPES = [
   { key: 'sounds', label: 'Sounds' },
@@ -14,29 +14,6 @@ const ASSET_TYPES = [
   { key: 'scripts', label: 'Scripts' },
 ] as const;
 
-const SCRIPT_MODES = [
-  {
-    key: 'assetIds',
-    label: 'Asset IDs (Fast)',
-    desc: 'Extract asset IDs directly — best for large places and quick scans',
-  },
-  {
-    key: 'fullSource',
-    label: 'Full Code Analysis (Accurate)',
-    desc: 'Deep-scans script code to identify hidden asset variables and references',
-  },
-  {
-    key: 'off',
-    label: 'Skip Scripts',
-    desc: 'Only scan visual and audio properties, ignoring script contents',
-  },
-] as const;
-
-/**
- * Pre-scan options popup. Lets the user pick what to scan for and how
- * scripts are handled before kicking off the Studio scan. Defaults to
- * all types + asset-IDs mode (the fast path for large games).
- */
 export default function ScanOptionsModal({
   open,
   onOpenChange,
@@ -48,7 +25,6 @@ export default function ScanOptionsModal({
 }) {
   const { t } = useLanguage();
   const [scanTypes, setScanTypes] = useState<Set<string>>(new Set(ASSET_TYPES.map((a) => a.key)));
-  const [scriptMode, setScriptMode] = useState<string>('assetIds');
   const [scanning, setScanning] = useState(false);
 
   const toggleType = (key: string) => {
@@ -67,7 +43,7 @@ export default function ScanOptionsModal({
     setScanning(true);
     try {
       const types = ASSET_TYPES.map((a) => a.key).filter((k) => scanTypes.has(k));
-      await onScanStart({ scanTypes: types, scriptScanMode: scriptMode });
+      await onScanStart({ scanTypes: types });
       onOpenChange(false);
     } finally {
       setScanning(false);
@@ -85,7 +61,6 @@ export default function ScanOptionsModal({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Asset type checkboxes */}
           <div>
             <p className="text-sm font-semibold text-foreground mb-2">Asset types to scan</p>
             <div className="grid grid-cols-2 gap-2">
@@ -106,36 +81,6 @@ export default function ScanOptionsModal({
             </div>
           </div>
 
-          {/* Script scan mode */}
-          <div>
-            <p className="text-sm font-semibold text-foreground mb-2">Script scanning method</p>
-            <div className="space-y-2">
-              {SCRIPT_MODES.map((mode) => (
-                <label
-                  key={mode.key}
-                  className={`flex items-start gap-2 cursor-pointer rounded-md border px-3 py-2 transition-colors ${
-                    scriptMode === mode.key
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:bg-accent/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="scriptMode"
-                    checked={scriptMode === mode.key}
-                    onChange={() => setScriptMode(mode.key)}
-                    className="accent-primary mt-0.5"
-                  />
-                  <div>
-                    <span className="text-sm font-medium">{mode.label}</span>
-                    <p className="text-xs text-muted-foreground">{mode.desc}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Start button */}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={scanning}>
               {t('common.cancel')}

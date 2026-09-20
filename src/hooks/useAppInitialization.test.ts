@@ -1,21 +1,18 @@
-import { renderHook, act } from '@testing-library/react';
-import { useAppInitialization } from './useAppInitialization';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as tauriCore from '@tauri-apps/api/core';
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_APP_CONFIG, useConfigStore } from '../stores/configStore';
+import { useAppInitialization } from './useAppInitialization';
 
-// Mock Tauri plugin HTTP so we don't actually fetch
 vi.mock('@tauri-apps/plugin-http', () => ({
   fetch: vi.fn(),
 }));
 
-// Mock tauriRuntime utility
 vi.mock('../utils/tauriRuntime', () => ({
   isTauriRuntime: vi.fn(() => true),
 }));
 
-// Mock the shortcut plugin
 vi.mock('@tauri-apps/plugin-global-shortcut', () => ({
   isRegistered: vi.fn().mockResolvedValue(false),
   register: vi.fn().mockResolvedValue(undefined),

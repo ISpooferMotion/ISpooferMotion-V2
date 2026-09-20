@@ -21,7 +21,6 @@ export interface RobloxAnimationClip {
   keyframes: RobloxKeyframe[];
 }
 
-// Parse Roblox animation XML into a JS object using the Rust backend.
 export async function parseAnimationXml(xml: string): Promise<RobloxAnimationClip | null> {
   try {
     const result = await invoke<RobloxAnimationClip | null>('parse_animation_data', { xml });

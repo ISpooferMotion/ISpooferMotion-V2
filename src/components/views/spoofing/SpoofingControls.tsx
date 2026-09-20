@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { Ban, Play, RotateCcw, ScanSearch } from 'lucide-react';
 
 import { useLanguage } from '../../../contexts/LanguageContext';
@@ -16,7 +15,6 @@ export interface SpoofingControlsProps {
   isScanningStudio: boolean;
   isJobPaused: boolean;
   replaceError: boolean;
-  itemVariants: import('framer-motion').Variants;
   handleRetryFailedAssets: () => void;
 
   handleScanStudio: () => void;
@@ -36,7 +34,6 @@ export function SpoofingControls({
   isScanningStudio,
   isJobPaused,
   replaceError,
-  itemVariants,
   handleRetryFailedAssets,
 
   handleScanStudio,
@@ -51,10 +48,7 @@ export function SpoofingControls({
   const totalFailed = failedAssetIds.length + failedReplacements.size;
 
   return (
-    <motion.div
-      variants={itemVariants}
-      className="shrink-0 flex flex-wrap items-center justify-end gap-4 pt-4 mt-auto"
-    >
+    <div className="shrink-0 flex flex-wrap items-center justify-end gap-4 pt-4 mt-auto">
       {totalFailed > 0 && !activeSpooferJobId && (
         <Button
           variant="outline"
@@ -143,6 +137,6 @@ export function SpoofingControls({
         </div>
         {(isSpoofing || isReplacing) && <SpoofProgressOverlay />}
       </Button>
-    </motion.div>
+    </div>
   );
 }

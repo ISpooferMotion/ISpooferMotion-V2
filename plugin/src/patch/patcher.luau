@@ -4,11 +4,7 @@
 
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
---- Handles applying targeted replacement instructions received from the daemon.
----
---- The desktop app analyzes the scanned assets, finds matches in its local database
---- or the community cache, and sends back an array of `Patch` objects telling us
---- exactly what to change.
+
 local BLOCKED_SET_PROPERTIES: { [string]: boolean } = {
 	Parent = true,
 	ClassName = true,
@@ -25,7 +21,6 @@ local VALID_PATCH_ACTIONS: { [string]: boolean } = {
 	replaceMeshPart = true,
 }
 
---- Cleans up raw ID strings or Roblox URLs into a plain numeric asset ID.
 local function normalizeAssetId(value: any): string?
 	if value == nil then
 		return nil
@@ -39,8 +34,6 @@ local function normalizeAssetId(value: any): string?
 	local assetId = string.match(str, "^rbxassetid://(%d+)$")
 		or string.match(str, "^rbxasset://(%d+)$")
 		or string.match(str, "^id=(%d+)$")
-		-- Anchored: only match when id= appears at the end of the query string or is the sole
-		-- param. Prevents extracting IDs from keys like '?badid=12345abc'.
 		or string.match(str, "[?&]id=(%d+)$")
 		or string.match(str, "roblox%.com/asset/%?id=(%d+)$")
 		or string.match(str, "roblox%.com/library/(%d+)$")
@@ -55,23 +48,11 @@ local function normalizeAssetId(value: any): string?
 	return assetId
 end
 
---- Converts a raw ID or URL into a standard `rbxassetid://` URI.
 local function toAssetUri(value: any): string?
 	local assetId = normalizeAssetId(value)
 	return if assetId then "rbxassetid://" .. assetId else nil
 end
 
---- Every property name we know is Content-typed on modern Roblox.
----
---- The scan side accepts values from ANY known-asset property, but the patch
---- side used to only know how to encode Content values when reading the
---- current value came back typed as `Content`. When that read failed (plugin
---- sandbox permission edge cases) or `Content.fromUri` was unavailable
---- (older Studio builds), coerce would fall through and try to assign a raw
---- digit string to a Content property -- Studio silently rejects that and
---- the "patch" appears to succeed but nothing changes.
----
---- This map lets us encode by property name even when the readback fails.
 local CONTENT_PROPERTIES: { [string]: boolean } = {
 	AnimationId = true,
 	AnimationContent = true,
@@ -116,8 +97,6 @@ local CONTENT_PROPERTIES: { [string]: boolean } = {
 	MoodAnimation = true,
 }
 
---- Property names that historically hold a raw int64 asset id rather than a
---- Content value (mostly HumanoidDescription body parts and PackageLink).
 local NUMBER_ASSET_PROPERTIES: { [string]: boolean } = {
 	Face = true,
 	Head = true,
@@ -133,10 +112,6 @@ local NUMBER_ASSET_PROPERTIES: { [string]: boolean } = {
 	AssetId = true,
 }
 
---- Tries every known way to build a `Content` value from a raw asset id or
---- URI. `Content.fromUri` is the modern API; `Content.new` covered older
---- builds. Returns `nil` if neither is available in this Studio version --
---- caller falls back to a plain URI string in that case.
 local function buildContentValue(value: any): any
 	local uri = toAssetUri(value) or tostring(value)
 	local ok, contentObj = pcall(function()
@@ -156,12 +131,6 @@ local function buildContentValue(value: any): any
 	return nil
 end
 
---- Safely converts an incoming patch value into the type expected by the property.
----
---- Strategy: use the current-value type when we can read it, otherwise fall
---- back to a hardcoded property-name lookup. The old code returned the raw
---- input on any readback failure, which silently no-op'd every Content-typed
---- property whose readback errored inside the sandbox.
 local function coercePropertyValue(obj: Instance, property: string, value: any): any
 	local readOk, currentValue = pcall(function()
 		return (obj :: any)[property]
@@ -182,8 +151,6 @@ local function coercePropertyValue(obj: Instance, property: string, value: any):
 		end
 	end
 
-	-- Read failed OR the type didn't match a known encoder. Return URI string
-	-- for content properties so Roblox Studio never throws ContentId vs Content errors.
 	if CONTENT_PROPERTIES[property] then
 		return toAssetUri(value) or tostring(value)
 	end
@@ -196,7 +163,6 @@ local function coercePropertyValue(obj: Instance, property: string, value: any):
 	return value
 end
 
---- Ensures a property name is safe to use and not a malicious payload.
 local function validatePropertyName(property: any): (boolean, string?)
 	if type(property) ~= "string" or property == "" or #property > 200 then
 		return false, "Invalid patch property"
@@ -207,7 +173,6 @@ local function validatePropertyName(property: any): (boolean, string?)
 	return true, nil
 end
 
---- Validates that an incoming raw JSON patch has all the required fields.
 local function normalizePatch(rawPatch: any): (Patch?, string?)
 	if type(rawPatch) ~= "table" then
 		return nil, "Patch must be a table"
@@ -230,7 +195,6 @@ local function normalizePatch(rawPatch: any): (Patch?, string?)
 		end
 		property = rawPatch.property
 	elseif rawPatch.action == "setProperty" or rawPatch.action == "replaceAttribute" then
-		-- These actions require a property name
 		return nil, "Patch action '" .. rawPatch.action .. "' requires a property name"
 	end
 
@@ -246,14 +210,10 @@ local function normalizePatch(rawPatch: any): (Patch?, string?)
 		nil
 end
 
---- Safely decodes a JSON string into a Lua table, enforcing size limits.
 local function decodeJsonTable(value: any, label: string): (any?, string?)
 	if type(value) ~= "string" then
 		return nil, label .. " must be a JSON string"
 	end
-	-- if #value > 1000000 then
-	-- 	return nil, label .. " JSON is too large"
-	-- end
 
 	local ok, decoded = pcall(function()
 		return HttpService:JSONDecode(value)
@@ -265,7 +225,6 @@ local function decodeJsonTable(value: any, label: string): (any?, string?)
 	return decoded, nil
 end
 
---- Ensures a decoded tags array is valid and within engine limits.
 local function validateTags(decoded: any): (boolean, string?)
 	if type(decoded) ~= "table" then
 		return false, "Invalid JSON tags"
@@ -294,7 +253,6 @@ local function validateTags(decoded: any): (boolean, string?)
 	return true, nil
 end
 
---- Executes a single patch against the mapped Studio instance.
 local function applyPatch(patch: Patch): (boolean, string?)
 	local obj = getRegisteredObject(patch.token)
 	if not obj then
@@ -406,15 +364,11 @@ local function applyPatch(patch: Patch): (boolean, string?)
 			return false, tagErr
 		end
 		local ok, err = pcall(function()
-			-- Build a set of the incoming new tags so we can safely skip removal of
-			-- non-asset tags that happen to match the asset-slot heuristics.
 			local newTagSet: { [string]: boolean } = {}
 			for _, newTag in ipairs(decoded) do
 				newTagSet[newTag] = true
 			end
 			for _, oldTag in ipairs(CollectionService:GetTags(obj)) do
-				-- Only remove a tag if it looks like an asset reference AND is not
-				-- already in the replacement set (which would mean it is unchanged).
 				if
 					not newTagSet[oldTag]
 					and (isAssetFormat(oldTag) or stringContainsAssetReference(oldTag))
@@ -466,9 +420,6 @@ local function applyPatch(patch: Patch): (boolean, string?)
 
 		local source
 		if type(patch.value) == "table" then
-			-- assetIds scan mode: the daemon sends an old->new ID mapping. Re-read
-			-- the current source and apply the replacements locally, using the same
-			-- digit-boundary-safe patterns as the manual replace path.
 			local readOk, current = pcall(function()
 				return (obj :: any).Source
 			end)
@@ -485,7 +436,6 @@ local function applyPatch(patch: Patch): (boolean, string?)
 					string.gsub(source, "(roblox%.com/[Aa]sset/%?[Ii][Dd]=)" .. oId, "%1" .. nId)
 			end
 		elseif type(patch.value) == "string" then
-			-- fullSource scan mode: the daemon sends the fully-rewritten source.
 			source = patch.value
 		else
 			source = tostring(patch.value or "")
@@ -560,10 +510,6 @@ local function applyPatch(patch: Patch): (boolean, string?)
 	return false, "Unsupported patch action: " .. tostring(patch.action)
 end
 
---- Processes a full batch of replacement instructions from the daemon.
----
---- Wraps the entire operation in a ChangeHistoryService recording so the user
---- can hit Ctrl+Z to undo all the spoofed assets at once if they want.
 local function applyPatches(patches: any)
 	if patchRunning then
 		logToPlugin("[Warning] Patch batch already running")
@@ -600,8 +546,6 @@ local function applyPatches(patches: any)
 		recording = ChangeHistoryService:TryBeginRecording("ISpooferMotion Pre-Patch")
 	end)
 
-	-- finishPatch is called unconditionally at the end of every code path to ensure
-	-- FinishRecording is always paired with TryBeginRecording and patchRunning is cleared.
 	local function finishPatch()
 		if recording then
 			pcall(function()
@@ -615,13 +559,7 @@ local function applyPatches(patches: any)
 		patchRunning = false
 	end
 
-	local currentBatchSize = 50
-	pcall(function()
-		local saved = plugin:GetSetting("ManualBatchSize")
-		if type(saved) == "number" and saved >= 10 and saved <= 500 then
-			currentBatchSize = saved
-		end
-	end)
+	local currentBatchSize = math.clamp(manualBatchSize, 10, 500)
 	local yieldInterval = math.clamp(math.floor(currentBatchSize / 5), 2, 50)
 	local yieldDelay = currentBatchSize >= 150 and 0.01 or 0.02
 
@@ -711,7 +649,6 @@ local function applyPatches(patches: any)
 			end
 
 			if (index % yieldInterval == 0 or (now - frameStart) > 0.02) and index < #patches then
-				-- Silent=true: transient progress updates should not produce log spam.
 				setPluginGuiStatus(
 					string.format("Applying replacements (%d/%d)...", index, #patches),
 					true
@@ -727,7 +664,6 @@ local function applyPatches(patches: any)
 		logToPlugin("[Warning] " .. "[ISpooferMotion] Patch batch failed: " .. tostring(batchErr))
 	end
 
-	-- Always commit the history recording and release the patch lock.
 	finishPatch()
 
 	logToPlugin(
@@ -738,8 +674,6 @@ local function applyPatches(patches: any)
 		)
 	)
 
-	-- Report failed patches back to the desktop app. Include counts so the
-	-- app can log "N/M patches applied" instead of guessing from list length.
 	pcall(function()
 		postJson("/patch-results", {
 			failedPatches = failedPatchesList,

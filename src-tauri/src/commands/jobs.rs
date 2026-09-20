@@ -1,8 +1,3 @@
-//! Manages the persistent history of spoofing jobs (runs).
-//!
-//! Stores history in a JSON file locally and strips all sensitive credentials
-//! (like cookies or API keys) before writing anything to disk.
-
 use crate::commands::AnyValue;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -43,7 +38,6 @@ fn sanitize_job_history(jobs: &mut Value) -> bool {
     dirty
 }
 
-/// Reads the job history JSON from disk so the frontend can populate the history tab.
 #[tauri::command]
 #[specta::specta]
 pub async fn get_jobs(app: AppHandle) -> crate::error::Result<AnyValue> {
@@ -59,7 +53,6 @@ pub async fn get_jobs(app: AppHandle) -> crate::error::Result<AnyValue> {
     Ok(AnyValue(jobs))
 }
 
-/// Removes a specific job entry from the persistent history file.
 #[tauri::command]
 #[specta::specta]
 pub async fn delete_job(app: AppHandle, job_id: String) -> crate::error::Result<bool> {
@@ -77,10 +70,6 @@ pub async fn delete_job(app: AppHandle, job_id: String) -> crate::error::Result<
     Ok(true)
 }
 
-/// Appends a new spoofing job to the JSON history file.
-///
-/// Keeps the file from growing infinitely by capping it at 250 entries.
-/// Automatically strips any credentials from the payload before writing to disk.
 pub(super) async fn persist_job(app: &AppHandle, job: Value) -> crate::error::Result<bool> {
     let _guard = job_mutex().lock().await;
     let path = get_jobs_path(app)?;
@@ -98,10 +87,6 @@ pub(super) async fn persist_job(app: &AppHandle, job: Value) -> crate::error::Re
     Ok(true)
 }
 
-/// Opens a specific job's text log file in the native OS text editor.
-///
-/// Contains path traversal protection to prevent malicious UI requests from
-/// opening arbitrary system files.
 #[tauri::command]
 #[specta::specta]
 pub async fn open_job_log(app: AppHandle, log_path: String) -> crate::error::Result<bool> {
@@ -109,7 +94,6 @@ pub async fn open_job_log(app: AppHandle, log_path: String) -> crate::error::Res
     let canonical_logs_dir = tokio::fs::canonicalize(logs_dir).await?;
     let canonical_log_path = tokio::fs::canonicalize(log_path).await?;
 
-    // Validate the path to prevent arbitrary file access.
     if !canonical_log_path.starts_with(canonical_logs_dir) {
         return Err("Job log path is outside the logs directory.".into());
     }

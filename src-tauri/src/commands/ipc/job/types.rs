@@ -2,7 +2,7 @@ use crate::commands::AnyValue;
 use validator::Validate;
 
 #[derive(serde::Deserialize, specta::Type, Validate)]
-// Configurable settings for a spoofing job.
+
 pub struct SpooferActionRequest {
     #[validate(length(min = 1))]
     pub assets: Option<String>,
@@ -31,12 +31,7 @@ pub struct SpooferActionRequest {
     pub concurrent: Option<bool>,
     #[serde(rename = "concurrentDownloading")]
     pub concurrent_downloading: Option<bool>,
-    // Range validation removed — processor.rs already clamps these to
-    // [1, 100] at the call site. Hard-failing here meant that any user
-    // with a stale >100 value in their persisted config (e.g. someone who
-    // typed 1000 into the frontend input before we added a max attribute)
-    // couldn't start ANY spoofer job until they knew to open Settings and
-    // manually lower the value. Now we just clamp silently.
+
     #[serde(rename = "maxConcurrency")]
     pub max_concurrency: Option<u32>,
     #[serde(rename = "maxDownloadConcurrency")]

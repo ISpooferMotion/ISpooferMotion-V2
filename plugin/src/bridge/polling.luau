@@ -3,17 +3,6 @@
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 
--- These variables are globals provided by the environment or other concatenated files
--- HttpService, decodeJsonResponseBody, logToPlugin, discoverServer, setPluginGuiStatus,
--- scanRunning, patchRunning, scan, applyPatches, BASE_URL
---- Manages the main communication loops with the daemon.
----
---- This module runs three concurrent loops:
---- Discovery/Health: Keeps the connection alive and reconnects if dropped.
---- Scan Poller: Waits for the daemon to request a workspace scan.
---- Patch Poller: Waits for targeted replacements from the daemon.
-
---- Helper to hit a polling endpoint and return the parsed JSON response.
 local function requestPollEndpoint(baseUrl: string, endpoint: string): (boolean, any, number?)
 	local ok, response = pcall(function()
 		return HttpService:RequestAsync({
@@ -49,12 +38,8 @@ local function requestPollEndpoint(baseUrl: string, endpoint: string): (boolean,
 	return true, decoded, response.StatusCode
 end
 
--- Guard against concurrent fetchApiDumpProperties calls (e.g. rapid daemon reconnects).
 local fetchingApiDump = false
 
---- Pulls the latest API dump from GitHub to power the property scanner.
----
---- If this fails, we fall back to the bundled API dump data in `properties.luau`.
 local function fetchApiDumpProperties()
 	if fetchingApiDump then
 		return
@@ -89,9 +74,7 @@ local function fetchApiDumpProperties()
 
 			local function isAssetLike(name)
 				local lower = string.lower(name)
-				-- Note: we do NOT check `string.sub(lower, -2) == "id"` here because that matches
-				-- non-asset properties like UserId, TeamId, SessionId, etc. The specific patterns
-				-- below are sufficient and more precise.
+
 				return string.sub(lower, -3) == "url"
 					or string.sub(lower, -5) == "asset"
 					or string.sub(lower, -7) == "content"
@@ -219,14 +202,10 @@ local function fetchApiDumpProperties()
 			"[Warning] [ISpooferMotion] Could not fetch live API dump from GitHub; using bundled data."
 		)
 	end
-	-- Release the guard so a future reconnect can trigger another fetch if needed.
+
 	fetchingApiDump = false
 end
 
--- A single failed HTTP poll is not proof the connection is dead. macOS App
--- Nap, sleep coalescing, Roblox HttpService request coalescing, and short
--- CPU spikes during scan all cause transient failures. Only treat the
--- connection as lost after several consecutive failures.
 local POLL_FAIL_THRESHOLD = 4
 local pollFailureStreak = 0
 local patchFailureStreak = 0
@@ -240,9 +219,6 @@ end
 local function startRequestedScan(decoded: any)
 	if type(decoded.scanTypes) == "table" then
 		activeScanTypes = decoded.scanTypes
-	end
-	if type(decoded.scriptScanMode) == "string" then
-		activeScriptScanMode = decoded.scriptScanMode
 	end
 	if type(decoded.scanPath) == "string" and decoded.scanPath ~= "" then
 		activeScanPath = decoded.scanPath
@@ -281,14 +257,8 @@ local function markConnectionLost(baseUrl: string, reason: string)
 	BASE_URL = nil
 	pollFailureStreak = 0
 	patchFailureStreak = 0
-	-- autoReplaceEnabled deliberately preserved: after reconnect, if we're
-	-- mid-workflow, the next /poll-replacements cycle should still deliver
-	-- pending patches instead of forcing the user to manually re-scan.
 end
 
---- Starts the background polling loops.
----
---- Idempotent; if polling is already running, this does nothing.
 local function getPollUrl(): string
 	local pId = 0
 	pcall(function()
@@ -316,13 +286,9 @@ function startPolling(): ()
 
 	task.spawn(function()
 		local wasConnected = false
-		-- Log the "why we can't connect" reason once per disconnect episode, not
-		-- every discovery cycle, so the console isn't spammed while waiting.
+
 		local reasonLogged = false
 		while polling do
-			-- Only re-run discovery when we genuinely have no connection.
-			-- Re-running on a timer caused reconnect spam because the
-			-- probe race could pick a different URL for the same server.
 			if not BASE_URL then
 				local connected, changed, reason = discoverServer()
 				lastDiscovery = os.clock()
@@ -337,11 +303,9 @@ function startPolling(): ()
 					patchFailureStreak = 0
 				elseif not connected then
 					setConnectionStatus(false)
-					-- Silent: this runs every discovery cycle while disconnected, so
-					-- it must not spam the console. The reason below logs once.
+
 					setPluginGuiStatus("Waiting for Desktop App...", true)
-					-- Surface the actual reason once per episode. Covers the
-					-- initial never-connected case too, not just a dropped link.
+
 					if not reasonLogged then
 						reasonLogged = true
 						logToPlugin(
@@ -380,7 +344,6 @@ function startPolling(): ()
 						end
 					end
 				else
-					-- Any successful poll (with or without a scan request) is a heartbeat.
 					pollFailureStreak = 0
 					if type(decoded) == "table" then
 						if decoded.batchSize and type(setPluginBatchSize) == "function" then
@@ -404,9 +367,6 @@ function startPolling(): ()
 		end
 	end)
 
-	-- Offset the second loop by 250ms so the two requests don't burst
-	-- against the local server on the same tick. Smoother CPU profile and
-	-- much less likely to hit Roblox HttpService request coalescing.
 	task.spawn(function()
 		task.wait(0.25)
 		while polling do
@@ -435,7 +395,6 @@ function startPolling(): ()
 						end
 					end
 				else
-					-- Successful patch poll is also a heartbeat.
 					patchFailureStreak = 0
 					if type(decoded) == "table" then
 						if decoded.batchSize and type(setPluginBatchSize) == "function" then
@@ -451,7 +410,6 @@ function startPolling(): ()
 								startPatchBatch(patches)
 							end
 						elseif type(mappings) == "table" and #mappings > 0 then
-							-- Do nothing, wait for patches to arrive on next poll cycle.
 							local _wait = true
 						end
 					end

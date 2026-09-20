@@ -36,8 +36,7 @@ export const Toast = () => {
     >
       <div
         className={cn(
-          'flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg backdrop-blur-md max-w-sm',
-          'animate-in slide-in-from-bottom-4 fade-in duration-200',
+          'flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg max-w-sm',
           colour,
         )}
       >

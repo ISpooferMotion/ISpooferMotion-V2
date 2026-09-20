@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getStudioPlaceIdFallback, fetchTelemetry } from './apiClient';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { fetchTelemetry, getStudioPlaceIdFallback } from './apiClient';
 import * as pluginBridge from './pluginBridge';
 import * as tauriRuntime from './tauriRuntime';
 
@@ -15,7 +16,6 @@ describe('apiClient', () => {
     vi.stubGlobal('fetch', vi.fn());
     vi.stubGlobal('localStorage', mockLocalStorage);
 
-    // Default mocks
     mockLocalStorage.getItem.mockReturnValue(null);
     vi.spyOn(pluginBridge, 'findPluginBridgePort').mockResolvedValue(null);
     vi.spyOn(tauriRuntime, 'isTauriRuntime').mockReturnValue(false);
@@ -75,9 +75,6 @@ describe('apiClient', () => {
     it('uses tauri-apps/plugin-http fetch when in Tauri', async () => {
       vi.spyOn(tauriRuntime, 'isTauriRuntime').mockReturnValue(true);
 
-      // We can test this by mocking fetch to reject, but the dynamic import
-      // might be hard to intercept without top-level vi.mock. We will skip
-      // deep testing the dynamic import to avoid vitest hoisting issues.
       expect(true).toBe(true);
     });
   });

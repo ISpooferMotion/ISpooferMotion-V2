@@ -1,5 +1,3 @@
-//! Commands for fetching and parsing Roblox inventory assets and thumbnails.
-
 #![allow(clippy::too_many_lines)]
 use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
 use serde::{Deserialize, Serialize};
@@ -45,9 +43,6 @@ pub struct FetchAssetsResponse {
     pub items: Vec<AssetExplorerItem>,
 }
 
-/// Normalizes legacy asset type names for compatibility with the Roblox Inventory API.
-///
-/// For example, mapping "Decal" to "Image".
 fn map_asset_types(types: Option<Vec<String>>) -> String {
     let input_types: Vec<String> = types.unwrap_or_else(|| {
         vec!["Animation".to_string(), "Audio".to_string(), "Image".to_string(), "Model".to_string()]
@@ -66,7 +61,6 @@ fn map_asset_types(types: Option<Vec<String>>) -> String {
     mapped.join(",")
 }
 
-/// Paginated fetch of a user or group's public inventory from Roblox.
 #[tauri::command]
 #[specta::specta]
 pub async fn fetch_assets(
@@ -119,7 +113,6 @@ pub async fn fetch_assets(
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
 
-            // 403 indicates a private inventory or lacking access.
             if status.as_u16() == 403 {
                 return Err("Inventory access denied (403). The target user's inventory is private or this account does not have permission to view it. This is expected behavior per Roblox's January 2026 inventory privacy changes.".into());
             }
@@ -163,7 +156,6 @@ pub async fn fetch_assets(
 
     let mut thumbnails = std::collections::HashMap::new();
     if !asset_ids.is_empty() {
-        // Chunk thumbnail API requests to a maximum of 100.
         let chunks: Vec<Vec<u64>> = asset_ids.chunks(100).map(<[u64]>::to_vec).collect();
         let futures = chunks.into_iter().map(|chunk| {
             async move {
@@ -258,14 +250,13 @@ pub async fn fetch_assets(
             thumbnail_url,
             creator_type: creator_type.clone(),
             creator_id: query.creator_id.clone(),
-            is_moderated: false, // already filtered above
+            is_moderated: false,
         });
     }
 
     Ok(FetchAssetsResponse { total: enriched.len(), items: enriched })
 }
 
-/// Grabs the 420x420 PNG thumbnail for a specific asset ID directly from Roblox.
 #[tauri::command]
 #[specta::specta]
 pub async fn fetch_roblox_thumbnail(asset_id: String) -> crate::error::Result<Option<String>> {
@@ -293,9 +284,6 @@ pub async fn fetch_roblox_thumbnail(asset_id: String) -> crate::error::Result<Op
     Ok(None)
 }
 
-/// Downloads the raw binary or XML representation of a Roblox animation asset.
-///
-/// Converts binary-format animations (`<roblox!`) into readable XML text before returning.
 #[tauri::command]
 #[specta::specta]
 pub async fn fetch_animation_xml(
@@ -304,7 +292,6 @@ pub async fn fetch_animation_xml(
     cookie: Option<String>,
     place_id: Option<String>,
 ) -> crate::error::Result<Option<String>> {
-    // 1. Check local downloads cache first
     let anim_cache_file = if let Ok(app_dir) = app.path().app_data_dir() {
         let anim_dir = app_dir.join("downloads").join("animations");
         let _ = tokio::fs::create_dir_all(&anim_dir).await;

@@ -119,9 +119,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   const lastReplacements = useSpooferStore((s) => s.lastReplacements) ?? {};
 
   const [userExpanded, setExpanded] = useState(initialExpanded);
-  // Cap the initial render to keep expanding huge folders (e.g. thousands of
-  // Unverified Script IDs) from freezing the app. User can click 'show more'
-  // to reveal the rest in chunks.
+
   const ASSET_RENDER_CHUNK = 300;
   const [renderLimit, setRenderLimit] = useState(ASSET_RENDER_CHUNK);
 
@@ -184,12 +182,10 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
     [getAllAssetKeys, node, allIds],
   );
 
-  // Guard after ALL hooks have executed so hook call count is always constant
   if (!hasMatchingDescendant) return null;
 
   const hiddenAssetCount = filteredAssets.length - visibleAssets.length;
-  // Force-expand while a search is active so matches are visible without the
-  // user having to click every folder open, but only for branches with matches.
+
   const expanded = userExpanded || (Boolean(normalizedSearch) && hasMatchingDescendant);
 
   const selectedCount = allKeys.filter((k) =>
@@ -233,7 +229,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
   };
 
   const renderAssetRow = (asset: ParsedAssetRef) => {
-    // Compact single-line row item: [Icon] + [Asset Name] + optional [Lock]
     const assetId = getAssetId(asset);
     const assetKey = getAssetKey(asset);
     const pinnedPlaceId = assetId ? assetForcePlaceIds[assetId] : undefined;
@@ -293,7 +288,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           />
         </div>
 
-        {/* Asset Name */}
         <div className="flex-1 flex items-center gap-1.5 min-w-0 mr-2">
           <span className="text-xs text-foreground/90 truncate">{getAssetTitle(asset)}</span>
           {(instanceCount ?? 1) > 1 && (
@@ -303,7 +297,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           )}
         </div>
 
-        {/* Per-asset status indicator during spoofing */}
         {(() => {
           const status = assetId ? assetStatuses[assetId] : undefined;
           if (!status || status.stage === 'idle') return null;
@@ -381,13 +374,12 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           );
         })()}
 
-        {/* Compact color-coded lock indicator when forced place ID is enabled for this asset */}
         {pinnedPlaceId && (
           <Tooltip>
             <TooltipTrigger
               render={
                 <div
-                  className="flex items-center justify-center h-5 w-6 rounded border shrink-0 transition-transform hover:scale-110 cursor-help"
+                  className="flex items-center justify-center h-5 w-6 rounded border shrink-0 cursor-help"
                   style={{
                     color: getBrightPlaceIdColor(pinnedPlaceId),
                     backgroundColor: `${getBrightPlaceIdColor(pinnedPlaceId)}18`,
@@ -404,7 +396,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           </Tooltip>
         )}
 
-        {/* Compact spoofed indicator when a replacement ID exists for this asset */}
         {(() => {
           const replacementId = assetId ? lastReplacements[assetId] : undefined;
           if (!replacementId) return null;
@@ -412,19 +403,18 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <div className="flex items-center justify-center h-5 w-6 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shrink-0 transition-transform hover:scale-110 cursor-help ml-1">
+                  <div className="flex items-center justify-center h-5 w-6 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shrink-0 cursor-help ml-1">
                     <Inbox size={11} />
                   </div>
                 }
               />
               <TooltipContent className="whitespace-nowrap font-mono text-xs">
-                Spoofed: rbxassetid://{replacementId}
+                Spoofed: rbxassetid:
               </TooltipContent>
             </Tooltip>
           );
         })()}
 
-        {/* Ghost ID indicator badge */}
         {asset.type === 'ghost' && (
           <Tooltip>
             <TooltipTrigger
@@ -441,8 +431,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           </Tooltip>
         )}
 
-        {/* Quick actions removed — play/preview/copy are all available
-         * in the Inspector panel. Tree rows stay clean. */}
+        {}
       </div>
     );
   };
@@ -531,7 +520,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
           </span>
         )}
 
-        {/* Status / Lock / Spoofed badges on leaf instance row */}
         {(() => {
           if (!isLeafInstance || node.assets.length === 0) return null;
           const primaryAsset = node.assets[0];
@@ -628,7 +616,7 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
                   <TooltipTrigger
                     render={
                       <div
-                        className="flex items-center justify-center h-5 w-6 rounded border shrink-0 transition-transform hover:scale-110 cursor-help"
+                        className="flex items-center justify-center h-5 w-6 rounded border shrink-0 cursor-help"
                         style={{
                           color: getBrightPlaceIdColor(pinnedPid),
                           backgroundColor: `${getBrightPlaceIdColor(pinnedPid)}18`,
@@ -649,13 +637,13 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <div className="flex items-center justify-center h-5 w-6 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shrink-0 transition-transform hover:scale-110 cursor-help">
+                      <div className="flex items-center justify-center h-5 w-6 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shrink-0 cursor-help">
                         <Inbox size={11} />
                       </div>
                     }
                   />
                   <TooltipContent className="whitespace-nowrap font-mono text-xs">
-                    Spoofed: rbxassetid://{replId}
+                    Spoofed: rbxassetid:
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -666,7 +654,6 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
 
       {expanded && (
         <div className="flex flex-col overflow-hidden">
-          {/* Render child assets only for container nodes that contain loose script references or ghost IDs */}
           {node.children.length > 0 && visibleAssets.length > 0 && (
             <div className="flex flex-col">
               {visibleAssets.map((asset) => (

@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { notifyError } from './notifyError';
 import * as tauriRuntime from './tauriRuntime';
-import { invoke } from '@tauri-apps/api/core';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),

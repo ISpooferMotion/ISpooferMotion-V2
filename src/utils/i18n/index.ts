@@ -9,7 +9,6 @@ import { ru } from './ru';
 
 const locales: Record<string, TranslationTree> = { en, es, ru, fr };
 
-// Fetch translation string using dot-notation path, fallback to English.
 export function getTranslation(lang: string, keyPath: string): string {
   const dictionary = locales[lang] || locales.en;
   const keys = keyPath.split('.');

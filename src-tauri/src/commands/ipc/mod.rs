@@ -4,9 +4,6 @@ pub mod logging;
 pub mod profile;
 pub mod secrets;
 
-// lib.rs registers all commands via their full crate::commands::ipc::submodule::fn path,
-// so no re-exports are needed here. Submodules are public for direct access only.
-
 use keyring::Entry;
 use regex::Regex;
 use reqwest::header::{COOKIE, USER_AGENT};
@@ -23,9 +20,6 @@ use crate::utils::build_roblox_cookie_header;
 
 static REDACTION_REGEXES: OnceLock<Vec<(Regex, &'static str)>> = OnceLock::new();
 
-// Read a JSON file into a generic value object. A missing file is the only
-// condition treated as an empty/default store; real I/O or parse failures are
-// propagated so corrupted data is never silently overwritten on the next save.
 pub(super) async fn read_json_file(path: &PathBuf) -> crate::error::Result<Value> {
     match tokio::fs::read_to_string(path).await {
         Ok(content) => Ok(serde_json::from_str(&content)?),
@@ -46,7 +40,6 @@ pub(super) async fn write_json_file(path: &PathBuf, value: &Value) -> crate::err
 
 static REDACTION_ENV_VARS: OnceLock<Vec<String>> = OnceLock::new();
 
-// Redact sensitive information (usernames, paths) from logs.
 pub(super) fn redact_log_message(message: &str) -> String {
     let mut redacted = message.to_string();
 

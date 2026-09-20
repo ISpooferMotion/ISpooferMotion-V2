@@ -25,7 +25,6 @@ const GROUP_CACHE_KEY_PREFIX = 'ISpooferMotion_DetectedGroups_';
 export const normalizeId = (value: string | number | null | undefined) =>
   String(value ?? '').trim();
 
-// Retrieve cached profiles from localstorage.
 export const loadCachedUsers = (): RobloxUserInfo[] => {
   try {
     const parsed = JSON.parse(localStorage.getItem(USER_CACHE_KEY) || '[]');
@@ -77,7 +76,6 @@ export const saveCachedGroups = (userId: string, nextGroups: RobloxGroup[]) => {
   localStorage.setItem(groupCacheKey(userId), JSON.stringify(unique));
 };
 
-// Extract cookie from Studio registry keys or browser profiles.
 export const detectCookie = async (mode: 'studio' | 'browser', userId: string | null = null) => {
   const payload = { userId };
   if (mode === 'browser') {
@@ -115,7 +113,6 @@ const hydrateUserProfile = async (
   return { ...info, avatarUrl: avatarUrl || undefined, authType };
 };
 
-// Verify cookie validity and fetch user info before saving.
 export const validateCookieProfile = async (cookie: string): Promise<CookieValidationResult> => {
   const trimmedCookie = cookie.trim();
   if (!trimmedCookie) {

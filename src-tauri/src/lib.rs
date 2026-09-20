@@ -1,8 +1,3 @@
-//! The core ISpooferMotion application library.
-//!
-//! This module registers all Tauri commands, initializes plugins, sets up global state,
-//! and bootstraps both the React frontend and the background Studio polling daemon.
-
 pub mod api_dump;
 pub mod commands;
 pub mod domain;
@@ -12,10 +7,6 @@ pub mod utils;
 
 use tauri::Manager;
 
-/// Generates the Specta type bindings for frontend-to-backend commands.
-///
-/// Specta inspects the signatures of these commands at compile time and generates
-/// a `bindings.ts` file so the React frontend has strongly-typed RPC calls.
 macro_rules! specta_commands {
     () => {
         tauri_specta::collect_commands![
@@ -92,7 +83,6 @@ macro_rules! specta_commands {
             crate::commands::spoofer::place::clear_downloads_directory_command,
             crate::commands::spoofer::place::find_asset_by_name,
             crate::commands::studio::push_to_studio,
-            crate::commands::studio::set_plugin_theme_accent,
             crate::commands::studio::set_plugin_batch_size,
             crate::studio_bridge::set_bridge_skip_owned_check,
             crate::studio_bridge::get_plugin_bridge_port,
@@ -103,14 +93,8 @@ macro_rules! specta_commands {
     };
 }
 
-/// Initializes and runs the Tauri application lifecycle.
-///
-/// This sets up global crash handlers, initializes Specta types (if in debug mode),
-/// registers plugins, starts the local IPC daemon for Roblox Studio, and finally
-/// launches the webview.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Export TypeScript bindings during debug builds.
     #[cfg(debug_assertions)]
     {
         log::info!("ISpooferMotion: Exporting Specta bindings in a high-stack thread...");
@@ -130,7 +114,6 @@ pub fn run() {
         log::info!("ISpooferMotion: Finished Exporting Specta bindings!");
     }
 
-    // Initialize native OS panic dialogs and logging.
     std::panic::set_hook(Box::new(|info| {
         let msg =
             format!("ISpooferMotion encountered a fatal error. Please check the logs.\n\n{}", info);
@@ -184,10 +167,8 @@ pub fn run() {
                 tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build(),
             )?;
 
-            // Initialize the bridge server asynchronously.
             tauri::async_runtime::spawn(crate::studio_bridge::start_server(app.handle().clone()));
 
-            // Initialize system tray icon.
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             let _tray = TrayIconBuilder::new()
                 .icon(

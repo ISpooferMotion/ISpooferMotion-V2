@@ -25,8 +25,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # Code Quality Checks
-
   js-lua-checks:
     name: JS/TS/Lua Checks (Type & Lint)
     runs-on: ubuntu-latest
@@ -87,8 +85,6 @@ jobs:
       - run: bun run rust:check
       - run: bun run rust:lint
       - run: bun run rust:test
-
-  # Prepare Release
 
   prepare-release:
     name: Prepare Release
@@ -162,8 +158,6 @@ jobs:
               --title "ISpooferMotion $TAG_NAME"
           fi
 
-  # Platform Builds
-
   build-and-release:
     name: Build & Release (${{ matrix.os }})
     needs: [prepare-release, create-release]
@@ -175,6 +169,7 @@ jobs:
 
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
           - platform: windows-latest
@@ -358,37 +353,21 @@ jobs:
 
           const platforms = latest.platforms || {};
 
-          const macEntries = Object.entries(platforms).filter(([key]) =>
-            key.startsWith('darwin-') || key.includes('apple-darwin')
-          );
-
-          if (macEntries.length === 0) {
-            throw new Error('latest.json has no macOS updater entry');
-          }
-
-          for (const [key, value] of macEntries) {
-            if (
-              !value ||
-              typeof value.signature !== 'string' ||
-              value.signature.trim() === ''
-            ) {
-              throw new Error(
-                `latest.json macOS entry ${key} has no updater signature`
-              );
+          for (const key of ['darwin-aarch64', 'darwin-x86_64']) {
+            const value = platforms[key];
+            if (!value) {
+              throw new Error(`latest.json is missing required macOS updater target ${key}`);
             }
-
-            if (
-              typeof value.url !== 'string' ||
-              !value.url.includes('.app.tar.gz')
-            ) {
+            if (typeof value.signature !== 'string' || value.signature.trim() === '') {
+              throw new Error(`latest.json macOS entry ${key} has no updater signature`);
+            }
+            if (typeof value.url !== 'string' || !value.url.includes('.app.tar.gz')) {
               throw new Error(
                 `latest.json macOS entry ${key} does not target an .app.tar.gz updater bundle`
               );
             }
           }
           NODE
-
-  # Plugin Build
 
   plugin-release:
     name: Build & Release Plugin
@@ -424,8 +403,6 @@ jobs:
           tag_name: ${{ needs.prepare-release.outputs.RELEASE_TAG }}
           files: dist-plugin/ISpooferMotion.rbxmx
           fail_on_unmatched_files: true
-
-  # Discord Announcement
 
   announce-release:
     name: Announce on Discord

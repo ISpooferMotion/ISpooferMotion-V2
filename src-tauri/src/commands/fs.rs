@@ -1,5 +1,3 @@
-//! OS-level filesystem and system interaction commands.
-
 use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
 
@@ -11,7 +9,6 @@ pub struct NotificationOptions {
     pub body: Option<String>,
 }
 
-/// Deletes all cached data (like downloaded thumbnails and audio files).
 #[tauri::command]
 #[specta::specta]
 pub async fn clear_app_cache(app: AppHandle) -> crate::error::Result<bool> {
@@ -25,10 +22,6 @@ pub async fn clear_app_cache(app: AppHandle) -> crate::error::Result<bool> {
     Ok(true)
 }
 
-/// Downloads an audio asset from Roblox to the local cache and returns its path.
-///
-/// The frontend uses this to stream audio via HTML5 `<audio>` since we can't
-/// reliably bypass Roblox's CORS policies directly in the browser context.
 #[tauri::command]
 #[specta::specta]
 pub async fn play_roblox_audio(
@@ -46,7 +39,6 @@ pub async fn play_roblox_audio(
     let audio_dir = app.path().app_cache_dir()?.join("roblox_audio");
     tokio::fs::create_dir_all(&audio_dir).await?;
 
-    // Check if the audio file exists locally.
     let existing_file = ["ogg", "mp3"]
         .iter()
         .map(|ext| audio_dir.join(format!("sound_{asset_id}.{ext}")))
@@ -73,8 +65,6 @@ async fn download_roblox_audio(
     asset_id: &str,
     cookie: Option<&str>,
 ) -> crate::error::Result<std::path::PathBuf> {
-    // Use the shared connection-pooled client; Roblox asset delivery redirects are handled
-    // by the default policy (up to 10 hops) which reqwest follows automatically.
     let client = crate::utils::get_http_client();
     let mut request = client
         .get(format!("https://assetdelivery.roblox.com/v1/asset/?id={asset_id}"))
@@ -99,7 +89,6 @@ async fn download_roblox_audio(
         return Err(message.into());
     }
 
-    // Infer file extension from Content-Type, defaulting to ogg.
     let extension = response
         .headers()
         .get(reqwest::header::CONTENT_TYPE)
@@ -111,7 +100,6 @@ async fn download_roblox_audio(
     Ok(audio_path)
 }
 
-/// Triggers a native desktop notification.
 #[tauri::command]
 #[specta::specta]
 pub async fn show_notification(

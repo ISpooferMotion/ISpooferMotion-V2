@@ -15,7 +15,7 @@ use serde_json::Value;
 
 #[tauri::command]
 #[specta::specta]
-// Retrieve user profile information using the provided cookie.
+
 pub async fn get_roblox_profile(
     app: AppHandle,
     context: ProfileRequest,
@@ -131,7 +131,7 @@ pub async fn get_roblox_profile(
 
 #[tauri::command]
 #[specta::specta]
-// Check remaining free audio uploads via the publish API.
+
 pub async fn fetch_audio_quota(
     app: AppHandle,
     cookie: Option<String>,

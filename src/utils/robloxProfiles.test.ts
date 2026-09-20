@@ -1,15 +1,16 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { invoke } from '@tauri-apps/api/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
-  normalizeId,
+  detectCookie,
+  loadCachedGroups,
   loadCachedUsers,
   mergeCachedUser,
-  loadCachedGroups,
-  saveCachedGroups,
-  detectCookie,
-  validateCookieProfile,
+  normalizeId,
   type RobloxUserInfo,
+  saveCachedGroups,
+  validateCookieProfile,
 } from './robloxProfiles';
-import { invoke } from '@tauri-apps/api/core';
 
 describe('robloxProfiles', () => {
   const storeData: Record<string, string> = {};
@@ -64,12 +65,10 @@ describe('robloxProfiles', () => {
       expect(users).toHaveLength(1);
       expect(users[0].id).toBe(1);
 
-      // Adding the same user shouldn't duplicate
       mergeCachedUser(user1);
       users = loadCachedUsers();
       expect(users).toHaveLength(1);
 
-      // Adding a new user should append
       mergeCachedUser(user2);
       users = loadCachedUsers();
       expect(users).toHaveLength(2);

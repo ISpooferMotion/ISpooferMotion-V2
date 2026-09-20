@@ -1,11 +1,11 @@
-import { render, screen } from '@testing-library/react';
-import ActivityView from './ActivityView';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import * as LanguageContext from '../../contexts/LanguageContext';
-import * as ConfigContext from '../../contexts/ConfigContext';
-
-import * as ConfigStore from '../../stores/configStore';
 import { invoke } from '@tauri-apps/api/core';
+import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as ConfigContext from '../../contexts/ConfigContext';
+import * as LanguageContext from '../../contexts/LanguageContext';
+import * as ConfigStore from '../../stores/configStore';
+import ActivityView from './ActivityView';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -42,7 +42,7 @@ describe('ActivityView', () => {
     vi.mocked(ConfigContext.useConfig).mockReturnValue({
       config: { ui: { transparency: true } },
     } as any);
-    vi.mocked(ConfigStore.useConfigStore).mockReturnValue({} as any); // mock whatever we need
+    vi.mocked(ConfigStore.useConfigStore).mockReturnValue({} as any);
   });
 
   it('renders history correctly', async () => {
@@ -62,7 +62,6 @@ describe('ActivityView', () => {
 
     render(<ActivityView />);
 
-    // Since async fetching and invoke mocking can be tricky, just assert it mounts
     expect(await screen.findByText('activity.spoofedTo')).toBeInTheDocument();
   });
 });

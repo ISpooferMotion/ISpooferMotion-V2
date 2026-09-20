@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from 'framer-motion';
 import { lazy, Suspense } from 'react';
 
 import Sidebar from './components/layout/Sidebar';
@@ -19,13 +18,6 @@ const SettingsView = lazy(() => import('./components/views/SettingsView'));
 const SpoofingView = lazy(() => import('./components/views/SpoofingView'));
 const AccountsView = lazy(() => import('./components/views/accounts/AccountsView'));
 
-/**
- * The root component of the ISpooferMotion React application.
- *
- * This orchestrates the main layout frame: the Titlebar and Sidebar,
- * and the main content router that flips between Spoofing, Activity, and Settings.
- * It also mounts floating overlays like the Debug Console and Asset Explorer.
- */
 export default function App() {
   const { t } = useLanguage();
   const { config, updateConfig } = useConfig();
@@ -33,16 +25,6 @@ export default function App() {
   const isExplorerOpen = config.ui.assetExplorerOpen;
 
   const { maintenance, isRobloxApiDown } = useAppInitialization();
-
-  // Browser preview: mock place seed disabled to show the empty explorer state.
-  // Re-enable by uncommenting the block below.
-  // useEffect(() => {
-  //   if (!isBrowserPreview()) return;
-  //   const store = useSpooferStore.getState();
-  //   if (store.rootInstances.length > 0) return;
-  //   store.setRootInstances(buildMockRootInstances());
-  //   store.setLoadedFileName(MOCK_PLACE_FILE_NAME);
-  // }, []);
 
   const setActiveTab = (tabId: string) => updateConfig('ui', 'activeTab', tabId);
   const setIsExplorerOpen = (isOpen: boolean) => updateConfig('ui', 'assetExplorerOpen', isOpen);
@@ -75,16 +57,10 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden text-foreground relative font-sans selection:bg-primary/30 antialiased bg-background">
-      {/* Sidebar spans the full window height (logo + version collapse with it,
-       * so there's no empty gap where the titlebar logo used to be). */}
+      {}
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-        className="flex flex-col flex-1 min-w-0 h-full relative z-10"
-      >
+      <div className="flex flex-col flex-1 min-w-0 h-full relative z-10">
         <Titlebar />
 
         <div className="flex-1 relative overflow-hidden bg-transparent flex flex-col">
@@ -93,30 +69,23 @@ export default function App() {
 
           <div className="flex-1 relative overflow-hidden">
             <Suspense fallback={<div className="w-full h-full bg-background/50" />}>
-              <AnimatePresence mode="wait" initial={false}>
-                {activeTab === 'spoofing' && (
-                  <div key="spoofing" className="w-full h-full flex">
-                    {/* Explorer-first main view */}
-                    <AssetExplorer
-                      isOpen={isExplorerOpen}
-                      setIsOpen={setIsExplorerOpen}
-                      mode="main"
-                    />
-                    {/* Hidden logic host: keeps all run/scan handlers, effects,
-                     * event listeners, and portaled modals alive while the
-                     * explorer is the visible main surface. Radix modals portal
-                     * to <body>, so they remain visible despite this wrapper
-                     * being display:none. */}
-                    <div className="hidden" aria-hidden>
-                      <SpoofingView />
-                    </div>
+              {activeTab === 'spoofing' && (
+                <div key="spoofing" className="w-full h-full flex">
+                  <AssetExplorer
+                    isOpen={isExplorerOpen}
+                    setIsOpen={setIsExplorerOpen}
+                    mode="main"
+                  />
+                  {}
+                  <div className="hidden" aria-hidden>
+                    <SpoofingView />
                   </div>
-                )}
-                {activeTab === 'activity' && <ActivityView key="activity" />}
-                {activeTab === 'accounts' && <AccountsView key="accounts" />}
-                {activeTab === 'settings' && <SettingsView key="settings" />}
-                {activeTab === 'console' && <ConsoleView key="console" />}
-              </AnimatePresence>
+                </div>
+              )}
+              {activeTab === 'activity' && <ActivityView key="activity" />}
+              {activeTab === 'accounts' && <AccountsView key="accounts" />}
+              {activeTab === 'settings' && <SettingsView key="settings" />}
+              {activeTab === 'console' && <ConsoleView key="console" />}
             </Suspense>
           </div>
 
@@ -134,7 +103,7 @@ export default function App() {
             background: 'linear-gradient(to top, var(--primary), transparent)',
           }}
         />
-      </motion.div>
+      </div>
 
       <TutorialGate />
     </div>

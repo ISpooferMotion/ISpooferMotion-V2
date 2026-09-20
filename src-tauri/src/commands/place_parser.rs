@@ -1,9 +1,3 @@
-//! Parses local `.rbxl` and `.rbxm` files directly without needing Roblox Studio open.
-//!
-//! Exposes a command that reads a local file using `rbx_dom_weak`, walks the tree,
-//! and extracts any property that looks like an asset ID so the user can spoof
-//! an entire place file offline.
-
 use rbx_dom_weak::types::Variant;
 use rbx_dom_weak::WeakDom;
 use serde::Serialize;
@@ -12,7 +6,7 @@ use std::io::BufReader;
 
 #[derive(Debug, Serialize, Clone, specta::Type)]
 pub struct ParsedAssetRef {
-    pub r#type: String, // "animation", "audio", "image", "mesh", "script_ref", etc.
+    pub r#type: String,
     #[serde(rename = "assetId")]
     pub asset_id: String,
     #[serde(rename = "rawValue")]
@@ -39,7 +33,7 @@ pub struct RbxInstance {
 #[derive(Debug, Serialize, specta::Type)]
 pub struct PlaceParseResult {
     #[serde(rename = "fileType")]
-    pub file_type: String, // "rbxl" or "rbxlx"
+    pub file_type: String,
     #[serde(rename = "rootInstances")]
     pub root_instances: Vec<RbxInstance>,
     pub warnings: Vec<String>,
@@ -51,11 +45,10 @@ fn extract_asset_id(raw: &str) -> Option<String> {
         return None;
     }
 
-    // Try extracting from standard "rbxassetid://12345"
     if let Some(stripped) = trimmed.strip_prefix("rbxassetid://") {
         return Some(stripped.to_string());
     }
-    // Try extracting from "?id=12345" or "&id=12345"
+
     if let Some(idx) = trimmed.find("id=") {
         let rest = &trimmed[idx + 3..];
         let end = rest.find('&').unwrap_or(rest.len());
@@ -64,7 +57,7 @@ fn extract_asset_id(raw: &str) -> Option<String> {
             return Some(id_str.to_string());
         }
     }
-    // Try numeric string
+
     if trimmed.chars().all(|c| c.is_ascii_digit()) && trimmed.len() >= 7 {
         return Some(trimmed.to_string());
     }
@@ -123,7 +116,6 @@ fn process_instance(
 
     let mut assets = Vec::new();
 
-    // Check properties for assets
     for (prop_name, prop_value) in &instance.properties {
         if let Some(asset_type) = classify_property(&class_name, prop_name.as_str()) {
             let raw_val_str = match prop_value {
@@ -133,7 +125,7 @@ fn process_instance(
                     _ => String::new(),
                 },
                 Variant::SharedString(s) => String::from_utf8_lossy(s.data()).into_owned(),
-                // All other variant types cannot carry an asset URL; skip them.
+
                 _ => continue,
             };
 
@@ -158,7 +150,6 @@ fn process_instance(
         }
     }
 
-    // Only return the node if it has assets or if any of its children have assets (to keep tree small)
     if !assets.is_empty() || !children.is_empty() {
         Some(RbxInstance { referent: id.to_string(), class_name, name, assets, children })
     } else {
@@ -166,9 +157,6 @@ fn process_instance(
     }
 }
 
-/// Reads a local Roblox place or model file and extracts all spoofable assets.
-///
-/// Supports both XML (`.rbxlx`, `.rbxmx`) and binary (`.rbxl`, `.rbxm`) formats.
 #[tauri::command]
 #[specta::specta]
 pub fn parse_place_file(file_path: String) -> Result<PlaceParseResult, String> {
@@ -195,7 +183,6 @@ pub fn parse_place_file(file_path: String) -> Result<PlaceParseResult, String> {
 
     let mut root_instances = Vec::new();
 
-    // Process top-level children of the DOM root
     let root = dom.root();
     for child_id in root.children() {
         if let Some(node) = process_instance(&dom, *child_id, "") {

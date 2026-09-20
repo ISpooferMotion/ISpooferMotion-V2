@@ -20,13 +20,11 @@ export default function DebugCard() {
         invoke('clear_app_cache'),
       ]);
 
-      // Clear all spoofer store runtime states (replacements, pins, statuses)
       const store = useSpooferStore.getState();
       store.setLastReplacements({});
       store.clearAssetStatuses();
       store.setAssetForcePlaceIds({});
 
-      // Clear all cached keys from localStorage
       Object.keys(localStorage).forEach((key) => {
         if (key.startsWith('ISpooferMotion_') || key.startsWith('preview-')) {
           localStorage.removeItem(key);

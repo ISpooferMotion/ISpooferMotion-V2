@@ -1,6 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { motion } from 'framer-motion';
 import {
   Activity,
   Box,
@@ -40,12 +39,6 @@ export const ASSET_TYPE_OPTIONS = [
   { value: 'mesh', label: 'Meshes', icon: Box },
 ];
 
-/**
- * Context-aware 48px Header & Custom Window Controls bar.
- *
- * Renders tab-specific search, filters, place info, and inspector controls
- * depending on whether the user is on Spoofer, Activity, Settings, Accounts, or Console.
- */
 export default function Titlebar() {
   const { t } = useLanguage();
   const { config } = useConfig();
@@ -103,7 +96,6 @@ export default function Titlebar() {
     if (activeTab === 'spoofing') {
       return (
         <>
-          {/* Left: Place name / file info — hidden when no place loaded */}
           {hasAssets && (
             <div
               className="flex items-center gap-2 text-xs font-semibold text-text-primary shrink-0 min-w-0 max-w-[200px]"
@@ -114,7 +106,6 @@ export default function Titlebar() {
             </div>
           )}
 
-          {/* Center: Flex-grow search bar with embedded Filter — only when assets loaded */}
           {hasAssets && (
             <div className="flex-1 min-w-0 mx-3 relative flex items-center" data-tauri-drag-region>
               <Search
@@ -138,7 +129,7 @@ export default function Titlebar() {
                     <X size={11} />
                   </button>
                 )}
-                {/* Compact Filter icon embedded inside search bar */}
+
                 <Popover>
                   <PopoverTrigger
                     render={
@@ -235,13 +226,10 @@ export default function Titlebar() {
             </div>
           )}
 
-          {/* Spacer when no assets to push window controls right */}
           {!hasAssets && <div className="flex-1" data-tauri-drag-region />}
 
-          {/* Right: Independent Viewport & Properties Toggles */}
           {hasAssets && (
             <div className="flex items-center gap-1.5 shrink-0" data-tauri-drag-region>
-              {/* Toggle Preview Viewport (Eye) */}
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -265,7 +253,6 @@ export default function Titlebar() {
                 </TooltipContent>
               </Tooltip>
 
-              {/* Toggle Properties Table (Sliders) */}
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -368,10 +355,7 @@ export default function Titlebar() {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
+    <div
       data-tauri-drag-region
       className="h-12 w-full flex items-center justify-between px-3 bg-bg-surface/90 border-b border-border select-none shrink-0 z-50 relative"
     >
@@ -380,7 +364,6 @@ export default function Titlebar() {
       <div className="flex items-center gap-2 shrink-0 ml-2" data-tauri-drag-region={false}>
         <div className="h-4 w-px bg-border mx-0.5" />
 
-        {/* Window controls: Minimize, Pin, Close */}
         <Tooltip>
           <TooltipTrigger
             render={
@@ -436,6 +419,6 @@ export default function Titlebar() {
           <TooltipContent>{t('common.close')}</TooltipContent>
         </Tooltip>
       </div>
-    </motion.div>
+    </div>
   );
 }

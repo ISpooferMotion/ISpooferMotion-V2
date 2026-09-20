@@ -11,13 +11,6 @@ export type StudioScanBundle = {
   scriptRefs: PluginAssetStore;
 };
 
-/**
- * Continuously polls the local Tauri IPC bridge for new assets discovered by the Studio plugin.
- *
- * To prevent frying React with constant re-renders during heavy deep scans, this hook implements
- * adaptive polling (2s when active, 10s when idle) and relies on a fast snapshot hash
- * to determine if the payload actually changed before invoking `onComplete`.
- */
 export function useStudioAssetPoll(
   studioConnected: boolean,
   onComplete: (bundle: StudioScanBundle) => void,
@@ -38,13 +31,12 @@ export function useStudioAssetPoll(
 
     const hashAssets = (assets?: PluginAsset[]) => {
       if (!assets || assets.length === 0) return '0';
-      // Fast hash: length, first asset, last asset.
+
       const first = assets[0].assetId || assets[0].name || '';
       const last = assets[assets.length - 1].assetId || assets[assets.length - 1].name || '';
       return `${assets.length}:${first}:${last}`;
     };
 
-    // Snapshot comparison to prevent unnecessary React renders.
     const bundleSnapshot = (bundle: StudioScanBundle) =>
       `${hashAssets(bundle.anims.assets)}-${hashAssets(bundle.sounds.assets)}-${hashAssets(bundle.images.assets)}-${hashAssets(bundle.meshes.assets)}-${hashAssets(bundle.scriptRefs.assets)}`;
 
@@ -57,7 +49,6 @@ export function useStudioAssetPoll(
       if (cancelled || inFlight) return;
       inFlight = true;
 
-      // Fetch the latest asset stores from the Rust backend.
       try {
         const bundle = await invoke<StudioScanBundle>('get_studio_asset_snapshots');
         if (cancelled) return;

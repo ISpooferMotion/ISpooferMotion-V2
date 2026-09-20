@@ -3,7 +3,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 #[derive(Default)]
-// Global state managing the active spoofing job, enabling UI pause/cancel controls.
+
 pub struct SpooferControl {
     pub active_job_id: Option<String>,
     pub paused: bool,
@@ -16,7 +16,6 @@ pub fn spoofer_control() -> &'static Mutex<SpooferControl> {
     SPOOFER_CONTROL.get_or_init(|| Mutex::new(SpooferControl::default()))
 }
 
-// Apply a lock to ensure only one spoofing job runs concurrently.
 pub fn begin_spoofer_job(job_id: &str) -> crate::error::Result<()> {
     let mut control =
         spoofer_control().lock().map_err(|_| "Spoofer control state is unavailable.")?;
@@ -37,7 +36,6 @@ pub fn finish_spoofer_job(job_id: &str) {
 }
 
 pub async fn wait_if_paused(job_id: &str) -> crate::error::Result<()> {
-    // Poll state when paused until resumption.
     loop {
         let paused = {
             let control =
@@ -81,34 +79,27 @@ mod tests {
     #[tokio::test]
     async fn test_spoofer_job_lifecycle() {
         let _guard = test_mutex().lock().unwrap();
-        // Ensure state is clean before we start (in case other tests ran)
+
         {
             *spoofer_control().lock().unwrap() = SpooferControl::default();
         }
 
         let job_id = "test_job_123";
 
-        // Begin job
         assert!(begin_spoofer_job(job_id).is_ok());
 
-        // Attempting to begin another job should fail
         assert!(begin_spoofer_job("another_job").is_err());
 
-        // Update control to pause
         assert!(update_spoofer_control(job_id, |c| c.paused = true));
 
-        // Verify paused state
         let is_paused = spoofer_control().lock().unwrap().paused;
         assert!(is_paused);
 
-        // Finish job
         finish_spoofer_job(job_id);
 
-        // State should be reset
         let is_active = spoofer_control().lock().unwrap().active_job_id.is_some();
         assert!(!is_active);
 
-        // Attempting to begin should now work
         assert!(begin_spoofer_job("job_456").is_ok());
         finish_spoofer_job("job_456");
     }
@@ -122,10 +113,8 @@ mod tests {
 
         assert!(begin_spoofer_job("job_1").is_ok());
 
-        // Try to update a different job ID
         assert!(!update_spoofer_control("job_2", |c| c.paused = true));
 
-        // State should remain unpaused
         let is_paused = spoofer_control().lock().unwrap().paused;
         assert!(!is_paused);
 

@@ -1,9 +1,3 @@
-//! Interfaces with the Roblox web API for asset resolution and verification.
-//!
-//! Because ISpooferMotion needs to spoof assets across the entire platform, we have
-//! to constantly query Roblox's endpoints to figure out what type of asset an ID is,
-//! who created it, and if it even exists. This module wraps those undocumented endpoints.
-
 use crate::commands::spoofer::{wait_rate_limit, RateLimitBucket};
 use crate::utils::build_roblox_cookie_header;
 use reqwest::header::{
@@ -15,7 +9,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
 
-/// Spoofs standard browser headers so Roblox does not immediately block our requests.
 fn build_roblox_auth_headers(cookie: &HeaderValue) -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert(COOKIE, cookie.clone());
@@ -28,11 +21,6 @@ fn build_roblox_auth_headers(cookie: &HeaderValue) -> HeaderMap {
     headers
 }
 
-/// Grabs a fresh CSRF token from the Roblox catalog endpoint.
-///
-/// Most authenticated Roblox endpoints require a CSRF token. The standard way to get
-/// one is to intentionally send a bad POST request, read the `x-csrf-token` header
-/// from the 403 response, and use that for the real request.
 async fn fetch_csrf_token(client: &reqwest::Client) -> String {
     for _ in 0..2 {
         if let Ok(res) = client
@@ -49,10 +37,6 @@ async fn fetch_csrf_token(client: &reqwest::Client) -> String {
     String::new()
 }
 
-/// Resolves a batch of asset IDs by hitting the public catalog endpoint.
-///
-/// We use this to quickly categorize hundreds of IDs at once (Mesh vs Image vs Audio)
-/// instead of hitting the individual details endpoint for every single asset.
 async fn resolve_via_catalog(
     client: &reqwest::Client,
     asset_ids: &[String],
@@ -165,7 +149,6 @@ pub struct RobloxAssetAuthResponse {
     pub name: Option<String>,
 }
 
-/// Hits the user-auth API to find out exactly who created a specific asset.
 async fn resolve_single_asset_creator<F, C>(
     mut asset: ResolverAsset,
     sem: Arc<Semaphore>,
@@ -264,8 +247,6 @@ where
     (asset, msg, success)
 }
 
-/// Takes a list of raw assets, drops those we already know the creator for,
-/// and concurrently fetches the rest from Roblox.
 pub async fn resolve_asset_creators<F, C>(
     assets: Vec<ResolverAsset>,
     cookie: String,
@@ -342,11 +323,6 @@ pub struct ScriptRefProgress {
     pub resolved_category: Option<String>,
 }
 
-/// Resolves raw numeric IDs extracted from script source code.
-///
-/// Because scripts often contain random numbers that are not actually asset IDs,
-/// this validates them against the catalog and the batch asset delivery endpoints
-/// to filter out false positives.
 pub async fn resolve_script_references<F>(
     asset_ids: Vec<String>,
     on_progress: F,
@@ -461,10 +437,6 @@ where
     Ok(resolved_map)
 }
 
-/// Confirms that scraped asset IDs actually exist on Roblox and determines their type.
-///
-/// Falls back to the slow economy details endpoint for assets that the catalog
-/// refuses to resolve (like off-sale meshes or private decals).
 pub async fn validate_asset_ids(
     asset_ids: Vec<String>,
 ) -> crate::error::Result<HashMap<String, String>> {
@@ -565,7 +537,6 @@ mod tests {
         let user_agent =
             headers.get(USER_AGENT).expect("user agent header").to_str().expect("user agent str");
         assert!(user_agent.contains("Mozilla/5.0"));
-        // Just checking it exists
     }
 
     #[test]

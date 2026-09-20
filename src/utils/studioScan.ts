@@ -5,11 +5,6 @@ import { fetchPluginBridge } from './pluginBridge';
 const SCAN_STALL_MS = 300_000;
 const SCAN_POLL_MS = 1500;
 
-// Poll backend until the studio plugin finishes active scan. The timeout is
-// progress-based: the watchdog resets whenever the scanned count advances, so a
-// huge place that's actively scanning runs to completion instead of being killed
-// at a hard 5-minute wall. It only throws if the scan stalls (no progress for
-// SCAN_STALL_MS) or Studio disconnects mid-scan.
 async function waitForStudioScanComplete(): Promise<void> {
   let lastProgressScanned: number | undefined;
   let lastProgressTime = Date.now();
@@ -23,7 +18,7 @@ async function waitForStudioScanComplete(): Promise<void> {
       if (!health.scanStatus || !health.scanStatus.scanning) {
         return;
       }
-      // Reset the stall watchdog whenever the scanned count advances.
+
       const scanned = health.scanStatus.scanned;
       if (scanned !== undefined && scanned !== lastProgressScanned) {
         lastProgressScanned = scanned;
@@ -48,7 +43,6 @@ async function waitForStudioScanComplete(): Promise<void> {
 
 export interface ScanOptions {
   scanTypes: string[];
-  scriptScanMode: string;
   scanPath?: string;
 }
 
@@ -57,7 +51,6 @@ export async function triggerStudioScan(options?: ScanOptions): Promise<void> {
   const activePort = await findPluginBridgePort();
 
   if (!activePort) {
-    // Immediate process & plugin check before attempting scan or polling
     const pid = await invoke<number | null>('find_studio_process').catch(() => null);
     if (!pid) {
       throw new Error('Please open Roblox Studio to connect the plugin.');
@@ -70,7 +63,6 @@ export async function triggerStudioScan(options?: ScanOptions): Promise<void> {
 
   const port = activePort;
 
-  // Push scan options to the backend so the plugin picks them up via /poll.
   if (options) {
     await fetchPluginBridge('/scan-options', port, {
       method: 'POST',

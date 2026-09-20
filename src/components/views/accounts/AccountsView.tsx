@@ -4,15 +4,14 @@ import {
   requestPermission,
   sendNotification,
 } from '@tauri-apps/plugin-notification';
-import { motion } from 'framer-motion';
 import {
+  CheckCircle2,
+  Cookie,
+  Key,
   Plus,
   RefreshCw,
-  Trash2,
-  Key,
-  Cookie,
   ShieldAlert,
-  CheckCircle2,
+  Trash2,
   User2,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -20,14 +19,13 @@ import { useState } from 'react';
 import { useConfig } from '../../../contexts/ConfigContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { useConfigStore } from '../../../stores/configStore';
-import { validateCookieProfile, logIsm, loadCachedUsers } from '../../../utils/robloxProfiles';
-import { itemVariants, pageVariants } from '../../../utils/animations';
+import { loadCachedUsers, logIsm, validateCookieProfile } from '../../../utils/robloxProfiles';
 import { Button } from '../../ui/button';
+import { Card } from '../../ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../ui/dialog';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
 import { Switch } from '../../ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../ui/dialog';
-import { Card } from '../../ui/card';
 
 type ApiKeyOwnerDetectResult = {
   ok: boolean;
@@ -57,10 +55,7 @@ export default function AccountsView() {
       let userId = '';
       let name = 'Unknown';
       let avatarUrl = '';
-      // Track what got validated during this add — the cookie/API key were
-      // just tested against Roblox, so persist that so the account shows a
-      // green check on reopen instead of forcing the user to click 'Validate
-      // All' every session.
+
       let cookieValidated = false;
       let apiKeyValidated = false;
 
@@ -87,8 +82,6 @@ export default function AccountsView() {
         throw new Error('Please enter a Roblox cookie (.ROBLOSECURITY) or an Open Cloud API key.');
       }
 
-      // If both were supplied, validate the API key too even though we
-      // resolved userId from the cookie above.
       if (newCookie.trim() && newApiKey.trim() && !apiKeyValidated) {
         try {
           const apiResult = await invoke<ApiKeyOwnerDetectResult>(
@@ -111,9 +104,7 @@ export default function AccountsView() {
           isUploader,
           name,
           avatarUrl: avatarUrl || existingAccounts[existingIdx].avatarUrl,
-          // Only overwrite validated flags when the user actually supplied a
-          // new value for that field on this add — preserves the previous
-          // state for the untouched field.
+
           cookieValidated: newCookie.trim()
             ? cookieValidated
             : existingAccounts[existingIdx].cookieValidated,
@@ -214,7 +205,6 @@ export default function AccountsView() {
 
     store.updateConfig('spoofing', 'selectedUser', acc.id);
 
-    // Disable auto-detect when an account is manually selected.
     store.updateCategory('advanced', {
       autoCookieStudio: false,
       autoCookieBrowser: false,
@@ -234,7 +224,6 @@ export default function AccountsView() {
     const roles = applied.length > 0 ? ` (${applied.join(', ')})` : '';
     const msg = `${t('accounts.selectedAccount')}: ${acc.name}${roles}`;
 
-    // Use native desktop notifications instead of in-app toasts
     try {
       let permissionGranted = await isPermissionGranted();
       if (!permissionGranted) {
@@ -252,19 +241,10 @@ export default function AccountsView() {
   };
 
   return (
-    <motion.div
-      variants={pageVariants}
-      initial="hidden"
-      animate="show"
-      exit="exit"
-      className="w-full h-full overflow-y-auto overflow-x-hidden"
-    >
+    <div className="w-full h-full overflow-y-auto overflow-x-hidden">
       <div className="w-full h-full p-4 lg:p-8">
         {config.accounts.length === 0 && discoveredUsers.length > 0 ? (
-          <motion.div
-            variants={itemVariants}
-            className="w-full max-w-4xl mx-auto flex flex-col gap-6 pb-12"
-          >
+          <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 pb-12">
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">{t('accounts.description')}</p>
               <div className="flex gap-2">
@@ -380,7 +360,7 @@ export default function AccountsView() {
                 </div>
               ))}
             </div>
-          </motion.div>
+          </div>
         ) : config.accounts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[calc(100vh-140px)] text-center text-muted-foreground space-y-4">
             <User2 size={48} className="opacity-20 text-primary" />
@@ -468,10 +448,7 @@ export default function AccountsView() {
             </Dialog>
           </div>
         ) : (
-          <motion.div
-            variants={itemVariants}
-            className="w-full max-w-4xl mx-auto flex flex-col gap-6 pb-12"
-          >
+          <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 pb-12">
             <div className="flex items-center justify-between">
               <p className="text-xs text-text-secondary">{t('accounts.description')}</p>
               <div className="flex gap-2">
@@ -637,11 +614,7 @@ export default function AccountsView() {
                           )}
                         </div>
                       )}
-                      {/* Only render 'missing' pills once secrets have finished loading
-                        from disk. Otherwise a stale render during the mount → load
-                        window flashed 'Invalid cookie / Invalid API key' for every
-                        account, which users read as the app invalidating their
-                        credentials on reopen. */}
+                      {}
                       {secretsLoaded && !secrets?.cookie && acc.isDownloader && (
                         <div
                           className="text-xs text-red-500 flex items-center gap-1"
@@ -685,9 +658,9 @@ export default function AccountsView() {
                 );
               })}
             </div>
-          </motion.div>
+          </div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }

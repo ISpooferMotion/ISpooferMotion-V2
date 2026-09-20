@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { motion } from 'framer-motion';
 import {
   CheckCircle2,
   Clock,
@@ -14,17 +13,10 @@ import { useEffect, useState } from 'react';
 
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { itemVariants, pageVariants } from '../../utils/animations';
 import { queueSpoofRetry, type SpoofJob } from '../../utils/jobTypes';
 import { logIsm } from '../../utils/robloxProfiles';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 
-/**
- * Renders the Job History and Activity pane.
- *
- * Pulls the persistent list of past spoofing jobs from the Rust backend and displays them
- * in a reverse-chronological accordion. Allows users to retry failed assets or redo entire jobs.
- */
 export default function ActivityView() {
   const { t } = useLanguage();
 
@@ -102,14 +94,8 @@ export default function ActivityView() {
   };
 
   return (
-    <motion.div
-      variants={pageVariants}
-      initial="hidden"
-      animate="show"
-      exit="exit"
-      className="w-full h-full"
-    >
-      <motion.div variants={itemVariants} className="w-full h-full flex flex-col">
+    <div className="w-full h-full">
+      <div className="w-full h-full flex flex-col">
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
@@ -286,7 +272,7 @@ export default function ActivityView() {
             </Accordion>
           )}
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }

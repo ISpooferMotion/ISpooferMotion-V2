@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { AnimatePresence, motion } from 'framer-motion';
 import { ExternalLink, Loader2, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -204,24 +203,19 @@ export default function CredentialsSection() {
 
   return (
     <div className="flex flex-col gap-3 w-full">
-      {/* Auto Detect Cookie Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
         <div className="space-y-0.5 min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <Label className="text-sm font-semibold text-text-primary">
               {t('config.autoDetectCookie')}
             </Label>
-            <AnimatePresence>
+            <>
               {authStatus === 'loading' && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                >
+                <div>
                   <Loader2 size={14} className="animate-spin text-primary" />
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
+            </>
           </div>
           <p className="text-xs text-text-secondary leading-relaxed">
             Automatically detect Roblox session cookie from running Studio or local browser.
@@ -256,7 +250,6 @@ export default function CredentialsSection() {
         </Select>
       </div>
 
-      {/* Roblox Cookie Row */}
       <div className="flex flex-col gap-2 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
         <div className="space-y-0.5">
           <Label className="text-sm font-semibold text-text-primary">{t('spoof.cookie')}</Label>
@@ -278,7 +271,6 @@ export default function CredentialsSection() {
         />
       </div>
 
-      {/* User Open Cloud API Key Row */}
       <div className="flex flex-col gap-2 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
         <div className="space-y-0.5">
           <Label className="text-sm font-semibold text-text-primary">User Open Cloud API Key</Label>
@@ -335,7 +327,6 @@ export default function CredentialsSection() {
         </div>
       </div>
 
-      {/* Group Open Cloud API Key Row */}
       <div className="flex flex-col gap-2 p-3.5 rounded-lg border border-border-subtle/60 bg-bg-base/40">
         <div className="space-y-0.5">
           <Label className="text-sm font-semibold text-text-primary">

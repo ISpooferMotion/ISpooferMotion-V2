@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { isTauriRuntime, isMemoryInjectionSupported } from './tauriRuntime';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { isMemoryInjectionSupported, isTauriRuntime } from './tauriRuntime';
 
 describe('tauriRuntime', () => {
   beforeEach(() => {

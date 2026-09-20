@@ -8,9 +8,9 @@ import type {
   SpooferResultPayload,
   SpooferStartedPayload,
 } from '../types/tauriEvents';
+import { logIsm } from '../utils/robloxProfiles';
 import { appendSpoofingLog } from '../utils/spoofingLogs';
 import { isTauriRuntime } from '../utils/tauriRuntime';
-import { logIsm } from '../utils/robloxProfiles';
 
 export type { AppConfig };
 
@@ -27,13 +27,6 @@ interface ConfigContextType {
 
 const Context = createContext<ConfigContextType | undefined>(undefined);
 
-/**
- * Wraps the config store and initializes Tauri IPC listeners for the spoofer.
- *
- * Sits near the root to ensure IPC event listeners (like progress or logs) are always mounted
- * and actively pushing state down into the `spooferStore` even when the user navigates away
- * from the main execution view.
- */
 export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const configState = useConfigStore();
 
@@ -47,8 +40,6 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     let isMounted = true;
     const unlisteners: Array<() => void> = [];
 
-    // Bind global IPC listeners here.
-    // Views read directly from the spooferStore.
     const setup = async () => {
       const { listen } = await import('@tauri-apps/api/event');
       const {
@@ -81,24 +72,19 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         let msg = e.payload.message ?? '';
         const rawLevel = (e.payload.level || 'info').toUpperCase();
 
-        // Apply a level prefix to the log if missing.
         if (!msg.startsWith('[')) {
           msg = `[${rawLevel}] ${msg}`;
         }
 
-        // Parse per-asset status from log messages
-        // "Processing asset {assetId} ({current}/{total})" → downloading
         const processingMatch = msg.match(/Processing asset (\S+)\s+\((\d+)\/(\d+)\)/);
         if (processingMatch) {
           const assetId = processingMatch[1];
           setAssetStatus(assetId, { stage: 'downloading' });
         }
-        // "Found N candidate Place ID(s)..." → discovering
+
         if (msg.includes('candidate Place ID')) {
-          // Set a global discovering status on all selected assets
-          // (the log doesn't specify which asset, so we set it globally via spoofStatusText)
         }
-        // Upload-related messages
+
         if (msg.toLowerCase().includes('upload') && msg.includes('asset')) {
           const uploadMatch = msg.match(/asset (\S+)/i);
           if (uploadMatch) {
@@ -142,7 +128,6 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setKeyframeWarningCount(e.payload.keyframe_warnings ?? 0);
         incrementSpoofCompletionVersion();
 
-        // Set per-asset final status from results
         const results = e.payload.assetResults ?? e.payload.results ?? [];
         for (const result of results) {
           if (!result.id) continue;
@@ -161,9 +146,6 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
         }
 
-        // Surface a bottom-right toast so the user knows the job is done without
-        // the modal that lived here previously. Success / partial / failure all
-        // get a clear, distinct message.
         const total = results.length;
         const ok = results.filter((r) => r.success).length;
         const skipped = results.filter((r) => r.skipped).length;
@@ -171,7 +153,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const durationMs = startTime ? Date.now() - startTime : 0;
         const durationSec = (durationMs / 1000).toFixed(2);
         const avgMsPerAsset = Math.round(durationMs / Math.max(1, total));
-        let level: 'success' | 'error' | 'info' = 'info';
+        let level: 'success' | 'error' | 'info';
         let message: string;
         if (e.payload.error) {
           level = 'error';
@@ -197,15 +179,7 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setSpoofingLogs((prev) => appendSpoofingLog(prev, `[ERROR] ${e.payload.error}`));
         } else {
           setSpoofingLogs((prev) => appendSpoofingLog(prev, `[SUCCESS] ${message}`));
-          // Always apply replacements when the backend emits them (even if the
-          // payload object exists but is empty, we still want to persist and
-          // re-send mappings that were skipped by skipExistingReplacements).
-          //
-          // IMPORTANT: Only send the NEW batch's replacements to Studio, not
-          // the full merged history. Sending 4000 stale mappings after a
-          // 2-asset re-spoof causes Studio plugin timeouts / silently dropped
-          // packets. The merge is only used for persisting to lastReplacements
-          // so that "Retry Replacement" covers all historical assets.
+
           if (e.payload.replacements !== undefined) {
             const newBatchReplacements: Record<string, string> = e.payload.replacements ?? {};
             const existingMappings = useSpooferStore.getState().lastReplacements;
@@ -213,10 +187,9 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               ...existingMappings,
               ...newBatchReplacements,
             };
-            // Persist the full history for Retry Replacement button
+
             useSpooferStore.getState().setLastReplacements(mergedReplacements);
-            // But only push the new batch to Studio — avoids flooding the
-            // plugin bridge with thousands of already-applied mappings
+
             const toApply =
               Object.keys(newBatchReplacements).length > 0
                 ? newBatchReplacements
@@ -224,7 +197,6 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             applyReplacements(toApply, true);
           }
 
-          // Auto-grant permissions to target experiences/users/groups if configured
           const storeState = useConfigStore.getState();
           const currentConfig = storeState.config;
           const permissionsConfig = currentConfig.permissions;
@@ -268,7 +240,6 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                   currentConfig.spoofing.cookie?.trim() ||
                   null;
 
-                // Fallback to any available account's secrets if selected user has none
                 if (!cookie && currentConfig.accounts?.length) {
                   for (const acc of currentConfig.accounts) {
                     const candidate = accountSecrets[acc.id]?.cookie?.trim();
@@ -450,7 +421,6 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         },
       );
 
-      // Initial batch size sync to plugin bridge
       import('@tauri-apps/api/core').then(({ invoke }) => {
         const currentBatch = useConfigStore.getState().config.advanced.batchSize ?? 50;
         invoke('set_plugin_batch_size', { batchSize: currentBatch }).catch(() => {});
@@ -471,7 +441,6 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, []);
 
-  // Memoized to prevent full app re-renders on minor state changes.
   const contextValue = useMemo<ConfigContextType>(
     () => ({
       config: configState.config,

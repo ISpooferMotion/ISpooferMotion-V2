@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useConfigStore, DEFAULT_APP_CONFIG } from './configStore';
 import * as tauriCore from '@tauri-apps/api/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { DEFAULT_APP_CONFIG, useConfigStore } from './configStore';
 
 vi.mock('../utils/tauriRuntime', () => ({
   isTauriRuntime: vi.fn().mockReturnValue(true),
@@ -69,8 +70,6 @@ describe('configStore', () => {
   it('saves secrets to backend', async () => {
     const invokeMock = (tauriCore.invoke as any).mockResolvedValueOnce(undefined);
 
-    // saveSecrets is gated on secretsLoaded so the restart cookie-auto-detect
-    // race can't wipe a not-yet-loaded API key. Simulate a completed load.
     useConfigStore.setState({ secretsLoaded: true });
 
     useConfigStore
@@ -90,9 +89,6 @@ describe('configStore', () => {
   });
 
   it('does not save secrets before the initial load completes', async () => {
-    // Guards the restart race: cookie auto-detect fires saveSecrets on mount
-    // before loadSecrets() has restored the API key. Without this guard, that
-    // save reads apiKey='' and overwrites the persisted key with empty.
     const invokeMock = (tauriCore.invoke as any).mockResolvedValueOnce(undefined);
     useConfigStore.setState({ secretsLoaded: false });
 

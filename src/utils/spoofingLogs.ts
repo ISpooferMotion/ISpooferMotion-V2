@@ -1,7 +1,5 @@
 const MAX_LOG_LINES = 750;
 
-// Matches leading [HH:MM:SS] so we don't double-stamp lines that already
-// arrived from the backend with a timestamp.
 const TIMESTAMP_RE = /^\[\d{2}:\d{2}:\d{2}\]/;
 
 function currentTimestamp(): string {

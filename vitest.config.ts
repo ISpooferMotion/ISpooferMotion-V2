@@ -1,9 +1,10 @@
-import { defineConfig, mergeConfig } from 'vitest/config';
 import { resolve } from 'path';
+import { defineConfig, mergeConfig } from 'vitest/config';
+
 import viteConfig from './vite.config';
 
 export default mergeConfig(
-  // @ts-ignore
+  // @ts-expect-error stfu
   viteConfig(),
   defineConfig({
     test: {

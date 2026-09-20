@@ -2,11 +2,9 @@ import { invoke } from '@tauri-apps/api/core';
 
 import { isTauriRuntime } from './tauriRuntime';
 
-// Show native OS notification in Tauri, fallback to console.
 export async function notifyError(title: string, message?: string) {
   let displayMessage = message ?? title;
 
-  // Parse structured backend errors.
   if (message) {
     try {
       const parsed = JSON.parse(message);
@@ -14,9 +12,7 @@ export async function notifyError(title: string, message?: string) {
         displayMessage = parsed.message;
         console.error(`[Backend Error Context] ${title}`, parsed.debug);
       }
-    } catch {
-      // Normal string error.
-    }
+    } catch {}
   }
 
   const body = displayMessage !== title ? displayMessage : '';
