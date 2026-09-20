@@ -121,10 +121,8 @@ pub async fn handle_scan_records(
 
     let mut truncated = false;
     {
-        let mut pending = guard
-            .pending_studio_records
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut pending =
+            guard.pending_studio_records.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let current_len = pending.len();
         if current_len < super::MAX_STUDIO_RECORDS {
             let available = super::MAX_STUDIO_RECORDS - current_len;
