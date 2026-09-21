@@ -30,7 +30,7 @@ export async function getStudioPlaceIdFallback(): Promise<string> {
 export async function fetchTelemetry(url: string, options?: RequestInit): Promise<Response> {
   if (isTauriRuntime()) {
     const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-    return tauriFetch(url, options);
+    return tauriFetch(url, options as Parameters<typeof tauriFetch>[1]);
   } else {
     return fetch(url, options);
   }

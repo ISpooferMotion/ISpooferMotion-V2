@@ -469,7 +469,6 @@ fn value_to_string(value: &Value) -> Option<String> {
 
 #[tauri::command]
 #[specta::specta]
-
 pub async fn get_place_id_from_creator(
     app: AppHandle,
     creator_type: String,
@@ -853,7 +852,6 @@ pub async fn clear_downloads_directory_command(app: AppHandle) -> crate::error::
 
 #[tauri::command]
 #[specta::specta]
-
 pub async fn find_asset_by_name(
     cookie: String,
     asset_type: String,

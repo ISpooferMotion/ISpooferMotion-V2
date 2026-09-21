@@ -2,7 +2,6 @@ use crate::commands::AnyValue;
 use validator::Validate;
 
 #[derive(serde::Deserialize, specta::Type, Validate)]
-
 pub struct SpooferActionRequest {
     #[validate(length(min = 1))]
     pub assets: Option<String>,

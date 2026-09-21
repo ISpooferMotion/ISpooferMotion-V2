@@ -125,7 +125,6 @@ unsafe extern "system" fn enum_windows_proc(
 
 #[tauri::command]
 #[specta::specta]
-
 pub async fn focus_and_save_studio(pid: u32) -> crate::error::Result<()> {
     tokio::task::spawn_blocking(move || {
         let mut target_hwnd = std::ptr::null_mut();
@@ -338,7 +337,6 @@ fn read_process_chunk(
 
 #[tauri::command]
 #[specta::specta]
-
 pub async fn scan_and_replace_multiple_strings(
     app: AppHandle,
     pid: u32,

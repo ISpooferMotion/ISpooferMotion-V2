@@ -252,7 +252,6 @@ async fn upload_path_allowed(
 
 #[tauri::command]
 #[specta::specta]
-
 pub async fn publish_asset_with_progress(
     app: AppHandle,
     file_path: String,

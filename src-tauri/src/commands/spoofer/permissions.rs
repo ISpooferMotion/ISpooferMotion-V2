@@ -348,7 +348,6 @@ pub async fn batch_grant_asset_permissions(
 
 #[tauri::command]
 #[specta::specta]
-
 pub async fn patch_asset_permissions(
     asset_id: String,
     universe_id: String,
@@ -423,7 +422,6 @@ pub async fn patch_asset_permissions(
 
 #[tauri::command]
 #[specta::specta]
-
 pub async fn set_asset_privacy(
     asset_id: String,
     privacy_status: String,

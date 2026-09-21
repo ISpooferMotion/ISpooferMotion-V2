@@ -3,7 +3,6 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 #[derive(Default)]
-
 pub struct SpooferControl {
     pub active_job_id: Option<String>,
     pub paused: bool,

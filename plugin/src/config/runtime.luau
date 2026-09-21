@@ -33,8 +33,8 @@ local MAX_PATCHES_PER_BATCH = 10000
 local MAX_HTTP_BODY_BYTES = 10000000
 local MAX_HTTP_RESPONSE_BYTES = 1000000
 
-local BASE_URL = nil
-local polling = false
+BASE_URL = nil
+polling = false
 
 local scanRunning = false
 local patchRunning = false

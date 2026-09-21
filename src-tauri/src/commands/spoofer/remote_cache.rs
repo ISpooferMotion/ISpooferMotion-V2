@@ -175,7 +175,6 @@ pub async fn push_discovery(asset_id: String, place_id: String) -> Result<(), St
 
 #[tauri::command]
 #[specta::specta]
-
 pub async fn initialize_remote_cache(
     app: tauri::AppHandle,
     push_url: Option<String>,

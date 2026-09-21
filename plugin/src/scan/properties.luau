@@ -54,18 +54,12 @@ local function getMaxRecordValueBytes(property: string): number
 	return MAX_RECORD_VALUE_BYTES
 end
 
-local function addRecord(
-	records: { Record },
-	obj: Instance,
-	property: string,
-	value: any,
-	allowNumberAssetId: boolean?
-): number
+local function addRecord(records: { Record }, obj: Instance, property: string, value: any): number
 	if type(property) ~= "string" or property == "" then
 		return 0
 	end
 
-	local normalized = contentValueToString(value, allowNumberAssetId)
+	local normalized = contentValueToString(value)
 	if not normalized or normalized == "" then
 		return 0
 	end
@@ -188,7 +182,7 @@ local function captureProperty(
 	end)
 
 	if ok then
-		addRecord(records, obj, property, value, true)
+		addRecord(records, obj, property, value)
 
 		if scannedProps then
 			scannedProps[property] = true
@@ -203,12 +197,12 @@ local function scanEmbeddedStringAssets(records: { Record }, obj: Instance)
 		end)
 
 		if ok then
-			local normalized = contentValueToString(val, false)
+			local normalized = contentValueToString(val)
 			if
 				normalized
 				and (stringContainsAssetReference(normalized) or isAssetFormat(normalized))
 			then
-				addRecord(records, obj, prop, normalized, false)
+				addRecord(records, obj, prop, normalized)
 			end
 		end
 	end
@@ -231,12 +225,12 @@ local function scanBundledStringProperties(
 			end)
 
 			if ok then
-				local normalized = contentValueToString(val, false)
+				local normalized = contentValueToString(val)
 				if
 					normalized
 					and (stringContainsAssetReference(normalized) or isAssetFormat(normalized))
 				then
-					addRecord(records, obj, prop, normalized, false)
+					addRecord(records, obj, prop, normalized)
 				end
 			end
 		end
@@ -279,7 +273,7 @@ local function scanSpecialInstanceAssets(
 				end)
 
 				if okJson and jsonStr then
-					addRecord(records, obj, "__Emotes__", jsonStr, false)
+					addRecord(records, obj, "__Emotes__", jsonStr)
 				end
 			end
 
@@ -293,7 +287,7 @@ local function scanSpecialInstanceAssets(
 				end)
 
 				if okJson and jsonStr then
-					addRecord(records, obj, "__Accessories__", jsonStr, false)
+					addRecord(records, obj, "__Accessories__", jsonStr)
 				end
 			end
 		end

@@ -16,10 +16,10 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
-type TauriListener = (event: { event: string; payload: unknown }) => void;
+type TauriEventHandler = (event: { event: string; payload: unknown }) => void;
 
 const { listeners } = vi.hoisted(() => ({
-  listeners: {} as Record<string, TauriListener[]>,
+  listeners: {} as Record<string, TauriEventHandler[]>,
 }));
 
 vi.mock('@tauri-apps/api/core', () => {

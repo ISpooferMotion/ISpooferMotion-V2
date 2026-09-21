@@ -11,7 +11,6 @@ use types::SpooferActionRequest;
 
 #[tauri::command]
 #[specta::specta]
-
 pub async fn run_spoofer_action(
     app: AppHandle,
     data: SpooferActionRequest,

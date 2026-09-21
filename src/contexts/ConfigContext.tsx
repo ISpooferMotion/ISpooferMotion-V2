@@ -82,9 +82,6 @@ export const ConfigProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setAssetStatus(assetId, { stage: 'downloading' });
         }
 
-        if (msg.includes('candidate Place ID')) {
-        }
-
         if (msg.toLowerCase().includes('upload') && msg.includes('asset')) {
           const uploadMatch = msg.match(/asset (\S+)/i);
           if (uploadMatch) {

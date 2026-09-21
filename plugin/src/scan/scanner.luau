@@ -48,7 +48,7 @@ local function scanAttributeRecords(records: { Record }, obj: Instance)
 			local normalized = contentValueToString(value)
 			if normalized then
 				if isAssetFormat(value) or stringContainsAssetReference(normalized) then
-					addRecord(records, obj, "__Attribute__:" .. key, normalized, false)
+					addRecord(records, obj, "__Attribute__:" .. key, normalized)
 				end
 			end
 		end
@@ -95,7 +95,7 @@ local function scanTagRecords(records: { Record }, obj: Instance)
 	end)
 
 	if okJson and jsonStr then
-		addRecord(records, obj, "__Tags__", jsonStr, false)
+		addRecord(records, obj, "__Tags__", jsonStr)
 	end
 end
 
@@ -118,7 +118,7 @@ local function scanValueObjectRecord(records: { Record }, obj: Instance)
 	end
 
 	if isAssetFormat(val) or stringContainsAssetReference(normalized) then
-		addRecord(records, obj, "Value", normalized, false)
+		addRecord(records, obj, "Value", normalized)
 	end
 end
 
@@ -160,7 +160,7 @@ local function scanScriptSourceRecord(records: { Record }, obj: Instance)
 		logToPlugin("[Warning] [ISpooferMotion] Skipping oversized script source: " .. fullName)
 		return
 	end
-	addRecord(records, obj, "Source", source, false)
+	addRecord(records, obj, "Source", source)
 end
 
 local FLUSH_MAX_RETRIES: number = 10
