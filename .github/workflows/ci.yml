@@ -73,7 +73,7 @@ jobs:
         with:
           bun-version: 1.3.14
 
-      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: x86_64-pc-windows-msvc
           components: rustfmt, clippy
