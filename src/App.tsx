@@ -1,7 +1,8 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 import Sidebar from './components/layout/Sidebar';
 import Titlebar from './components/layout/Titlebar';
+import { V3_PROMO_SEEN_KEY, V3PromoModal } from './components/modals/V3PromoModal';
 import { PortDiagnosticBanner } from './components/shared/PortDiagnosticBanner';
 import { RobloxStatusBanner } from './components/shared/RobloxStatusBanner';
 import { TutorialGate } from './components/tutorial/TutorialGate';
@@ -20,11 +21,30 @@ const AccountsView = lazy(() => import('./components/views/accounts/AccountsView
 
 export default function App() {
   const { t } = useLanguage();
+  const [showV3Promo, setShowV3Promo] = useState(false);
   const { config, updateConfig } = useConfig();
   const activeTab = config.ui.activeTab;
   const isExplorerOpen = config.ui.assetExplorerOpen;
 
   const { maintenance, isRobloxApiDown } = useAppInitialization();
+
+  useEffect(() => {
+    if (maintenance.mode || !config.ui.tutorialCompleted) return;
+
+    if (import.meta.env.DEV) {
+      setShowV3Promo(true);
+      return;
+    }
+
+    try {
+      if (localStorage.getItem(V3_PROMO_SEEN_KEY) === '1') return;
+
+      localStorage.setItem(V3_PROMO_SEEN_KEY, '1');
+      setShowV3Promo(true);
+    } catch (error) {
+      console.warn('Unable to persist V3 promotion state.', error);
+    }
+  }, [config.ui.tutorialCompleted, maintenance.mode]);
 
   const setActiveTab = (tabId: string) => updateConfig('ui', 'activeTab', tabId);
   const setIsExplorerOpen = (isOpen: boolean) => updateConfig('ui', 'assetExplorerOpen', isOpen);
@@ -57,7 +77,6 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden text-foreground relative font-sans selection:bg-primary/30 antialiased bg-background">
-      {}
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
       <div className="flex flex-col flex-1 min-w-0 h-full relative z-10">
@@ -76,7 +95,6 @@ export default function App() {
                     setIsOpen={setIsExplorerOpen}
                     mode="main"
                   />
-                  {}
                   <div className="hidden" aria-hidden>
                     <SpoofingView />
                   </div>
@@ -106,6 +124,7 @@ export default function App() {
       </div>
 
       <TutorialGate />
+      <V3PromoModal open={showV3Promo} onOpenChange={setShowV3Promo} />
     </div>
   );
 }

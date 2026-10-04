@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -62,5 +63,15 @@ describe('Sidebar', () => {
 
     expect(activityBtn).toHaveClass('bg-bg-elevated');
     expect(spoofingBtn).not.toHaveClass('bg-bg-elevated');
+  });
+
+  it('opens the V3 pricing page from the sidebar', () => {
+    render(<Sidebar activeTab="spoofing" onTabChange={() => {}} />);
+
+    fireEvent.click(screen.getByText('Purchase V3'));
+
+    expect(invoke).toHaveBeenCalledWith('open_external', {
+      url: 'https://ispoofermotion.com/pricing',
+    });
   });
 });

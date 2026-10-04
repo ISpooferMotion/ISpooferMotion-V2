@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import {
   ChevronLeft,
   ChevronRight,
+  Crown,
   History,
   ScanLine,
   Settings,
@@ -10,12 +11,10 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import IsmLogoDark from '../../assets/ism_logo_dark.webp';
-import IsmLogoLight from '../../assets/ism_logo_light.webp';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
 import { cn } from '../../lib/utils';
-import { isTauriRuntime } from '../../utils/tauriRuntime';
+import { openV3PurchasePage } from '../modals/V3PromoModal';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import ProfilePopup from './ProfilePopup';
@@ -55,7 +54,6 @@ export default function Sidebar({
           isCollapsed ? 'w-16' : 'w-[220px]',
         )}
       >
-        {}
         <div
           className={cn(
             'flex items-center gap-2 mb-2 pl-[12px] pr-3 h-10 shrink-0 justify-between',
@@ -80,26 +78,12 @@ export default function Sidebar({
                 </div>
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  {isTauriRuntime() ? (
-                    <>
-                      <img
-                        src={IsmLogoLight}
-                        className="w-full h-full object-contain block dark:hidden select-none pointer-events-none"
-                        alt="Logo"
-                      />
-                      <img
-                        src={IsmLogoDark}
-                        className="w-full h-full object-contain hidden dark:block select-none pointer-events-none"
-                        alt="Logo"
-                      />
-                    </>
-                  ) : (
-                    <img
-                      src="/ispoofermotion-logo-dark.png"
-                      className="w-full h-full object-contain"
-                      alt="Logo"
-                    />
-                  )}
+                  <img
+                    src="/ism_logo_theme_swap.svg"
+                    className="w-full h-full object-contain select-none pointer-events-none"
+                    alt="ISpooferMotion"
+                    draggable={false}
+                  />
                 </div>
               )}
             </div>
@@ -198,7 +182,34 @@ export default function Sidebar({
           })}
         </div>
 
-        <div className="pt-2 mt-auto">
+        <div className="pt-2 mt-auto space-y-1">
+          {isCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger>
+                <button
+                  type="button"
+                  aria-label="Purchase V3"
+                  onClick={() => void openV3PurchasePage()}
+                  className="flex h-10 w-full items-center justify-center rounded-[4.5px] text-text-secondary transition-colors hover:bg-bg-elevated/70 hover:text-text-primary"
+                >
+                  <Crown size={18} className="opacity-70" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="font-semibold text-xs py-1 px-2">
+                Purchase V3
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void openV3PurchasePage()}
+              className="flex h-10 w-full items-center gap-3 rounded-[4.5px] px-[15px] text-left text-text-secondary transition-colors hover:bg-bg-elevated/70 hover:text-text-primary"
+            >
+              <Crown size={18} className="shrink-0 opacity-70" />
+              <span className="text-[13px] font-medium tracking-wide">Purchase V3</span>
+            </button>
+          )}
+
           {isCollapsed ? (
             <Tooltip>
               <TooltipTrigger>

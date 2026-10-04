@@ -290,6 +290,21 @@ pub async fn handle_poll(
             if let Some(id) =
                 query.place_id.as_deref().filter(|i| !i.trim().is_empty() && *i != "0")
             {
+                let place_changed = guard.studio_place_id.as_deref().is_some_and(|old| old != id);
+                if place_changed {
+                    // A Studio place change invalidates every object token from the previous scan.
+                    guard.studio_records = std::sync::Arc::new(Vec::new());
+                    guard.pending_studio_records =
+                        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+                    guard.stored_patches.clear();
+                    if !guard.stored_mappings.is_empty() {
+                        guard.request_sounds = true;
+                        guard.request_animations = true;
+                        guard.request_images = true;
+                        guard.request_meshes = true;
+                        guard.request_script_refs = true;
+                    }
+                }
                 guard.studio_place_id = Some(id.to_string());
             }
             let request_assets = guard.request_sounds
@@ -397,49 +412,24 @@ pub async fn handle_replace_ids(
         payload.get("mappings").and_then(Value::as_array).cloned().unwrap_or_default();
     let over_limit = mappings_raw.len() > 5_000;
     let mappings = mappings_raw.into_iter().take(5_000).collect::<Vec<_>>();
-    let records = std::sync::Arc::clone(&state.data.read().await.studio_records);
-    let plan_mappings = mappings.clone();
-    let plan_records = std::sync::Arc::clone(&records);
-    let patches = tokio::task::spawn_blocking(move || plan_patches(&plan_records, &plan_mappings))
-        .await
-        .unwrap_or_else(|e| {
-            log::error!("Failed to plan patches: {}", e);
-            Vec::new()
-        });
-    let mut guard = state.data.write().await;
-    if records.is_empty() {
-        guard.stored_mappings = mappings;
-        guard.stored_patches = patches;
-        guard.request_sounds = true;
-        guard.request_animations = true;
-        guard.request_images = true;
-        guard.request_meshes = true;
-        guard.request_script_refs = true;
-        guard.notify.notify_waiters();
-    } else {
-        if patches.is_empty() {
-            let _ = state.app_handle.emit(
-                "spoofer-log",
-                serde_json::json!({
-                    "level": "warn",
-                    "message": "0 patches could be planned from the current scan data. Nothing to replace."
-                }),
-            );
-            let _ = state.app_handle.emit(
-                "patch-results",
-                serde_json::json!({
-                    "failedPatches": [],
-                    "succeeded": 0,
-                    "failed": 0,
-                    "total": 0
-                }),
-            );
-        } else {
-            guard.stored_mappings = mappings;
-            guard.stored_patches = patches;
-            guard.notify.notify_waiters();
-        }
+
+    if mappings.is_empty() {
+        return Json(serde_json::json!({ "ok": false, "truncated": over_limit }));
     }
+
+    // Replacement patches depend on scan-generation object tokens owned by the plugin.
+    // Force a fresh scan instead of planning against cached records that may belong to a
+    // previous Studio place or pre-reload object graph.
+    let mut guard = state.data.write().await;
+    guard.stored_mappings = mappings;
+    guard.stored_patches.clear();
+    guard.request_sounds = true;
+    guard.request_animations = true;
+    guard.request_images = true;
+    guard.request_meshes = true;
+    guard.request_script_refs = true;
+    guard.notify.notify_waiters();
+
     Json(serde_json::json!({ "ok": true, "truncated": over_limit }))
 }
 

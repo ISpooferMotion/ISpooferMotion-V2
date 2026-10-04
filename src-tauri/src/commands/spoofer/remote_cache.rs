@@ -1,16 +1,9 @@
-use dashmap::DashMap;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::sync::OnceLock;
 use std::time::Duration;
 
 const MAX_WRITE_ATTEMPTS: usize = 3;
 const BASE_RETRY_DELAY_MS: u64 = 250;
-
-#[derive(Clone, Debug)]
-pub struct CachedContext {
-    pub place_id: String,
-    pub is_invalidated: bool,
-}
 
 static PUSH_URL: OnceLock<std::sync::RwLock<Option<String>>> = OnceLock::new();
 
@@ -25,29 +18,6 @@ fn read_push_url() -> Option<String> {
 fn set_push_url(push_url: Option<String>) {
     let mut guard = get_push_url_lock().write().unwrap_or_else(std::sync::PoisonError::into_inner);
     *guard = push_url;
-}
-
-static LOCAL_CACHE: OnceLock<DashMap<String, CachedContext>> = OnceLock::new();
-
-fn get_local_cache() -> &'static DashMap<String, CachedContext> {
-    LOCAL_CACHE.get_or_init(DashMap::new)
-}
-
-pub fn get_local_context(asset_id: &str) -> Option<String> {
-    let cache = get_local_cache();
-    if let Some(entry) = cache.get(asset_id) {
-        if !entry.is_invalidated {
-            return Some(entry.place_id.clone());
-        }
-    }
-    None
-}
-
-pub fn invalidate_context(asset_id: &str) {
-    let cache = get_local_cache();
-    if let Some(mut entry) = cache.get_mut(asset_id) {
-        entry.is_invalidated = true;
-    }
 }
 
 fn deserialize_id<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -125,7 +95,13 @@ async fn write_remote_context(
             );
         }
 
-        match client.post(url).json(context).send().await {
+        match client
+            .post(url)
+            .header("x-ispoofermotion-client", "ispoofermotion-v2")
+            .json(context)
+            .send()
+            .await
+        {
             Ok(response) if response.status().is_success() => return Ok(()),
             Ok(response) => {
                 let status = response.status();
@@ -152,19 +128,6 @@ async fn write_remote_context(
 }
 
 pub async fn push_discovery(asset_id: String, place_id: String) -> Result<(), String> {
-    let cache = get_local_cache();
-    cache.insert(
-        asset_id.clone(),
-        CachedContext { place_id: place_id.clone(), is_invalidated: false },
-    );
-
-    if cache.len() > 50_000 {
-        let to_remove: Vec<String> = cache.iter().take(10_000).map(|e| e.key().clone()).collect();
-        for key in to_remove {
-            cache.remove(&key);
-        }
-    }
-
     let Some(url) = read_push_url().filter(|url| !url.is_empty()) else {
         return Ok(());
     };
@@ -245,7 +208,7 @@ mod tests {
     use super::*;
     use axum::{
         extract::{Json, State},
-        http::StatusCode,
+        http::{HeaderMap, StatusCode},
         routing::post,
         Router,
     };
@@ -264,8 +227,15 @@ mod tests {
 
     async fn cache_handler(
         State(state): State<TestState>,
+        headers: HeaderMap,
         Json(context): Json<RemoteAssetContext>,
     ) -> StatusCode {
+        if headers.get("x-ispoofermotion-client").and_then(|value| value.to_str().ok())
+            != Some("ispoofermotion-v2")
+        {
+            return StatusCode::BAD_REQUEST;
+        }
+
         state.contexts.lock().expect("contexts lock").push(context);
         let attempt = state.attempts.fetch_add(1, Ordering::SeqCst) + 1;
         if attempt <= state.fail_attempts {

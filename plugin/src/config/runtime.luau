@@ -21,7 +21,7 @@ local HttpService = game:GetService("HttpService")
 local ScriptEditorService = game:GetService("ScriptEditorService")
 
 local PORT_START = 14285
-local PORT_END = 14289
+local PORT_END = 14320
 
 local SEND_CHUNK_SIZE = 5000
 

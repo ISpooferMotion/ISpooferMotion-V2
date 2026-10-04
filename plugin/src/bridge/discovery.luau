@@ -151,7 +151,7 @@ local function discoverServer(): (boolean, boolean, string?)
 		)
 	else
 		reason = string.format(
-			"No desktop app found on ports %d-%d. Make sure it's running. If it is, the app uses 14285-14289 by default -- check the Daemon Port range in Settings covers those.",
+			"No desktop app found on ports %d-%d. Make sure ISpooferMotion is running and Roblox Studio HTTP requests are enabled.",
 			portStart,
 			portEnd
 		)

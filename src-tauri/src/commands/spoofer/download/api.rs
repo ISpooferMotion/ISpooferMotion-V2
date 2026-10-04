@@ -355,21 +355,11 @@ pub async fn batch_get_download_urls_for_assets(
             continue;
         }
         if let Ok(id) = id_str.parse::<i64>() {
-            let mut final_place_id = per_asset_place_ids
+            let final_place_id = per_asset_place_ids
                 .and_then(|map| map.get(id_str))
                 .filter(|p| is_valid_numeric_id(p))
                 .and_then(|p| p.parse::<i64>().ok())
                 .or(place_id_num);
-
-            if final_place_id.is_none() {
-                if let Some(cached_place_id_str) =
-                    crate::commands::spoofer::remote_cache::get_local_context(id_str)
-                {
-                    if let Ok(cached_id) = cached_place_id_str.parse::<i64>() {
-                        final_place_id = Some(cached_id);
-                    }
-                }
-            }
 
             body.push(BatchAssetRequest {
                 asset_name: id_str.clone(),

@@ -163,15 +163,7 @@ pub async fn download_animation_asset_with_progress(
     );
 
     let client = crate::utils::get_http_client_with_proxy(proxy_url.as_deref());
-    let mut place_ids = parse_place_ids(place_id.as_deref());
-
-    if let Some(cached_place_id) =
-        crate::commands::spoofer::remote_cache::get_local_context(&asset_id)
-    {
-        if !place_ids.contains(&cached_place_id) {
-            place_ids.insert(0, cached_place_id);
-        }
-    }
+    let place_ids = parse_place_ids(place_id.as_deref());
 
     let mut candidate_urls = Vec::new();
 
@@ -436,7 +428,6 @@ pub async fn download_animation_asset_with_progress(
                     "Download failed for asset {asset_id} ({status_reason}) from {download_url}"
                 );
                 last_error = format!("Download failed: {status_reason}");
-                crate::commands::spoofer::remote_cache::invalidate_context(&asset_id);
 
                 if should_attempt_claim(status) && !attempted_claim {
                     attempted_claim = true;

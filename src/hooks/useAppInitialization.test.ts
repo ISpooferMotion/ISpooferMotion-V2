@@ -129,6 +129,20 @@ describe('useAppInitialization', () => {
     expect(result.current.maintenance).toEqual({ mode: false, message: '' });
   });
 
+  it('keeps the V2 cache writer enabled when the optional config endpoint is unavailable', async () => {
+    mockFetch.mockRejectedValue(new Error('offline'));
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    renderHook(() => useAppInitialization());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(tauriCore.invoke).toHaveBeenCalledWith('initialize_remote_cache', {
+      pushUrl: 'https://ispoofermotion.com/api/cache',
+    });
+  });
+
   it('disables cache contributions and heartbeat even if config fetch fails', async () => {
     useConfigStore.setState((state) => ({
       config: {
@@ -202,7 +216,10 @@ describe('useAppInitialization', () => {
     const cacheCalls = vi
       .mocked(tauriCore.invoke)
       .mock.calls.filter(([command]) => command === 'initialize_remote_cache');
-    expect(cacheCalls).toEqual([['initialize_remote_cache', { pushUrl: null }]]);
+    expect(cacheCalls).toEqual([
+      ['initialize_remote_cache', { pushUrl: 'https://ispoofermotion.com/api/cache' }],
+      ['initialize_remote_cache', { pushUrl: null }],
+    ]);
   });
 
   it('registers keyboard shortcuts and events on mount', async () => {

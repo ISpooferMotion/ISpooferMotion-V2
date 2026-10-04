@@ -40,17 +40,20 @@ export function useAppInitialization() {
   useEffect(() => {
     let cancelled = false;
     const tauriRuntime = isTauriRuntime();
+    const baseUrl =
+      import.meta.env.VITE_API_BASE_URL === undefined
+        ? 'https://ispoofermotion.com'
+        : import.meta.env.VITE_API_BASE_URL;
+    const defaultCacheWriteUrl = `${baseUrl}/api/cache`;
 
-    if (tauriRuntime && !telemetryEnabled) {
-      void invoke('initialize_remote_cache', { pushUrl: null }).catch(console.warn);
+    if (tauriRuntime) {
+      void invoke('initialize_remote_cache', {
+        pushUrl: telemetryEnabled ? defaultCacheWriteUrl : null,
+      }).catch(console.warn);
     }
 
     const fetchConfig = async () => {
       try {
-        const baseUrl =
-          import.meta.env.VITE_API_BASE_URL === undefined
-            ? 'https://ispoofermotion.com'
-            : import.meta.env.VITE_API_BASE_URL;
         let res;
         if (tauriRuntime) {
           const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
@@ -71,14 +74,6 @@ export function useAppInitialization() {
               ? data.maintenanceMessage
               : '',
         });
-
-        if (tauriRuntime && telemetryEnabled) {
-          const pushUrl =
-            typeof data.communityCacheUrl === 'string' && data.communityCacheUrl.trim()
-              ? data.communityCacheUrl
-              : `${baseUrl}/api/v1/cache/discovery`;
-          void invoke('initialize_remote_cache', { pushUrl }).catch(console.warn);
-        }
       } catch (e) {
         if (!cancelled) {
           console.warn('Could not connect to app config server:', e);

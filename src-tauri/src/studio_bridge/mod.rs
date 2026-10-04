@@ -21,7 +21,6 @@ use tower_http::{
     limit::RequestBodyLimitLayer,
 };
 
-use messages::plan_patches;
 use middleware::require_json_for_post;
 use server::{
     get_last_animations, get_last_images, get_last_meshes, get_last_script_refs, get_last_sounds,
@@ -86,19 +85,19 @@ pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
     if mappings.is_empty() {
         return false;
     }
-    let records = std::sync::Arc::clone(&data.read().await.studio_records);
-    let records_empty = records.is_empty();
-    let patches = if records_empty { Vec::new() } else { plan_patches(&records, &mappings) };
+
+    // Always plan replacement patches from a fresh Studio scan. The object tokens
+    // in studio_records are only valid for the scan generation that produced them;
+    // reusing older records after a place reload/change can queue patches that can
+    // never resolve inside the plugin.
     let mut guard = data.write().await;
     guard.stored_mappings = mappings;
-    guard.stored_patches = patches;
-    if records_empty {
-        guard.request_sounds = true;
-        guard.request_animations = true;
-        guard.request_images = true;
-        guard.request_meshes = true;
-        guard.request_script_refs = true;
-    }
+    guard.stored_patches.clear();
+    guard.request_sounds = true;
+    guard.request_animations = true;
+    guard.request_images = true;
+    guard.request_meshes = true;
+    guard.request_script_refs = true;
     guard.notify.notify_waiters();
     true
 }
@@ -139,8 +138,8 @@ pub async fn start_server(app_handle: AppHandle) {
             defaults_occupied.iter().map(|o| format!("{}:{}", o.exe, o.port)).collect();
         log::warn!(
             "Plugin server moved past the default ports to {bound_port}: ports \
-             14285-14289 occupied by [{}]. Set the Studio plugin's Daemon Port \
-             Scan Range to 14285-{bound_port} so it can find the app.",
+             14285-14289 occupied by [{}]. The Studio plugin scans the extended \
+             fallback range automatically.",
             names.join(", ")
         );
     }
