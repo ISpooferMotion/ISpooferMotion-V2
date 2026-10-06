@@ -9,12 +9,12 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
   pull_request:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to create or update (example: v2.1.8)'
+        description: "Release tag to create or update (example: v2.1.8)"
         required: true
         type: string
 
@@ -50,7 +50,7 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
 
       - run: bun install --frozen-lockfile
-      - run:       - run: bun run format:prettier:check
+      - run: bun run format:prettier:check
       - run: bun run format:stylua:check
       - run: bun run build:plugin
       - run: bun run typecheck
@@ -89,7 +89,7 @@ jobs:
           cache-on-failure: true
 
       - run: bun install --frozen-lockfile
-      - run:       - run: bun run build:plugin
+      - run: bun run build:plugin
       - run: bun run rust:check
       - run: bun run rust:lint
       - run: bun run rust:test
@@ -183,17 +183,17 @@ jobs:
           - platform: windows-latest
             os: windows
             bundles: nsis
-            args: ''
+            args: ""
 
           - platform: macos-latest
             os: macos
             bundles: dmg
-            args: '--target universal-apple-darwin'
+            args: "--target universal-apple-darwin"
 
           - platform: ubuntu-22.04
             os: linux
             bundles: appimage
-            args: ''
+            args: ""
 
     steps:
       - name: Checkout repository
@@ -436,7 +436,7 @@ jobs:
           RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare-release.outputs.RELEASE_TAG }}
           RELEASE_PRERELEASE: false
           RELEASE_EVENT_ACTION: published
-          DISCORD_RELEASE_ROLE_ID: '1457029900291670210'
+          DISCORD_RELEASE_ROLE_ID: "1457029900291670210"
 
         run: |
           python3 <<'PY'
