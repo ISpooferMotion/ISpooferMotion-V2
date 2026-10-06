@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 7D1A36BB5D833CAECF9313F3
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 export type TauriEventPayload<T> = {
   payload: T;
 };
@@ -51,3 +55,5 @@ export type ScriptRefProgressPayload = {
   resolved?: number;
   total?: number;
 };
+
+// ISM-V2-PROVENANCE-END: 7D1A36BB5D833CAECF9313F3

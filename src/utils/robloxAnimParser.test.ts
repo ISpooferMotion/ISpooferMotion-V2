@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: D4640DCE296D5D2E0C01B499
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import * as tauriCore from '@tauri-apps/api/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,3 +36,5 @@ describe('robloxAnimParser', () => {
     expect(consoleSpy).toHaveBeenCalled();
   });
 });
+
+// ISM-V2-PROVENANCE-END: D4640DCE296D5D2E0C01B499

@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 008A527CA17457F5873782B0
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { Button as ButtonPrimitive } from '@base-ui/react/button';
 import { cva, type VariantProps } from 'class-variance-authority';
 
@@ -56,3 +60,5 @@ function Button({
 }
 
 export { Button, buttonVariants };
+
+// ISM-V2-PROVENANCE-END: 008A527CA17457F5873782B0

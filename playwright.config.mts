@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 218E7581DF730F056D304C06
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { defineConfig, devices } from '@playwright/test';
 import type { PlaywrightTestConfig } from '@playwright/test';
 
@@ -33,3 +37,5 @@ const config: PlaywrightTestConfig = {
 };
 
 export default config;
+
+// ISM-V2-PROVENANCE-END: 218E7581DF730F056D304C06

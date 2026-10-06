@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 5BC053BF8752BE616905D9B2
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 pub mod api_dump;
 pub mod commands;
 pub mod domain;
@@ -198,3 +202,5 @@ pub fn run() {
         .expect("error while running tauri application");
     log::info!("ISpooferMotion: Exiting run()");
 }
+
+// ISM-V2-PROVENANCE-END: 5BC053BF8752BE616905D9B2

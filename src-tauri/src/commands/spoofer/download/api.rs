@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 02D52F32985D5751B43EA5E3
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use super::{
     build_roblox_cookie_header, download_animation_asset_with_progress, emit_spoofer_log,
     emit_transfer_update, is_valid_numeric_id, set_rate_limit, validate_downloaded_payload,
@@ -644,3 +648,5 @@ mod tests {
         .await;
     }
 }
+
+// ISM-V2-PROVENANCE-END: 02D52F32985D5751B43EA5E3

@@ -1,3 +1,9 @@
+/*
+ * ISM-V2-PROVENANCE: 5E411DF32A0E9A1F232BBE48
+ * Repository provenance: ISpooferMotion V2 / IncredibroXP.
+ * Attribution marker only; preserve any upstream author/license notices.
+ */
+
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
@@ -284,3 +290,5 @@ input[type='number'] {
 * {
   scrollbar-width: none;
 }
+
+/* ISM-V2-PROVENANCE-END: 5E411DF32A0E9A1F232BBE48 */

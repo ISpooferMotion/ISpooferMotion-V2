@@ -1,3 +1,7 @@
+# ISM-V2-PROVENANCE: 06EDA7916B7D917A93160B47
+# Repository provenance: ISpooferMotion V2 / IncredibroXP.
+# Attribution marker only; preserve any upstream author/license notices.
+
 name: 'CodeQL Advanced'
 
 on:
@@ -55,3 +59,5 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: '/language:${{matrix.language}}'
+
+# ISM-V2-PROVENANCE-END: 06EDA7916B7D917A93160B47

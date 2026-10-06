@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 5A7D434E081FD10D6AFA9250
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -75,3 +79,5 @@ describe('Sidebar', () => {
     });
   });
 });
+
+// ISM-V2-PROVENANCE-END: 5A7D434E081FD10D6AFA9250

@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: C9602F8634F6D254F1E9F3CD
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use super::{build_roblox_cookie_header, COOKIE};
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use serde::{Deserialize, Serialize};
@@ -458,3 +462,5 @@ pub async fn set_asset_privacy(
 
     Ok(true)
 }
+
+// ISM-V2-PROVENANCE-END: C9602F8634F6D254F1E9F3CD

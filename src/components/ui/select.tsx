@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 93D88A4E22327A7052597276
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 'use client';
 
 import { Select as SelectPrimitive } from '@base-ui/react/select';
@@ -188,3 +192,5 @@ export {
   SelectTrigger,
   SelectValue,
 };
+
+// ISM-V2-PROVENANCE-END: 93D88A4E22327A7052597276

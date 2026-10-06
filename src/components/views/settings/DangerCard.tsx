@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: A641C3A79CDD8088B69B3E1C
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { ask } from '@tauri-apps/plugin-dialog';
 import { TriangleAlert } from 'lucide-react';
 
@@ -48,3 +52,5 @@ export default function DangerCard() {
     </SettingCard>
   );
 }
+
+// ISM-V2-PROVENANCE-END: A641C3A79CDD8088B69B3E1C

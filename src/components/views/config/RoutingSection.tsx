@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 74E23AF6484374C5AA5345BC
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { Gauge } from 'lucide-react';
 
 import { useConfig } from '../../../contexts/ConfigContext';
@@ -110,3 +114,5 @@ export default function RoutingSection() {
     </SettingCard>
   );
 }
+
+// ISM-V2-PROVENANCE-END: 74E23AF6484374C5AA5345BC

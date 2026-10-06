@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 6A662F412F4C38DAB7FC952B
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { Ban, Play, RotateCcw, ScanSearch } from 'lucide-react';
 
 import { useLanguage } from '../../../contexts/LanguageContext';
@@ -140,3 +144,5 @@ export function SpoofingControls({
     </div>
   );
 }
+
+// ISM-V2-PROVENANCE-END: 6A662F412F4C38DAB7FC952B

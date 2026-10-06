@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: B4CB12EA8E83F313F155B16A
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { AlertCircle } from 'lucide-react';
 
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -23,3 +27,5 @@ export function RobloxStatusBanner({ isVisible }: RobloxStatusBannerProps) {
     </>
   );
 }
+
+// ISM-V2-PROVENANCE-END: B4CB12EA8E83F313F155B16A

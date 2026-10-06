@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: B72C4745120322313A99C93E
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { create } from 'zustand';
 
 import type { SpooferAssetResult } from '../types/tauriEvents';
@@ -557,3 +561,5 @@ export const applyReplacements = async (
     setIsReplacing(false);
   }
 };
+
+// ISM-V2-PROVENANCE-END: B72C4745120322313A99C93E

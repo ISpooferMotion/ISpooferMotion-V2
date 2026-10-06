@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: E13173F4CA700AD835C0DB48
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import {
   CheckCircle2,
@@ -276,3 +280,5 @@ export default function ActivityView() {
     </div>
   );
 }
+
+// ISM-V2-PROVENANCE-END: E13173F4CA700AD835C0DB48

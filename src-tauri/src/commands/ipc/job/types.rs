@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 428B4097029415576D2481E7
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use crate::commands::AnyValue;
 use validator::Validate;
 
@@ -63,3 +67,5 @@ pub struct AssetDetails {
     pub name: String,
     pub description: String,
 }
+
+// ISM-V2-PROVENANCE-END: 428B4097029415576D2481E7

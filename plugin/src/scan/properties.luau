@@ -1,5 +1,9 @@
 --!nocheck
 --!nolint
+-- ISM-V2-PROVENANCE: 7A9927842D4A485DB09C6C8D
+-- Repository provenance: ISpooferMotion V2 / IncredibroXP.
+-- Attribution marker only; preserve any upstream author/license notices.
+
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 
@@ -435,3 +439,5 @@ local function scanSpecialInstanceAssets(
 		end
 	end
 end
+
+-- ISM-V2-PROVENANCE-END: 7A9927842D4A485DB09C6C8D

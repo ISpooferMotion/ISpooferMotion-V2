@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 79A70993B30B9DB2713513CB
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { test, expect } from '@playwright/test';
 import { createTauriTest } from '@srsholmes/tauri-playwright';
 
@@ -21,3 +25,5 @@ test.describe('ISpooferMotion E2E', () => {
     await expect(mainPage!.locator('text=ISpooferMotion')).toBeVisible({ timeout: 15000 });
   });
 });
+
+// ISM-V2-PROVENANCE-END: 79A70993B30B9DB2713513CB

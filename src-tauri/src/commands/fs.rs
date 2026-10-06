@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: D9F99C463DAB34B1088ABA30
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
 
@@ -115,3 +119,5 @@ pub async fn show_notification(
         .map_err(|err| err.to_string())?;
     Ok(true)
 }
+
+// ISM-V2-PROVENANCE-END: D9F99C463DAB34B1088ABA30

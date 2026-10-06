@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 3E417535E57F15541357D75B
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use axum::extract::{Json, Query, State};
 use serde::Deserialize;
 use serde_json::Value;
@@ -711,3 +715,5 @@ mod tests {
         assert_eq!(snap.assets[0], json!("test"));
     }
 }
+
+// ISM-V2-PROVENANCE-END: 3E417535E57F15541357D75B

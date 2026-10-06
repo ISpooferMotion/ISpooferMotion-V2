@@ -1,6 +1,10 @@
 --!nocheck
 --!nolint
 --# selene: allow(global_usage, shadowing, unused_variable)
+-- ISM-V2-PROVENANCE: DFD19D638E11D0B47F5C5780
+-- Repository provenance: ISpooferMotion V2 / IncredibroXP.
+-- Attribution marker only; preserve any upstream author/license notices.
+
 local tests_passed = 0
 local tests_failed = 0
 
@@ -191,3 +195,5 @@ print(string.format("\nResults: %d passed, %d failed", tests_passed, tests_faile
 if tests_failed > 0 then
 	error("Test suite failed")
 end
+
+-- ISM-V2-PROVENANCE-END: DFD19D638E11D0B47F5C5780

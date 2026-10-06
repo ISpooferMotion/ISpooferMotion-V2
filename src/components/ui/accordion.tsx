@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 49788D3C87704DB34009E261
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { Accordion as AccordionPrimitive } from '@base-ui/react/accordion';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 
@@ -68,3 +72,5 @@ function AccordionContent({ className, children, ...props }: AccordionPrimitive.
 }
 
 export { Accordion, AccordionContent, AccordionItem, AccordionTrigger };
+
+// ISM-V2-PROVENANCE-END: 49788D3C87704DB34009E261

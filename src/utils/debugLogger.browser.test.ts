@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 5EDBFF019EBE1C3A067E8E15
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createWindow = () => {
@@ -143,3 +147,5 @@ describe('clearDebugLogs', () => {
     unsub();
   });
 });
+
+// ISM-V2-PROVENANCE-END: 5EDBFF019EBE1C3A067E8E15

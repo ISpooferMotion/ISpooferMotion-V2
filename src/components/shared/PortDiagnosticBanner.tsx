@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 93321572ECD8E08E08394E69
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { AlertTriangle } from 'lucide-react';
 
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -43,3 +47,5 @@ export function PortDiagnosticBanner() {
     </>
   );
 }
+
+// ISM-V2-PROVENANCE-END: 93321572ECD8E08E08394E69

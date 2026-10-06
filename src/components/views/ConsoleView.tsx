@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 4A015410C780F798DC48F992
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { useConfig } from '../../contexts/ConfigContext';
 import DebugConsole from './DebugConsole';
 
@@ -9,3 +13,5 @@ export default function ConsoleView() {
     </div>
   );
 }
+
+// ISM-V2-PROVENANCE-END: 4A015410C780F798DC48F992

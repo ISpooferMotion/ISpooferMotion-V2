@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 2F85A24629BF0B7A02C52F63
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import React from 'react';
 
 import { cn } from '../../../lib/utils';
@@ -212,3 +216,5 @@ export function SettingSliderItem({
     </div>
   );
 }
+
+// ISM-V2-PROVENANCE-END: 2F85A24629BF0B7A02C52F63

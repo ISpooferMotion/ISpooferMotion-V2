@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 22E33C069BE93B9930290089
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use std::path::Path;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -64,3 +68,5 @@ pub async fn inspect_payload(path: &Path) -> crate::error::Result<PayloadMeta> {
 
     Ok(PayloadMeta { file_type: "application/octet-stream".into(), extension: "unknown".into() })
 }
+
+// ISM-V2-PROVENANCE-END: 22E33C069BE93B9930290089

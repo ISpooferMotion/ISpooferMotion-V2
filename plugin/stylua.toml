@@ -1,3 +1,7 @@
+# ISM-V2-PROVENANCE: 3C62D3B251601387B1613E5C
+# Repository provenance: ISpooferMotion V2 / IncredibroXP.
+# Attribution marker only; preserve any upstream author/license notices.
+
 syntax = "Luau"
 column_width = 100
 line_endings = "Unix"
@@ -6,3 +10,5 @@ indent_width = 4
 quote_style = "AutoPreferDouble"
 call_parentheses = "Always"
 collapse_simple_statement = "Never"
+
+# ISM-V2-PROVENANCE-END: 3C62D3B251601387B1613E5C

@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 8588835C421CD5D799BB06E4
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import { useEffect, useRef } from 'react';
 
@@ -99,3 +103,5 @@ export function useStudioAssetPoll(
     };
   }, [studioConnected]);
 }
+
+// ISM-V2-PROVENANCE-END: 8588835C421CD5D799BB06E4

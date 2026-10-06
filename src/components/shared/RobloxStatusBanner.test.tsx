@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 42B80DE11DA8CBFBE88B9410
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -24,3 +28,5 @@ describe('RobloxStatusBanner', () => {
     expect(screen.getByText('Roblox API is down')).toBeInTheDocument();
   });
 });
+
+// ISM-V2-PROVENANCE-END: 42B80DE11DA8CBFBE88B9410

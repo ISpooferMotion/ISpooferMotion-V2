@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 29E60B1F714927C857DA82A3
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -81,3 +85,5 @@ if (process.platform === 'win32') {
   }
   console.log('Done.');
 }
+
+// ISM-V2-PROVENANCE-END: 29E60B1F714927C857DA82A3

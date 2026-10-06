@@ -1,3 +1,7 @@
+-- ISM-V2-PROVENANCE: CF2DCF31DADE6B9CAD6059D0
+-- Repository provenance: ISpooferMotion V2 / IncredibroXP.
+-- Attribution marker only; preserve any upstream author/license notices.
+
 local function resolveInstancePath(pathStr: string): Instance?
 	local clean = string.gsub(pathStr, "^game%.", "")
 	local parts = string.split(clean, ".")
@@ -441,3 +445,5 @@ local function scan(): ()
 		setPluginGuiStatus("Scan Failed. Waiting for scan or replacements...")
 	end
 end
+
+-- ISM-V2-PROVENANCE-END: CF2DCF31DADE6B9CAD6059D0

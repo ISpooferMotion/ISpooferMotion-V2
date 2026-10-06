@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 42790448690F009CBC22587E
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use super::{
     build_roblox_cookie_header, get_asset_cache, is_valid_numeric_id, set_rate_limit,
     wait_rate_limit, AppHandle, Duration, Manager, RateLimitBucket, Value, COOKIE,
@@ -1234,3 +1238,5 @@ pub async fn discover_asset_place_id(
     broadcast_result(None);
     Ok(None)
 }
+
+// ISM-V2-PROVENANCE-END: 42790448690F009CBC22587E

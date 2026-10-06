@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: A32B2EDB3ADFD9A287F2D5CA
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useConfig } from '../../contexts/ConfigContext';
@@ -126,3 +130,5 @@ export const TutorialGate = () => {
     />
   );
 };
+
+// ISM-V2-PROVENANCE-END: A32B2EDB3ADFD9A287F2D5CA

@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: B06621203821A0A8D9AD8962
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 
 import { isTauriRuntime } from './tauriRuntime';
@@ -250,3 +254,5 @@ function installDebugLogger() {
 }
 
 installDebugLogger();
+
+// ISM-V2-PROVENANCE-END: B06621203821A0A8D9AD8962

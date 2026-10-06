@@ -1,5 +1,11 @@
+# ISM-V2-PROVENANCE: 014AEB8775E84479CCAFA979
+# Repository provenance: ISpooferMotion V2 / IncredibroXP.
+# Attribution marker only; preserve any upstream author/license notices.
+
 blank_issues_enabled: false
 contact_links:
   - name: Question or discussion
     url: https://github.com/ISpooferMotion/ISpooferMotion-V2/discussions
     about: For general questions, use Discussions rather than opening an issue.
+
+# ISM-V2-PROVENANCE-END: 014AEB8775E84479CCAFA979

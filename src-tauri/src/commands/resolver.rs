@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: E442D045F0AD39E329BB0C66
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 
@@ -43,3 +47,5 @@ pub async fn validate_asset_ids(
 ) -> crate::error::Result<HashMap<String, String>> {
     roblox_api::validate_asset_ids(asset_ids).await
 }
+
+// ISM-V2-PROVENANCE-END: E442D045F0AD39E329BB0C66

@@ -1,3 +1,7 @@
+# ISM-V2-PROVENANCE: EAA67EB5ADAA4B0C3CE250BE
+# Repository provenance: ISpooferMotion V2 / IncredibroXP.
+# Attribution marker only; preserve any upstream author/license notices.
+
 version: 2
 updates:
   - package-ecosystem: 'bun'
@@ -20,3 +24,5 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+
+# ISM-V2-PROVENANCE-END: EAA67EB5ADAA4B0C3CE250BE

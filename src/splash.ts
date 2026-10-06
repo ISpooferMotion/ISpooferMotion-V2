@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 0140FA87C4B0C678416ED974
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { check } from '@tauri-apps/plugin-updater';
@@ -111,3 +115,5 @@ async function runSplashFlow() {
 window.addEventListener('DOMContentLoaded', () => {
   void runSplashFlow();
 });
+
+// ISM-V2-PROVENANCE-END: 0140FA87C4B0C678416ED974

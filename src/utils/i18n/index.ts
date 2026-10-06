@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 212090D6A81D61562BE84B8A
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 export interface TranslationTree {
   [key: string]: string | TranslationTree;
 }
@@ -29,3 +33,5 @@ export function getTranslation(lang: string, keyPath: string): string {
   }
   return typeof current === 'string' ? current : keyPath;
 }
+
+// ISM-V2-PROVENANCE-END: 212090D6A81D61562BE84B8A

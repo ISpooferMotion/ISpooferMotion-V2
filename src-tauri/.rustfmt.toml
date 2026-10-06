@@ -1,5 +1,11 @@
+# ISM-V2-PROVENANCE: D514680C9E8C12D5049BEC79
+# Repository provenance: ISpooferMotion V2 / IncredibroXP.
+# Attribution marker only; preserve any upstream author/license notices.
+
 edition = "2021"
 max_width = 100
 use_small_heuristics = "Max"
 reorder_imports = true
 fn_params_layout = "Tall"
+
+# ISM-V2-PROVENANCE-END: D514680C9E8C12D5049BEC79

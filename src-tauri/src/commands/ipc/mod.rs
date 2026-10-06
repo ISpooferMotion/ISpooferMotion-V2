@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: A6B9C81BD74385202993F841
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 pub mod app;
 pub mod job;
 pub mod logging;
@@ -139,3 +143,5 @@ mod tests {
         assert!(redacted.contains("####"));
     }
 }
+
+// ISM-V2-PROVENANCE-END: A6B9C81BD74385202993F841

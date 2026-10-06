@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 8C60EAF4995F5E8A6F854C95
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use super::is_valid_numeric_id;
 
 use reqwest::header::{COOKIE, USER_AGENT};
@@ -837,3 +841,5 @@ pub fn parse_place_ids(raw: Option<&str>) -> Vec<String> {
     }
     ids
 }
+
+// ISM-V2-PROVENANCE-END: 8C60EAF4995F5E8A6F854C95

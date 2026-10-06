@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: E5C0D0B62C0A1AA8815DA740
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 pub mod api;
 pub mod resolution;
 pub mod types;
@@ -661,3 +665,5 @@ mod tests {
         Ok(())
     }
 }
+
+// ISM-V2-PROVENANCE-END: E5C0D0B62C0A1AA8815DA740

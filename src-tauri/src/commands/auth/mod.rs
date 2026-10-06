@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 3296AC301A33C713743A3FBC
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 pub mod cookies;
 pub mod validation;
 
@@ -448,3 +452,5 @@ pub async fn get_auth_metadata() -> crate::error::Result<crate::commands::AnyVal
 
     Ok(crate::commands::AnyValue(json))
 }
+
+// ISM-V2-PROVENANCE-END: 3296AC301A33C713743A3FBC

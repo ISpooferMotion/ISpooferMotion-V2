@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: EFD55CAC698A861CFE71E669
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 #![allow(clippy::too_many_lines)]
 use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
 use serde::{Deserialize, Serialize};
@@ -361,3 +365,5 @@ pub async fn fetch_animation_xml(
 
     Ok(parsed_xml)
 }
+
+// ISM-V2-PROVENANCE-END: EFD55CAC698A861CFE71E669

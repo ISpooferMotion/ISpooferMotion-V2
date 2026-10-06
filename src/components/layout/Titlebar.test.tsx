@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: D1AB0713617483065AB724AF
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -48,3 +52,5 @@ describe('Titlebar Component', () => {
     expect(container.firstChild).toBeInTheDocument();
   });
 });
+
+// ISM-V2-PROVENANCE-END: D1AB0713617483065AB724AF

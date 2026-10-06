@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: A20D9688FED944B8A17DC19D
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
@@ -2519,3 +2523,5 @@ function AssetInspectorPanel({
     </div>
   );
 }
+
+// ISM-V2-PROVENANCE-END: A20D9688FED944B8A17DC19D

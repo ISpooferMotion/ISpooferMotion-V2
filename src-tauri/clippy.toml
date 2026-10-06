@@ -1,4 +1,10 @@
+# ISM-V2-PROVENANCE: 0FCE9BEEDE7665D1CAF3648B
+# Repository provenance: ISpooferMotion V2 / IncredibroXP.
+# Attribution marker only; preserve any upstream author/license notices.
+
 cognitive-complexity-threshold = 20
 max-fn-params-bools            = 3
 max-struct-bools               = 5
 warn-on-all-wildcard-imports   = true
+
+# ISM-V2-PROVENANCE-END: 0FCE9BEEDE7665D1CAF3648B

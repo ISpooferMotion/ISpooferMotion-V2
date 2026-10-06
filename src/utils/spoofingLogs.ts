@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: FDDDD7215AE9CC791E6F00F4
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 const MAX_LOG_LINES = 750;
 
 const TIMESTAMP_RE = /^\[\d{2}:\d{2}:\d{2}\]/;
@@ -20,3 +24,5 @@ export function appendSpoofingLog(prev: string[], chunk: string): string[] {
   }
   return newLogs;
 }
+
+// ISM-V2-PROVENANCE-END: FDDDD7215AE9CC791E6F00F4

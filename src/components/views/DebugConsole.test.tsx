@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: A7E19AEB2FDE9B7C28066938
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -113,3 +117,5 @@ describe('DebugConsole', () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+// ISM-V2-PROVENANCE-END: A7E19AEB2FDE9B7C28066938

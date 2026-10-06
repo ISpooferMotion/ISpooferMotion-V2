@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: BE4F7405E60DDC45C9541C65
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import * as TauriDialog from '@tauri-apps/plugin-dialog';
 import * as TauriFs from '@tauri-apps/plugin-fs';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -121,3 +125,5 @@ describe('ResultsModal', () => {
     expect(screen.queryByText('Save Spoofed .rbxlx')).not.toBeInTheDocument();
   });
 });
+
+// ISM-V2-PROVENANCE-END: BE4F7405E60DDC45C9541C65

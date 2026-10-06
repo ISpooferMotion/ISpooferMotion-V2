@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 2020D6F42E513257DE6FD3EC
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { ArrowRight, CheckCircle2, Circle, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -161,3 +165,5 @@ export const Tutorial = ({ steps, onComplete, onSkip, beforeStep }: TutorialProp
     </>
   );
 };
+
+// ISM-V2-PROVENANCE-END: 2020D6F42E513257DE6FD3EC

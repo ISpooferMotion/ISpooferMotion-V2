@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 3F66A8CE692CB4F79215087B
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use super::{read_json_file, AppHandle, Entry, Manager, PathBuf};
 use crate::commands::AnyValue;
 use serde_json::Value;
@@ -400,3 +404,5 @@ mod tests {
         assert_eq!(split_chunks_by_bytes("", 1_000), vec![String::new()]);
     }
 }
+
+// ISM-V2-PROVENANCE-END: 3F66A8CE692CB4F79215087B

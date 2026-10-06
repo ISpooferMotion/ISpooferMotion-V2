@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 6DBB448EFA9A4131E808590C
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 
 import { fetchPluginBridge } from './pluginBridge';
@@ -94,3 +98,5 @@ export async function triggerStudioScan(options?: ScanOptions): Promise<void> {
 
   await waitForStudioScanComplete();
 }
+
+// ISM-V2-PROVENANCE-END: 6DBB448EFA9A4131E808590C

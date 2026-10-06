@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: CC95B9E3CADB30F83C1833DF
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { Wrench } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -50,3 +54,5 @@ export default function AdvancedSection() {
     </SettingCard>
   );
 }
+
+// ISM-V2-PROVENANCE-END: CC95B9E3CADB30F83C1833DF

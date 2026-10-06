@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 7464FDE7F53BD46CC2414E80
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import * as tauriCore from '@tauri-apps/api/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -94,3 +98,5 @@ describe('studioScan', () => {
     await expectPromise;
   });
 });
+
+// ISM-V2-PROVENANCE-END: 7464FDE7F53BD46CC2414E80

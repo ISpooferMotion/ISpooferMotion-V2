@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: A013C7D2F68C1515FC874EF0
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
@@ -1504,3 +1508,5 @@ mod tests {
         assert_eq!(patches[0]["value"], "rbxassetid://99999");
     }
 }
+
+// ISM-V2-PROVENANCE-END: A013C7D2F68C1515FC874EF0

@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: D00F01FA0802F6158CE72ABC
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -65,3 +69,5 @@ describe('ActivityView', () => {
     expect(await screen.findByText('activity.spoofedTo')).toBeInTheDocument();
   });
 });
+
+// ISM-V2-PROVENANCE-END: D00F01FA0802F6158CE72ABC

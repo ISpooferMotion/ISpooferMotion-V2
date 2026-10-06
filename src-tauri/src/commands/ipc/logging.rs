@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 3BBAEFA07C2B0EDEE45C3708
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use super::{
     app, append_log_entry, redact_log_message, write_json_file, AppHandle, Command, Manager, Path,
     Value,
@@ -154,3 +158,5 @@ pub async fn export_support_report(
     write_json_file(&report_path, &report).await?;
     Ok(report_path.to_string_lossy().to_string())
 }
+
+// ISM-V2-PROVENANCE-END: 3BBAEFA07C2B0EDEE45C3708

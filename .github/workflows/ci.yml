@@ -1,3 +1,7 @@
+# ISM-V2-PROVENANCE: 06E7A1FB7D4DCEEB7F14236F
+# Repository provenance: ISpooferMotion V2 / IncredibroXP.
+# Attribution marker only; preserve any upstream author/license notices.
+
 name: CI & Release
 
 on:
@@ -46,7 +50,7 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
 
       - run: bun install --frozen-lockfile
-      - run: bun run format:prettier:check
+      - run:       - run: bun run format:prettier:check
       - run: bun run format:stylua:check
       - run: bun run build:plugin
       - run: bun run typecheck
@@ -85,7 +89,7 @@ jobs:
           cache-on-failure: true
 
       - run: bun install --frozen-lockfile
-      - run: bun run build:plugin
+      - run:       - run: bun run build:plugin
       - run: bun run rust:check
       - run: bun run rust:lint
       - run: bun run rust:test
@@ -622,3 +626,5 @@ jobs:
               f"Posted Discord release announcement for {release_tag}."
           )
           PY
+
+# ISM-V2-PROVENANCE-END: 06E7A1FB7D4DCEEB7F14236F

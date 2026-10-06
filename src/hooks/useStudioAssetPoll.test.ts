@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 4CBA1A469089E1242C638A4D
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import * as tauriCore from '@tauri-apps/api/core';
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -104,3 +108,5 @@ describe('useStudioAssetPoll', () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 });
+
+// ISM-V2-PROVENANCE-END: 4CBA1A469089E1242C638A4D

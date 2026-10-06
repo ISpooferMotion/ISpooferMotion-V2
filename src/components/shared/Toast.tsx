@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 32269148E76BE19BBB07766E
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { useEffect } from 'react';
 
@@ -53,3 +57,5 @@ export const Toast = () => {
     </div>
   );
 };
+
+// ISM-V2-PROVENANCE-END: 32269148E76BE19BBB07766E

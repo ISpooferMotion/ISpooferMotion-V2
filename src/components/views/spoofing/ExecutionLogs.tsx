@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 8785E8629BB563E563F3CA75
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { ClipboardPaste, Copy, ListChecks, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -225,3 +229,5 @@ export default function ExecutionLogs({
     </div>
   );
 }
+
+// ISM-V2-PROVENANCE-END: 8785E8629BB563E563F3CA75

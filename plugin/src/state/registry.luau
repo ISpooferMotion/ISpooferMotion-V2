@@ -1,5 +1,9 @@
 --!nocheck
 --!nolint
+-- ISM-V2-PROVENANCE: 635B448B6D392F48AF5BC41A
+-- Repository provenance: ISpooferMotion V2 / IncredibroXP.
+-- Attribution marker only; preserve any upstream author/license notices.
+
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 
@@ -62,3 +66,5 @@ local function replaceRegisteredObject(token: string, obj: Instance)
 	objectRegistry[normalizedToken] = obj
 	objectTokens[obj] = normalizedToken
 end
+
+-- ISM-V2-PROVENANCE-END: 635B448B6D392F48AF5BC41A

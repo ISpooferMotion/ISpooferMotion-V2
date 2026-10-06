@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 6E658D5539E9CBDC1D1BF669
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 const MAGIC_PNG: &[u8] = b"\x89PNG\r\n\x1a\n";
 const MAGIC_JPEG: &[u8] = &[0xff, 0xd8, 0xff];
 const MAGIC_GIF87A: &[u8] = b"GIF87a";
@@ -115,3 +119,5 @@ mod tests {
         Ok(())
     }
 }
+
+// ISM-V2-PROVENANCE-END: 6E658D5539E9CBDC1D1BF669

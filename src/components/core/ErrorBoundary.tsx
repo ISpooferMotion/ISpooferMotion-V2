@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 6E33F39D0509F2F6E81CC22F
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { getVersion } from '@tauri-apps/api/app';
 import { type as getOsType, version as getOsVersion } from '@tauri-apps/plugin-os';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
@@ -122,3 +126,5 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+
+// ISM-V2-PROVENANCE-END: 6E33F39D0509F2F6E81CC22F

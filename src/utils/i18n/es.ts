@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: A211EFD5B77B150F27D5E532
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import type { TranslationTree } from './index';
 
 export const es: TranslationTree = {
@@ -362,3 +366,5 @@ export const es: TranslationTree = {
     generalDesktopNotifications: 'Notificaciones de Escritorio',
   },
 };
+
+// ISM-V2-PROVENANCE-END: A211EFD5B77B150F27D5E532

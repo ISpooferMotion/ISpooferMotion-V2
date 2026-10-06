@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 95F9B3A03CD3C1ECF3FAD849
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import { Bug, FolderOpen, Trash2 } from 'lucide-react';
 
@@ -96,3 +100,5 @@ export default function DebugCard() {
     </SettingCard>
   );
 }
+
+// ISM-V2-PROVENANCE-END: 95F9B3A03CD3C1ECF3FAD849

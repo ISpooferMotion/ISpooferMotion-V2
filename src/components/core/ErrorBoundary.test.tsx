@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 5271DF9B2A4DFE78D4A3DFB1
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import * as tauriApp from '@tauri-apps/api/app';
 import * as tauriOs from '@tauri-apps/plugin-os';
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -173,3 +177,5 @@ describe('ErrorBoundary', () => {
     consoleError.mockRestore();
   });
 });
+
+// ISM-V2-PROVENANCE-END: 5271DF9B2A4DFE78D4A3DFB1

@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 63B0A12A2C0F0F36964ADFE0
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 #![allow(clippy::needless_pass_by_value)]
 use super::{AppHandle, DialogExt, Manager};
 use crate::commands::ipc::secrets::clear_profile_secrets;
@@ -126,3 +130,5 @@ pub async fn clear_plugin_cache(app: AppHandle) -> crate::error::Result<bool> {
     crate::commands::spoofer::clear_asset_cache(app).await;
     Ok(true)
 }
+
+// ISM-V2-PROVENANCE-END: 63B0A12A2C0F0F36964ADFE0

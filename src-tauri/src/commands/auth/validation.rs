@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: EA45F06452D7FC305695333A
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use crate::utils::check_for_roblosecurity_update;
 use reqwest::header::{HeaderMap, HeaderValue, COOKIE, USER_AGENT};
 use serde::{Deserialize, Serialize};
@@ -78,3 +82,5 @@ pub struct ApiKeyOwnerDetectResult {
     pub owner_user_id: Option<String>,
     pub message: String,
 }
+
+// ISM-V2-PROVENANCE-END: EA45F06452D7FC305695333A

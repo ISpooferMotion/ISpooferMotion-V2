@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 707637DB3E59192E82F486F1
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
@@ -422,3 +426,5 @@ export default function Titlebar() {
     </div>
   );
 }
+
+// ISM-V2-PROVENANCE-END: 707637DB3E59192E82F486F1

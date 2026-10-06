@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 5299D358A527D741E8163A8C
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use futures::stream::{self, StreamExt};
 use std::collections::{HashMap, HashSet};
 use std::fs::{File, OpenOptions};
@@ -1212,3 +1216,5 @@ mod tests {
         assert_eq!(selected_account_id(&serde_json::json!({ "name": "cody" })), None);
     }
 }
+
+// ISM-V2-PROVENANCE-END: 5299D358A527D741E8163A8C

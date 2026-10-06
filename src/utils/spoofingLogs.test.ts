@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: FA62710CCC6C060550A47C54
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { appendSpoofingLog } from './spoofingLogs';
@@ -59,3 +63,5 @@ describe('appendSpoofingLog', () => {
     expect(logs).toEqual(['[12:34:56] [INFO] start', '[12:34:56] [SUCCESS] done']);
   });
 });
+
+// ISM-V2-PROVENANCE-END: FA62710CCC6C060550A47C54

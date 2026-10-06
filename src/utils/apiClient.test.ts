@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: B2A84615ECBB726FC78792E8
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchTelemetry, getStudioPlaceIdFallback } from './apiClient';
@@ -79,3 +83,5 @@ describe('apiClient', () => {
     });
   });
 });
+
+// ISM-V2-PROVENANCE-END: B2A84615ECBB726FC78792E8

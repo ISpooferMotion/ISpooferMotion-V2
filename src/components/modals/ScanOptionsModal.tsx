@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 4659F3F01C38C0C4C05917C6
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { ScanSearch } from 'lucide-react';
 import { useState } from 'react';
 
@@ -99,3 +103,5 @@ export default function ScanOptionsModal({
     </Dialog>
   );
 }
+
+// ISM-V2-PROVENANCE-END: 4659F3F01C38C0C4C05917C6

@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 2CD481EA31AC294F5439D44E
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 pub mod messages;
 pub mod middleware;
 pub mod server;
@@ -480,3 +484,5 @@ pub async fn set_batch_size(size: u32) {
         data.write().await.batch_size = Some(size);
     }
 }
+
+// ISM-V2-PROVENANCE-END: 2CD481EA31AC294F5439D44E

@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 78DED0B1E6CC3BA7E50D648A
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 export type RobloxAssetType =
   | 'animation'
   | 'audio'
@@ -55,3 +59,5 @@ export interface RbxInstance {
   rawXml?: string;
   _xmlStartPos?: number;
 }
+
+// ISM-V2-PROVENANCE-END: 78DED0B1E6CC3BA7E50D648A

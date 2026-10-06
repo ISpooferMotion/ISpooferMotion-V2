@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 3591A5757F9157D469ED3637
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -8,7 +12,20 @@ const pluginRoot = join(root, 'plugin');
 
 const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const versionLuauPath = join(pluginRoot, 'src', 'version', 'version.luau');
-writeFileSync(versionLuauPath, `local PLUGIN_VERSION: string = "${packageJson.version}"\n`, 'utf8');
+const currentVersionSource = readFileSync(versionLuauPath, 'utf8');
+const nextVersionSource = currentVersionSource.replace(
+  /^local PLUGIN_VERSION: string = "[^"]*"$/m,
+  `local PLUGIN_VERSION: string = "${packageJson.version}"`,
+);
+if (
+  nextVersionSource === currentVersionSource &&
+  !currentVersionSource.includes(`"${packageJson.version}"`)
+) {
+  throw new Error(
+    'Could not update plugin version without replacing its provenance-watermarked source file.',
+  );
+}
+writeFileSync(versionLuauPath, nextVersionSource, 'utf8');
 
 function expandPluginIncludes(source, fromFile, stack = []) {
   return source.replace(/^--#include\s+"([^"]+)"\s*$/gm, (_match, includePath) => {
@@ -91,3 +108,5 @@ async function buildPlugin() {
 }
 
 buildPlugin();
+
+// ISM-V2-PROVENANCE-END: 3591A5757F9157D469ED3637

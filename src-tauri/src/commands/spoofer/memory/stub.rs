@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: E66BC1C0A37DF156CD16B9E3
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 #[tauri::command]
 #[specta::specta]
 #[must_use]
@@ -30,3 +34,5 @@ pub async fn scan_and_replace_multiple_strings(
 pub async fn focus_and_save_studio(_pid: u32) -> Result<(), String> {
     Err("Auto-focus and auto-save are only supported on Windows.".into())
 }
+
+// ISM-V2-PROVENANCE-END: E66BC1C0A37DF156CD16B9E3

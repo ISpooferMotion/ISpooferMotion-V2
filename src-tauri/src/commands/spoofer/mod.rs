@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 1D05ED684C49B44B0603FFA6
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 #![allow(clippy::wildcard_imports, clippy::too_many_lines, clippy::missing_errors_doc)]
 
 pub mod inspector;
@@ -500,3 +504,5 @@ mod tests {
         Ok(())
     }
 }
+
+// ISM-V2-PROVENANCE-END: 1D05ED684C49B44B0603FFA6

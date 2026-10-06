@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 007D46D94155E5B293C14EA8
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import {
   ArrowDownUp,
   Bug,
@@ -181,3 +185,5 @@ export default function SettingsView() {
     </div>
   );
 }
+
+// ISM-V2-PROVENANCE-END: 007D46D94155E5B293C14EA8

@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 56A081A9046B011A2FC44D1F
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -89,3 +93,5 @@ describe('notifyError', () => {
     expect(consoleSpy).toHaveBeenCalledWith('Failed Tauri Title', 'Failed Tauri Body');
   });
 });
+
+// ISM-V2-PROVENANCE-END: 56A081A9046B011A2FC44D1F

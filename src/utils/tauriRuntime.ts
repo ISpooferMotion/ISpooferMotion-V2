@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 0FCFF20815B65F7A7CE3C4AC
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 export function isTauriRuntime() {
   const internals = (
     window as Window & {
@@ -35,3 +39,5 @@ async function getTauriPlatform(): Promise<string | null> {
 export async function isMemoryInjectionSupported(): Promise<boolean> {
   return (await getTauriPlatform()) === 'windows';
 }
+
+// ISM-V2-PROVENANCE-END: 0FCFF20815B65F7A7CE3C4AC

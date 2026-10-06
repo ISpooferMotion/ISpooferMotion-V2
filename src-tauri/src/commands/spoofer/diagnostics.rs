@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: D8255DA7838708DA247D8445
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -94,3 +98,5 @@ pub async fn record_failed_transfer_diagnostic(
     info!("Saved failed transfer diagnostic to {record_dir:?}");
     prune_transfer_diagnostics(&diagnostics_dir).await;
 }
+
+// ISM-V2-PROVENANCE-END: D8255DA7838708DA247D8445

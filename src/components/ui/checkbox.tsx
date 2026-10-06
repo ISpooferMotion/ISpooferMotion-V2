@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 5AE59E04208A350453F45140
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox';
 import { CheckIcon } from 'lucide-react';
 
@@ -24,3 +28,5 @@ function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
 }
 
 export { Checkbox };
+
+// ISM-V2-PROVENANCE-END: 5AE59E04208A350453F45140

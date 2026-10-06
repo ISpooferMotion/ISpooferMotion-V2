@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: F8D8D06D436D0F8FEE610DD6
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { Palette } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HexAlphaColorPicker } from 'react-colorful';
@@ -188,3 +192,5 @@ export default function AppearanceCard() {
     </SettingCard>
   );
 }
+
+// ISM-V2-PROVENANCE-END: F8D8D06D436D0F8FEE610DD6

@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 1C3602D70A019CBA791EFB5E
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 #![allow(clippy::cast_possible_truncation)]
 #[cfg(target_os = "windows")]
 use aes_gcm::aead::{Aead, KeyInit};
@@ -579,3 +583,5 @@ pub fn profile_cookie_entry(user_id: &str) -> crate::error::Result<Entry> {
         crate::error::AppError::Custom(format!("Failed to open credential store: {e}"))
     })
 }
+
+// ISM-V2-PROVENANCE-END: 1C3602D70A019CBA791EFB5E

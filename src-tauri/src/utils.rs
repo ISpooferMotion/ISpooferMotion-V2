@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 885541879B043C38EA7CC8B0
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use log::warn;
 use reqwest::Response;
 use std::path::Path;
@@ -488,3 +492,5 @@ mod tests {
         );
     }
 }
+
+// ISM-V2-PROVENANCE-END: 885541879B043C38EA7CC8B0

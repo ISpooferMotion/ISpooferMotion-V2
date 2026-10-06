@@ -1,6 +1,9 @@
 --!nolint UnknownGlobal
 --!nocheck
 --!nolint
+-- ISM-V2-PROVENANCE: 9D8FE01660370E56EC18022E
+-- Repository provenance: ISpooferMotion V2 / IncredibroXP.
+-- Attribution marker only; preserve any upstream author/license notices.
 
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
@@ -900,3 +903,5 @@ function setPluginBatchSize(size)
 		end)
 	end
 end
+
+-- ISM-V2-PROVENANCE-END: 9D8FE01660370E56EC18022E

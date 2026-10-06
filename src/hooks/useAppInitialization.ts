@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: F8F2F9DCC8CFC012AD2F9EA1
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
@@ -166,3 +170,5 @@ export function useAppInitialization() {
 
   return { maintenance, isRobloxApiDown };
 }
+
+// ISM-V2-PROVENANCE-END: F8F2F9DCC8CFC012AD2F9EA1

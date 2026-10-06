@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: A149A3384AD43FB3C6E6A277
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
 import type { AppConfig } from '../contexts/ConfigContext';
@@ -76,3 +80,5 @@ export const playRobloxAudio = async (assetId: string, config: AppConfig) => {
     return false;
   }
 };
+
+// ISM-V2-PROVENANCE-END: A149A3384AD43FB3C6E6A277

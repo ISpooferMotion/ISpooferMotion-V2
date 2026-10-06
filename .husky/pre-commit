@@ -1,1 +1,7 @@
+# ISM-V2-PROVENANCE: 26514C0398243399FA9441CE
+# Repository provenance: ISpooferMotion V2 / IncredibroXP.
+# Attribution marker only; preserve any upstream author/license notices.
+
 bunx lint-staged
+
+# ISM-V2-PROVENANCE-END: 26514C0398243399FA9441CE

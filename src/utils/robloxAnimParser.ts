@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 78FB6CBD68B6E98766662F4F
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 
 export interface RobloxPose {
@@ -30,3 +34,5 @@ export async function parseAnimationXml(xml: string): Promise<RobloxAnimationCli
     return null;
   }
 }
+
+// ISM-V2-PROVENANCE-END: 78FB6CBD68B6E98766662F4F

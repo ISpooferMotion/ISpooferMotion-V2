@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 23638285FF07F09A0691EAF3
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import js from '@eslint/js';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
@@ -37,3 +41,5 @@ export default tseslint.config(
     },
   },
 );
+
+// ISM-V2-PROVENANCE-END: 23638285FF07F09A0691EAF3

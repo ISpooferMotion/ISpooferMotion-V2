@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: E3BE0E2DFC4782737D3C40C7
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { Check, ChevronRight, Copy } from 'lucide-react';
 import { useState } from 'react';
 
@@ -106,3 +110,5 @@ export function JsonViewer({ data, name, defaultExpanded = false, level = 0 }: J
     </div>
   );
 }
+
+// ISM-V2-PROVENANCE-END: E3BE0E2DFC4782737D3C40C7

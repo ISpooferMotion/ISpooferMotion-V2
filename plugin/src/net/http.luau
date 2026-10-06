@@ -1,5 +1,9 @@
 --!nocheck
 --!nolint
+-- ISM-V2-PROVENANCE: 48C661734156B6C8B9B27321
+-- Repository provenance: ISpooferMotion V2 / IncredibroXP.
+-- Attribution marker only; preserve any upstream author/license notices.
+
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 
@@ -102,3 +106,5 @@ local function postJson(endpoint: string, payload: any): (boolean, any)
 
 	return false, nil
 end
+
+-- ISM-V2-PROVENANCE-END: 48C661734156B6C8B9B27321

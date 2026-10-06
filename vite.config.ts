@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 0FCA44175AF3D4C3AD08E25B
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
@@ -42,6 +46,8 @@ export default defineConfig(() => {
           preview: resolve(__dirname, './preview.html'),
         },
         output: {
+          banner:
+            '/*! ISM-V2-PROVENANCE-BUNDLE | ISpooferMotion V2 / IncredibroXP | source fingerprinted with ISM-V2-PROVENANCE */',
           manualChunks(id) {
             if (id.includes('node_modules')) {
               if (id.includes('react') || id.includes('react-dom')) return 'vendor-react';
@@ -66,3 +72,5 @@ export default defineConfig(() => {
     },
   };
 });
+
+// ISM-V2-PROVENANCE-END: 0FCA44175AF3D4C3AD08E25B

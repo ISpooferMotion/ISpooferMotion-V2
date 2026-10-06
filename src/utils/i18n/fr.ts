@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: F958550FBFD01B0670D777D4
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import type { TranslationTree } from './index';
 
 export const fr: TranslationTree = {
@@ -361,3 +365,5 @@ export const fr: TranslationTree = {
     generalDesktopNotifications: 'Notifications de Bureau',
   },
 };
+
+// ISM-V2-PROVENANCE-END: F958550FBFD01B0670D777D4

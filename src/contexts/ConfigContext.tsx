@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 75A337B58063ECCB585087E4
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { createContext, useContext, useEffect, useMemo } from 'react';
 
 import { type AppConfig, useConfigStore } from '../stores/configStore';
@@ -461,3 +465,5 @@ export const useConfig = () => {
   if (!ctx) throw new Error('useConfig must be used within ConfigProvider');
   return ctx;
 };
+
+// ISM-V2-PROVENANCE-END: 75A337B58063ECCB585087E4

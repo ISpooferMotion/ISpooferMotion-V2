@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 2A3D6577A57DF2E11DDA1AB1
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import {
   AlertCircle,
   Check,
@@ -718,3 +722,5 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
     </div>
   );
 });
+
+// ISM-V2-PROVENANCE-END: 2A3D6577A57DF2E11DDA1AB1

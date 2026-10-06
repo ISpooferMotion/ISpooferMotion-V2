@@ -1,6 +1,9 @@
 --!nolint UnknownGlobal
 --!nocheck
 --!nolint
+-- ISM-V2-PROVENANCE: 69F7455FE84F0BC888F04DC0
+-- Repository provenance: ISpooferMotion V2 / IncredibroXP.
+-- Attribution marker only; preserve any upstream author/license notices.
 
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
@@ -689,3 +692,5 @@ local function applyPatches(patches: any)
 		setPluginGuiStatus("Waiting for new scan or replacements...")
 	end
 end
+
+-- ISM-V2-PROVENANCE-END: 69F7455FE84F0BC888F04DC0

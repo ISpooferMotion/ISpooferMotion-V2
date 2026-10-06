@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 120C0ED97A60B1BEC02AB7C8
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import type { TranslationTree } from './index';
 
 export const ru: TranslationTree = {
@@ -369,3 +373,5 @@ export const ru: TranslationTree = {
     generalDesktopNotifications: 'Уведомления на Рабочем Столе',
   },
 };
+
+// ISM-V2-PROVENANCE-END: 120C0ED97A60B1BEC02AB7C8

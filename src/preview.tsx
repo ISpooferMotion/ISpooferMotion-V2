@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 7EC3A44BD3DC89D04729301E
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import './index.css';
 import './utils/debugLogger';
 
@@ -383,3 +387,5 @@ ReactDOM.createRoot(document.getElementById('preview-root')!).render(
     </LanguageProvider>
   </React.StrictMode>,
 );
+
+// ISM-V2-PROVENANCE-END: 7EC3A44BD3DC89D04729301E

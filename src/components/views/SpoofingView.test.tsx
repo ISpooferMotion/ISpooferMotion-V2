@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: B0496C3287BAF6E95A24C4D7
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -214,3 +218,5 @@ describe('SpoofingView', () => {
     expect(screen.getByTestId('spoofing-controls')).toBeInTheDocument();
   });
 });
+
+// ISM-V2-PROVENANCE-END: B0496C3287BAF6E95A24C4D7

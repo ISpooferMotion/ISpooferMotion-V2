@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 582327E3C23D7699DEF5FFE3
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 interface SpoofJobAssetResult {
   id: string;
   type?: string;
@@ -63,3 +67,5 @@ export function takeSpoofRetry(): PendingSpoofRetry | null {
     return null;
   }
 }
+
+// ISM-V2-PROVENANCE-END: 582327E3C23D7699DEF5FFE3

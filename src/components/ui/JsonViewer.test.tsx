@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 990FC7552FBA007C43AC48C5
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -85,3 +89,5 @@ describe('JsonViewer', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(JSON.stringify(data, null, 2));
   });
 });
+
+// ISM-V2-PROVENANCE-END: 990FC7552FBA007C43AC48C5

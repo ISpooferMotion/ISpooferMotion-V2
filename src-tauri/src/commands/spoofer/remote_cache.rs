@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: FD167A51BD3ECC14043971AF
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use serde::{Deserialize, Deserializer, Serialize};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -321,3 +325,5 @@ mod tests {
         assert!(validate_cache_url("not a URL").is_err());
     }
 }
+
+// ISM-V2-PROVENANCE-END: FD167A51BD3ECC14043971AF

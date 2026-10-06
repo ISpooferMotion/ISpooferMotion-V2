@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 9CAF3E7B29A20ECB7D793C4C
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -141,3 +145,5 @@ describe('robloxProfiles', () => {
     });
   });
 });
+
+// ISM-V2-PROVENANCE-END: 9CAF3E7B29A20ECB7D793C4C

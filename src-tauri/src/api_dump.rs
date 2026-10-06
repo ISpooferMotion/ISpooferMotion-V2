@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: A1A57615F1EAC8AA9B50FCC8
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -435,3 +439,5 @@ mod tests {
         assert!(!mesh_part_assets.contains(&"Name".to_string()));
     }
 }
+
+// ISM-V2-PROVENANCE-END: A1A57615F1EAC8AA9B50FCC8

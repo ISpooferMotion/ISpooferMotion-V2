@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 88AFFFDA01D8CDA215C9AF67
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { useSpooferStore } from '../../../stores/spooferStore';
 
 export const SpoofProgressText = () => {
@@ -70,3 +74,5 @@ export const SpoofProgressOverlay = () => {
     />
   );
 };
+
+// ISM-V2-PROVENANCE-END: 88AFFFDA01D8CDA215C9AF67

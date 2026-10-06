@@ -1,5 +1,9 @@
 --!nocheck
 --!nolint
+-- ISM-V2-PROVENANCE: 08353BE5E6C29629F8B6C608
+-- Repository provenance: ISpooferMotion V2 / IncredibroXP.
+-- Attribution marker only; preserve any upstream author/license notices.
+
 -- luacheck: ignore
 ---@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 
@@ -60,3 +64,5 @@ local SERVICES_TO_SCAN = {
 	"SoundService",
 	"Teams",
 }
+
+-- ISM-V2-PROVENANCE-END: 08353BE5E6C29629F8B6C608

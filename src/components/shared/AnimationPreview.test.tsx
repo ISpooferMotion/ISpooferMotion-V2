@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: E8FA1313AA53C94513502F6D
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import * as tauriCore from '@tauri-apps/api/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -252,3 +256,5 @@ describe('AnimationPreview', () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+// ISM-V2-PROVENANCE-END: E8FA1313AA53C94513502F6D

@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 23614EA1A5E0F9D5CBA5CF9A
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 use crate::commands::spoofer::{wait_rate_limit, RateLimitBucket};
 use crate::utils::build_roblox_cookie_header;
 use reqwest::header::{
@@ -597,3 +601,5 @@ mod tests {
         assert!(creator.user_id.is_none());
     }
 }
+
+// ISM-V2-PROVENANCE-END: 23614EA1A5E0F9D5CBA5CF9A

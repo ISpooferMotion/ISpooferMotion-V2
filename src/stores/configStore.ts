@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 53477076BB4D39CB6D934880
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { z } from 'zod';
 import { create } from 'zustand';
 
@@ -399,3 +403,5 @@ export const useConfigStore = create<ConfigState>((set, get) => {
     },
   };
 });
+
+// ISM-V2-PROVENANCE-END: 53477076BB4D39CB6D934880

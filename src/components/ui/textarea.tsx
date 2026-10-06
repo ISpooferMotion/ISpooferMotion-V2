@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: CB4735948BE582B78EBFF1C7
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
@@ -16,3 +20,5 @@ function Textarea({ className, ...props }: React.ComponentProps<'textarea'>) {
 }
 
 export { Textarea };
+
+// ISM-V2-PROVENANCE-END: CB4735948BE582B78EBFF1C7

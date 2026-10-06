@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 73A70ED1DBECF071929C207F
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 'use client';
 
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
@@ -75,3 +79,5 @@ function PopoverDescription({ className, ...props }: PopoverPrimitive.Descriptio
 }
 
 export { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger };
+
+// ISM-V2-PROVENANCE-END: 73A70ED1DBECF071929C207F

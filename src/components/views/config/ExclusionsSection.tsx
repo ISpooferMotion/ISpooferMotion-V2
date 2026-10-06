@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: A82E57D4A31924BC71580B29
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { ShieldAlert } from 'lucide-react';
 
 import { useConfig } from '../../../contexts/ConfigContext';
@@ -36,3 +40,5 @@ export default function ExclusionsSection() {
     </SettingCard>
   );
 }
+
+// ISM-V2-PROVENANCE-END: A82E57D4A31924BC71580B29

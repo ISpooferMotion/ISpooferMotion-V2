@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: E2702D2CC8E1207D57366AE0
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { invoke } from '@tauri-apps/api/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -97,3 +101,5 @@ describe('debugLogger', () => {
     });
   });
 });
+
+// ISM-V2-PROVENANCE-END: E2702D2CC8E1207D57366AE0

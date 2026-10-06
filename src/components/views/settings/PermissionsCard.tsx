@@ -1,3 +1,7 @@
+// ISM-V2-PROVENANCE: 3BA9FDDFFE14A969AE94640F
+// Repository provenance: ISpooferMotion V2 / IncredibroXP.
+// Attribution marker only; preserve any upstream author/license notices.
+
 import { Info, ShieldCheck } from 'lucide-react';
 
 import { useConfig } from '../../../contexts/ConfigContext';
@@ -96,3 +100,5 @@ export default function PermissionsCard() {
     </SettingCard>
   );
 }
+
+// ISM-V2-PROVENANCE-END: 3BA9FDDFFE14A969AE94640F
