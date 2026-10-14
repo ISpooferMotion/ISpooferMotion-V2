@@ -1122,31 +1122,27 @@ pub async fn process_spoofer_action(
             .open_path(base_downloads_dir.to_string_lossy().to_string(), None::<String>);
     }
 
-    if completed_successfully {
+    // Discovered asset/place pairs are valid even if a different asset in the
+    // job fails; the server independently verifies each submitted mapping.
+    {
         let discoveries = ctx
             .discoveries
             .lock()
             .map(|disc| disc.iter().cloned().collect::<HashMap<_, _>>())
             .unwrap_or_default();
-        let write_failures = stream::iter(discoveries)
-            .map(|(asset_id, place_id)| async move {
-                crate::commands::spoofer::remote_cache::push_discovery(asset_id, place_id).await
-            })
-            .buffer_unordered(8)
-            .filter_map(|result| async move { result.err() })
-            .collect::<Vec<_>>()
-            .await;
-
-        if !write_failures.is_empty() {
-            let first_error = write_failures.first().map(String::as_str).unwrap_or("unknown error");
-            ctx.log(
-                &format!(
-                    "Failed to contribute {} discovery entry/entries to the community cache. First error: {}",
-                    write_failures.len(),
-                    first_error
+        if !discoveries.is_empty() {
+            match crate::commands::spoofer::remote_cache::queue_discoveries(&ctx.app, discoveries)
+                .await
+            {
+                Ok(queued) if queued > 0 => {
+                    ctx.log(&format!("Queued {queued} discovery entries for verified community-cache submission"), "info");
+                }
+                Ok(_) => {}
+                Err(error) => ctx.log(
+                    &format!("Failed to persist community-cache discoveries: {error}"),
+                    "warn",
                 ),
-                "warn",
-            );
+            }
         }
     }
 

@@ -48,7 +48,7 @@ export function useAppInitialization() {
       import.meta.env.VITE_API_BASE_URL === undefined
         ? 'https://ispoofermotion.com'
         : import.meta.env.VITE_API_BASE_URL;
-    const defaultCacheWriteUrl = `${baseUrl}/api/cache`;
+    const defaultCacheWriteUrl = `${baseUrl.replace(/\/+$/, '')}/api/cache`;
 
     if (tauriRuntime) {
       void invoke('initialize_remote_cache', {
