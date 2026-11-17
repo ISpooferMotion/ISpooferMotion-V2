@@ -238,4 +238,32 @@ describe('useAppInitialization', () => {
     expect(addEventListenerSpy).toHaveBeenCalledWith('drop', expect.any(Function));
     expect(addEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
   });
+  it('does not start another heartbeat while the previous request is still pending', async () => {
+    let finishFirst: (() => void) | undefined;
+    let heartbeats = 0;
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/dev/heartbeat')) {
+        heartbeats++;
+        if (heartbeats === 1) {
+          return new Promise((resolve) => {
+            finishFirst = () => resolve({ ok: true });
+          });
+        }
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    const { unmount } = renderHook(() => useAppInitialization());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180000);
+    });
+    expect(heartbeats).toBe(1);
+
+    finishFirst?.();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60100);
+    });
+    expect(heartbeats).toBe(2);
+    unmount();
+  });
 });

@@ -4,15 +4,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useStudioAssetPoll } from './useStudioAssetPoll';
 
-describe('useStudioAssetPoll', () => {
-  const defaultBundle = {
-    anims: { assets: [], scanning: false, complete: false },
-    sounds: { assets: [], scanning: false, complete: false },
-    images: { assets: [], scanning: false, complete: false },
-    meshes: { assets: [], scanning: false, complete: false },
-    scriptRefs: { assets: [], scanning: false, complete: false },
-  };
+const emptyStore = { assets: [], scanning: false, complete: false };
+const incompleteBundle = {
+  anims: emptyStore,
+  sounds: emptyStore,
+  images: emptyStore,
+  meshes: emptyStore,
+  scriptRefs: emptyStore,
+};
+const completedBundle = {
+  anims: {
+    assets: [{ assetId: '1' }, { assetId: '2' }, { assetId: '3' }],
+    complete: true,
+    scanning: false,
+  },
+  sounds: { assets: [], complete: true, scanning: false },
+  images: { assets: [], complete: true, scanning: false },
+  meshes: { assets: [], complete: true, scanning: false },
+  scriptRefs: { assets: [], complete: true, scanning: false },
+};
 
+describe('useStudioAssetPoll', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
@@ -22,133 +34,90 @@ describe('useStudioAssetPoll', () => {
     vi.useRealTimers();
   });
 
-  it('does not poll if studioConnected is false', async () => {
+  it('does nothing while disconnected', async () => {
     const onComplete = vi.fn();
-    const invokeSpy = (tauriCore.invoke as any).mockResolvedValue(defaultBundle);
-
     renderHook(() => useStudioAssetPoll(false, onComplete));
-
     await vi.advanceTimersByTimeAsync(5000);
-    expect(invokeSpy).not.toHaveBeenCalled();
+    expect(tauriCore.invoke).not.toHaveBeenCalled();
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it('polls and does not call onComplete if incomplete', async () => {
+  it('does not download unchanged snapshots, even during an unfinished scan', async () => {
     const onComplete = vi.fn();
-    const invokeSpy = (tauriCore.invoke as any).mockResolvedValue({
-      ...defaultBundle,
-      anims: { assets: [], scanning: true, complete: false },
-    });
-
+    vi.mocked(tauriCore.invoke).mockImplementation((command) =>
+      Promise.resolve(command === 'get_studio_asset_revision' ? 1 : incompleteBundle),
+    );
     renderHook(() => useStudioAssetPoll(true, onComplete));
-
     await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(6000);
 
-    expect(invokeSpy).toHaveBeenCalled();
-    expect(onComplete).not.toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(2100);
-    expect(invokeSpy).toHaveBeenCalledTimes(2);
+    const snapshotCalls = vi
+      .mocked(tauriCore.invoke)
+      .mock.calls.filter(([name]) => name === 'get_studio_asset_snapshots');
+    expect(snapshotCalls).toHaveLength(1);
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it('calls onComplete when all stores are complete', async () => {
+  it('fetches and delivers a completed scan only when the backend revision changes', async () => {
+    let revision = 1;
+    let bundle = completedBundle;
     const onComplete = vi.fn();
-    const completeBundle = {
-      anims: { assets: [{ name: 'anim1' }], scanning: false, complete: true },
-      sounds: { assets: [], scanning: false, complete: true },
-      images: { assets: [], scanning: false, complete: true },
-      meshes: { assets: [], scanning: false, complete: true },
-      scriptRefs: { assets: [], scanning: false, complete: true },
-    };
-
-    const invokeSpy = (tauriCore.invoke as any).mockResolvedValue(completeBundle);
-
+    vi.mocked(tauriCore.invoke).mockImplementation((command) =>
+      Promise.resolve(command === 'get_studio_asset_revision' ? revision : bundle),
+    );
     renderHook(() => useStudioAssetPoll(true, onComplete));
-
     await vi.advanceTimersByTimeAsync(100);
-
-    await vi.advanceTimersByTimeAsync(100);
-    expect(invokeSpy).toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(100);
-
-    expect(onComplete).toHaveBeenCalledWith(completeBundle);
-    expect(onComplete).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not call onComplete twice if bundle hash is unchanged', async () => {
-    const onComplete = vi.fn();
-    const completeBundle = {
-      anims: { assets: [{ name: 'anim1' }], scanning: false, complete: true },
-      sounds: { assets: [], scanning: false, complete: true },
-      images: { assets: [], scanning: false, complete: true },
-      meshes: { assets: [], scanning: false, complete: true },
-      scriptRefs: { assets: [], scanning: false, complete: true },
-    };
-
-    const invokeSpy = (tauriCore.invoke as any).mockResolvedValue(completeBundle);
-
-    renderHook(() => useStudioAssetPoll(true, onComplete));
-
-    await vi.advanceTimersByTimeAsync(100);
-
-    await vi.advanceTimersByTimeAsync(100);
-    expect(invokeSpy).toHaveBeenCalled();
-
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledExactlyOnceWith(completedBundle);
 
     await vi.advanceTimersByTimeAsync(10100);
-    expect(invokeSpy).toHaveBeenCalledTimes(2);
-
     expect(onComplete).toHaveBeenCalledTimes(1);
-  });
-  it('detects changes to a middle asset without changes to the first or last', async () => {
-    const onComplete = vi.fn();
-    const completed = {
+    expect(
+      vi
+        .mocked(tauriCore.invoke)
+        .mock.calls.filter(([name]) => name === 'get_studio_asset_snapshots'),
+    ).toHaveLength(1);
+
+    revision = 2;
+    bundle = {
+      ...completedBundle,
       anims: {
-        assets: [{ assetId: '1' }, { assetId: '2' }, { assetId: '3' }],
-        scanning: false,
-        complete: true,
+        ...completedBundle.anims,
+        assets: [{ assetId: '1' }, { assetId: 'changed' }, { assetId: '3' }],
       },
-      sounds: { assets: [], scanning: false, complete: true },
-      images: { assets: [], scanning: false, complete: true },
-      meshes: { assets: [], scanning: false, complete: true },
-      scriptRefs: { assets: [], scanning: false, complete: true },
     };
-    vi.mocked(tauriCore.invoke)
-      .mockResolvedValueOnce(completed)
-      .mockResolvedValue({
-        ...completed,
-        anims: {
-          ...completed.anims,
-          assets: [{ assetId: '1' }, { assetId: 'changed' }, { assetId: '3' }],
-        },
-      });
-
-    renderHook(() => useStudioAssetPoll(true, onComplete));
-    await vi.advanceTimersByTimeAsync(100);
-    expect(onComplete).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(10100);
     expect(onComplete).toHaveBeenCalledTimes(2);
+    expect(onComplete).toHaveBeenLastCalledWith(bundle);
   });
-  it('retries delivering a completed scan if the callback fails', async () => {
+
+  it('retries delivery if the UI handler throws', async () => {
     const onComplete = vi.fn().mockImplementationOnce(() => {
       throw new Error('temporary UI failure');
     });
-    const completed = {
-      anims: { assets: [{ assetId: '123' }], scanning: false, complete: true },
-      sounds: { assets: [], scanning: false, complete: true },
-      images: { assets: [], scanning: false, complete: true },
-      meshes: { assets: [], scanning: false, complete: true },
-      scriptRefs: { assets: [], scanning: false, complete: true },
-    };
-    vi.mocked(tauriCore.invoke).mockResolvedValue(completed);
-
+    vi.mocked(tauriCore.invoke).mockImplementation((command) =>
+      Promise.resolve(command === 'get_studio_asset_revision' ? 5 : completedBundle),
+    );
     renderHook(() => useStudioAssetPoll(true, onComplete));
     await vi.advanceTimersByTimeAsync(100);
     expect(onComplete).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(2100);
     expect(onComplete).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not deliver results from requests that finish after unmount', async () => {
+    let finish: (value: number) => void = () => {};
+    vi.mocked(tauriCore.invoke).mockImplementation((command) =>
+      command === 'get_studio_asset_revision'
+        ? new Promise<number>((resolve) => {
+            finish = resolve;
+          })
+        : Promise.resolve(completedBundle),
+    );
+    const onComplete = vi.fn();
+    const { unmount } = renderHook(() => useStudioAssetPoll(true, onComplete));
+    unmount();
+    finish(1);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(onComplete).not.toHaveBeenCalled();
   });
 });

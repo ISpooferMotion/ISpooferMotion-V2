@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::Semaphore;
+use tokio::sync::Notify;
 use uuid::Uuid;
 
 static CIRCUIT_BREAKER: Mutex<Option<Instant>> = Mutex::new(None);
@@ -82,30 +82,97 @@ fn is_valid_numeric_id(value: &str) -> bool {
 struct AdaptiveLimiter {
     max: AtomicUsize,
     current: AtomicUsize,
+    active: AtomicUsize,
     success_streak: AtomicUsize,
     blocked_until: Mutex<Option<Instant>>,
-    semaphore: Semaphore,
+    notify: Notify,
 }
 
 impl AdaptiveLimiter {
     fn new(max: usize) -> Self {
         Self {
             max: AtomicUsize::new(max),
-            current: AtomicUsize::new(max),
+            current: AtomicUsize::new(max.min(3)),
+            active: AtomicUsize::new(0),
             success_streak: AtomicUsize::new(0),
             blocked_until: Mutex::new(None),
-            semaphore: Semaphore::new(max),
+            notify: Notify::new(),
+        }
+    }
+
+    fn set_max(&self, max: usize) {
+        let max = max.clamp(1, 100);
+        self.max.store(max, Ordering::Release);
+        self.current.store(max.min(3), Ordering::Release);
+        self.success_streak.store(0, Ordering::Release);
+        if let Ok(mut guard) = self.blocked_until.lock() {
+            *guard = None;
+        }
+        self.notify.notify_waiters();
+    }
+
+    fn backoff(&self, reduction: impl Fn(usize) -> usize) {
+        let mut old = self.current.load(Ordering::Acquire);
+        loop {
+            let next = reduction(old).max(1);
+            match self.current.compare_exchange_weak(old, next, Ordering::AcqRel, Ordering::Acquire)
+            {
+                Ok(_) => break,
+                Err(actual) => old = actual,
+            }
+        }
+        self.success_streak.store(0, Ordering::Release);
+    }
+
+    async fn acquire(&self) -> AdaptivePermit<'_> {
+        loop {
+            let wake = self.notify.notified();
+            tokio::pin!(wake);
+            wake.as_mut().enable();
+
+            let blocked_until = self.blocked_until.lock().ok().and_then(|guard| *guard);
+            if let Some(deadline) = blocked_until.filter(|deadline| *deadline > Instant::now()) {
+                tokio::select! {
+                    () = tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)) => {},
+                    () = &mut wake => {},
+                }
+                continue;
+            }
+
+            let active = self.active.load(Ordering::Acquire);
+            if active < self.current.load(Ordering::Acquire) {
+                if self
+                    .active
+                    .compare_exchange_weak(active, active + 1, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
+                {
+                    let permit = AdaptivePermit { limiter: self };
+                    let blocked = self
+                        .blocked_until
+                        .lock()
+                        .ok()
+                        .and_then(|guard| *guard)
+                        .is_some_and(|deadline| deadline > Instant::now());
+                    if !blocked {
+                        return permit;
+                    }
+                    drop(permit);
+                }
+                continue;
+            }
+            wake.await;
         }
     }
 }
 
-pub struct AdaptivePermit {
-    limiter: &'static AdaptiveLimiter,
+pub struct AdaptivePermit<'a> {
+    limiter: &'a AdaptiveLimiter,
 }
 
-impl Drop for AdaptivePermit {
+impl Drop for AdaptivePermit<'_> {
     fn drop(&mut self) {
-        self.limiter.semaphore.add_permits(1);
+        self.limiter.active.fetch_sub(1, Ordering::AcqRel);
+        self.limiter.notify.notify_waiters();
     }
 }
 
@@ -114,51 +181,11 @@ fn adaptive_limiter() -> &'static AdaptiveLimiter {
 }
 
 pub fn configure_adaptive_concurrency(max_concurrency: usize) {
-    let max = max_concurrency.clamp(1, 100);
-    let limiter = adaptive_limiter();
-    limiter.max.store(max, Ordering::Release);
-
-    let start = max.min(3);
-    limiter.current.store(start, Ordering::Release);
-
-    limiter.success_streak.store(0, Ordering::Release);
-    if let Ok(mut guard) = limiter.blocked_until.lock() {
-        *guard = None;
-    }
+    adaptive_limiter().set_max(max_concurrency);
 }
 
-pub async fn acquire_adaptive_permit() -> AdaptivePermit {
-    let limiter = adaptive_limiter();
-    loop {
-        let blocked_until = limiter.blocked_until.lock().ok().and_then(|guard| *guard);
-        if let Some(until) = blocked_until {
-            let now = Instant::now();
-            if until > now {
-                tokio::time::sleep_until(tokio::time::Instant::from_std(until)).await;
-                continue;
-            }
-        }
-
-        let permit = limiter
-            .semaphore
-            .acquire()
-            .await
-            .expect("AdaptiveLimiter semaphore should never be closed");
-
-        let blocked_until = limiter.blocked_until.lock().ok().and_then(|guard| *guard);
-        if let Some(until) = blocked_until {
-            let now = Instant::now();
-            if until > now {
-                permit.forget();
-                limiter.semaphore.add_permits(1);
-                tokio::time::sleep_until(tokio::time::Instant::from_std(until)).await;
-                continue;
-            }
-        }
-
-        permit.forget();
-        return AdaptivePermit { limiter };
-    }
+pub async fn acquire_adaptive_permit() -> AdaptivePermit<'static> {
+    adaptive_limiter().acquire().await
 }
 
 pub fn record_adaptive_success() {
@@ -176,69 +203,70 @@ pub fn record_adaptive_success() {
             .current
             .compare_exchange(limit, (limit + 1).min(max), Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
-            && limit < max
         {
-            limiter.semaphore.add_permits(1);
+            limiter.notify.notify_waiters();
         }
     }
 }
 
 pub fn record_adaptive_rate_limit(retry_after_ms: Option<u64>) {
     let limiter = adaptive_limiter();
-    let current = limiter.current.load(Ordering::Acquire).max(1);
-    let next = (current / 2).max(1);
-    if limiter.current.compare_exchange(current, next, Ordering::AcqRel, Ordering::Acquire).is_ok()
-    {
-        let diff = current - next;
-        if diff > 0 {
-            tokio::spawn(async move {
-                if let Ok(permits) = limiter.semaphore.acquire_many(diff as u32).await {
-                    permits.forget();
-                }
-            });
-        }
-    }
-
-    limiter.success_streak.store(0, Ordering::Release);
-
+    limiter.backoff(|current| current / 2);
     if let Some(retry_after_ms) = retry_after_ms {
-        let capped_ms = retry_after_ms.clamp(500, 60_000);
-        let next_until = Instant::now() + Duration::from_millis(capped_ms);
+        let deadline = Instant::now() + Duration::from_millis(retry_after_ms.clamp(500, 60_000));
         if let Ok(mut guard) = limiter.blocked_until.lock() {
-            if guard.map_or(true, |until| next_until > until) {
-                *guard = Some(next_until);
+            if guard.map_or(true, |until| deadline > until) {
+                *guard = Some(deadline);
             }
         }
     }
+    limiter.notify.notify_waiters();
 }
 
 pub fn record_explicit_rate_limit(reset_in_ms: u64) {
     let limiter = adaptive_limiter();
-    let capped_ms = reset_in_ms.clamp(500, 120_000);
-    let next_until = Instant::now() + Duration::from_millis(capped_ms);
+    let deadline = Instant::now() + Duration::from_millis(reset_in_ms.clamp(500, 120_000));
     if let Ok(mut guard) = limiter.blocked_until.lock() {
-        if guard.map_or(true, |until| next_until > until) {
-            *guard = Some(next_until);
+        if guard.map_or(true, |until| deadline > until) {
+            *guard = Some(deadline);
         }
     }
+    limiter.notify.notify_waiters();
 }
 
 pub fn record_adaptive_server_error() {
     let limiter = adaptive_limiter();
-    let current = limiter.current.load(Ordering::Acquire).max(1);
-    let next = current.saturating_sub(1).max(1);
-    if limiter.current.compare_exchange(current, next, Ordering::AcqRel, Ordering::Acquire).is_ok()
-    {
-        let diff = current - next;
-        if diff > 0 {
-            tokio::spawn(async move {
-                if let Ok(permits) = limiter.semaphore.acquire_many(diff as u32).await {
-                    permits.forget();
-                }
-            });
-        }
+    limiter.backoff(|current| current.saturating_sub(1));
+    limiter.notify.notify_waiters();
+}
+
+#[cfg(test)]
+mod adaptive_limiter_tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn shrinking_capacity_does_not_admit_more_work() {
+        let limiter = AdaptiveLimiter::new(3);
+        let first = limiter.acquire().await;
+        let second = limiter.acquire().await;
+        limiter.set_max(1);
+        assert!(tokio::time::timeout(Duration::from_millis(20), limiter.acquire()).await.is_err());
+        drop(first);
+        assert!(tokio::time::timeout(Duration::from_millis(20), limiter.acquire()).await.is_err());
+        drop(second);
+        let third = tokio::time::timeout(Duration::from_millis(100), limiter.acquire()).await;
+        assert!(third.is_ok());
     }
-    limiter.success_streak.store(0, Ordering::Release);
+
+    #[tokio::test]
+    async fn cancelled_wait_does_not_consume_capacity() {
+        let limiter = AdaptiveLimiter::new(1);
+        let first = limiter.acquire().await;
+        assert!(tokio::time::timeout(Duration::from_millis(20), limiter.acquire()).await.is_err());
+        drop(first);
+        assert!(tokio::time::timeout(Duration::from_millis(100), limiter.acquire()).await.is_ok());
+    }
 }
 
 #[derive(Clone)]
@@ -438,6 +466,7 @@ pub async fn clear_asset_cache(app: AppHandle) -> bool {
         guard.last_images = Default::default();
         guard.last_meshes = Default::default();
         guard.last_script_refs = Default::default();
+        guard.assets_revision = guard.assets_revision.saturating_add(1);
         guard.scan_status = None;
     }
     true

@@ -35,7 +35,13 @@ pub(super) async fn write_json_file(path: &PathBuf, value: &Value) -> crate::err
         tokio::fs::create_dir_all(parent).await?;
     }
     let json_str = serde_json::to_string_pretty(value)?;
-    tokio::fs::write(path, json_str).await.map_err(crate::error::AppError::from)
+    let temp_path = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4().simple()));
+    tokio::fs::write(&temp_path, json_str).await?;
+    if let Err(error) = tokio::fs::rename(&temp_path, path).await {
+        let _ = tokio::fs::remove_file(&temp_path).await;
+        return Err(error.into());
+    }
+    Ok(())
 }
 
 static REDACTION_ENV_VARS: OnceLock<Vec<String>> = OnceLock::new();

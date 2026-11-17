@@ -67,7 +67,7 @@ pub async fn delete_job(app: AppHandle, job_id: String) -> crate::error::Result<
         }
         write_json_file(&path, &jobs).await?;
     }
-    Ok(true)
+    Ok(false)
 }
 
 pub(super) async fn persist_job(app: &AppHandle, job: Value) -> crate::error::Result<bool> {

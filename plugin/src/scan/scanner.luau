@@ -270,13 +270,16 @@ local function scanAssets(): ()
 		end
 	end)
 
-	if not postJson("/scan-start", { placeId = placeId, placeName = placeName }) then
+	activeScanId = HttpService:GenerateGUID(false)
+	local started, response = postJson("/scan-start", { placeId = placeId, placeName = placeName, scanId = activeScanId })
+	if not started or (response and response.success == false) then
 		pcall(function()
-			postJson("/scan-abort", {})
+			postJson("/scan-abort", { scanId = activeScanId })
 		end)
 		return
 	end
 
+	scanChunkId = 0
 	resetObjectRegistry()
 	resetScanRecordState()
 
@@ -343,6 +346,7 @@ local function scanAssets(): ()
 		if now - lastProgressTime >= 0.25 then
 			pcall(function()
 				postJson("/scan-progress", {
+					scanId = activeScanId,
 					scanning = true,
 					current_service = currentService,
 					scanned = processed,
@@ -369,8 +373,18 @@ local function scanAssets(): ()
 	captured += #records
 	flushScanRecordsOrError(records)
 
-	local completeOk, response = postJson("/scan-complete", {})
-	if not completeOk then
+	local completeOk, response = false, nil
+	for _ = 1, 20 do
+		completeOk, response = postJson("/scan-complete", { scanId = activeScanId })
+		if completeOk and response and response.ok == true then
+			break
+		end
+		if not completeOk or not response or response.inProgress ~= true then
+			break
+		end
+		task.wait(1)
+	end
+	if not completeOk or not response or response.ok ~= true then
 		error("Could not finalize Studio scan")
 	end
 
@@ -436,11 +450,12 @@ local function scan(): ()
 		resetObjectRegistry()
 		resetScanRecordState()
 		pcall(function()
-			postJson("/scan-abort", {})
+			postJson("/scan-abort", { scanId = activeScanId })
 		end)
 		logToPlugin("[Warning] " .. "[ISpooferMotion] Scan failed: " .. tostring(err))
 		setPluginGuiStatus("Scan Failed. Waiting for scan or replacements...")
 	end
+	activeScanId = nil
 end
 
 

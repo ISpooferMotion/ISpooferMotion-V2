@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useEffect, useRef } from 'react';
 
-import type { PluginAsset, PluginAssetStore } from '../utils/pluginBridge';
+import type { PluginAssetStore } from '../utils/pluginBridge';
 
 export type StudioScanBundle = {
   anims: PluginAssetStore;
@@ -24,29 +24,14 @@ export function useStudioAssetPoll(
     if (!studioConnected) return;
 
     let cancelled = false;
-    let idle = false;
     let inFlight = false;
-    let lastSnapshot = '';
-    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+    let observedRevision: number | null = null;
+    let complete = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const hashAssets = (assets?: PluginAsset[]) => {
-      let hash = 2166136261;
-      for (const asset of assets ?? []) {
-        const value = JSON.stringify(asset);
-        for (let i = 0; i < value.length; i++) {
-          hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
-        }
-        hash = Math.imul(hash ^ 255, 16777619);
-      }
-      return `${assets?.length ?? 0}:${hash >>> 0}`;
-    };
-
-    const bundleSnapshot = (bundle: StudioScanBundle) =>
-      `${hashAssets(bundle.anims.assets)}-${hashAssets(bundle.sounds.assets)}-${hashAssets(bundle.images.assets)}-${hashAssets(bundle.meshes.assets)}-${hashAssets(bundle.scriptRefs.assets)}`;
-
-    const schedulePoll = (delayMs: number) => {
-      if (pollTimer) clearTimeout(pollTimer);
-      pollTimer = setTimeout(() => void poll(), delayMs);
+    const schedule = (delayMs: number) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void poll(), delayMs);
     };
 
     const poll = async () => {
@@ -54,53 +39,36 @@ export function useStudioAssetPoll(
       inFlight = true;
 
       try {
-        const bundle = await invoke<StudioScanBundle>('get_studio_asset_snapshots');
+        const revision = await invoke<number>('get_studio_asset_revision');
         if (cancelled) return;
 
-        const { anims, sounds, images, meshes, scriptRefs } = bundle;
-        const stores = [anims, sounds, images, meshes, scriptRefs];
-        const anyScanning = stores.some((store) => store.scanning);
-        if (anyScanning && idle) {
-          idle = false;
-          schedulePoll(2000);
+        if (revision !== observedRevision) {
+          const bundle = await invoke<StudioScanBundle>('get_studio_asset_snapshots');
+          if (cancelled) return;
+
+          complete = [
+            bundle.anims,
+            bundle.sounds,
+            bundle.images,
+            bundle.meshes,
+            bundle.scriptRefs,
+          ].every((store) => store.complete && !store.scanning);
+          if (complete) onCompleteRef.current(bundle);
+          observedRevision = revision;
         }
-
-        const allDone = stores.every((store) => store.complete);
-
-        if (!allDone) {
-          idle = false;
-          lastSnapshot = '';
-          schedulePoll(2000);
-          return;
-        }
-
-        const snapshot = bundleSnapshot(bundle);
-        if (snapshot === lastSnapshot) {
-          if (!idle) {
-            idle = true;
-            schedulePoll(10000);
-          }
-          return;
-        }
-
-        onCompleteRef.current(bundle);
-        lastSnapshot = snapshot;
-        idle = true;
-        schedulePoll(10000);
+        schedule(complete ? 10000 : 2000);
       } catch {
-        if (!cancelled) schedulePoll(2000);
+        if (!cancelled) schedule(2000);
       } finally {
         inFlight = false;
       }
     };
 
     void poll();
-    schedulePoll(2000);
 
     return () => {
       cancelled = true;
-      idle = true;
-      if (pollTimer) clearTimeout(pollTimer);
+      if (timer) clearTimeout(timer);
     };
   }, [studioConnected]);
 }

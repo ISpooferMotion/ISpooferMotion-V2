@@ -251,6 +251,82 @@ pub async fn load_profile_secrets(app: AppHandle) -> crate::error::Result<AnyVal
     Ok(AnyValue(load_profile_secrets_inner(&app).await?))
 }
 
+fn merge_secrets(current: &mut Value, update: &Value) -> crate::error::Result<()> {
+    let incoming = update.as_object().ok_or_else(|| {
+        crate::error::AppError::Custom("Profile secrets payload must be an object".to_string())
+    })?;
+    let stored = current.as_object_mut().ok_or_else(|| {
+        crate::error::AppError::Custom("Stored profile secrets must be an object".to_string())
+    })?;
+
+    for (key, value) in incoming {
+        match key.as_str() {
+            "action" => {}
+            "secrets" => {
+                if let Some(secrets) = value.as_object() {
+                    stored.extend(secrets.clone());
+                }
+            }
+            "accountSecrets" => {
+                if !value.is_object() {
+                    return Err(crate::error::AppError::Custom(
+                        "Account secrets must be an object".to_string(),
+                    ));
+                }
+                stored.insert(key.clone(), value.clone());
+            }
+            "profileCookies" => {
+                if let Some(incoming_profiles) = value.as_object() {
+                    let profiles = stored
+                        .entry(key.clone())
+                        .or_insert_with(|| Value::Object(serde_json::Map::new()));
+                    if let Some(existing) = profiles.as_object_mut() {
+                        existing.extend(incoming_profiles.clone());
+                    } else {
+                        *profiles = value.clone();
+                    }
+                }
+            }
+            _ => {
+                stored.insert(key.clone(), value.clone());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod merge_tests {
+    use super::*;
+
+    #[test]
+    fn account_snapshots_replace_deleted_credentials_without_erasing_other_profiles() {
+        let mut current = serde_json::json!({
+            "accountSecrets": {"removed": {"cookie": "old"}},
+            "profileCookies": {"anotherProfile": "keep"},
+            "cookie": "current"
+        });
+        merge_secrets(
+            &mut current,
+            &serde_json::json!({
+                "accountSecrets": {},
+                "profileCookies": {"selectedProfile": "new"}
+            }),
+        )
+        .expect("valid snapshot should be merged");
+        assert_eq!(current["accountSecrets"], serde_json::json!({}));
+        assert_eq!(current["profileCookies"]["anotherProfile"], "keep");
+        assert_eq!(current["profileCookies"]["selectedProfile"], "new");
+    }
+
+    #[test]
+    fn invalid_account_snapshot_cannot_destroy_existing_secrets() {
+        let mut current = serde_json::json!({"accountSecrets": {"a": "keep"}});
+        assert!(merge_secrets(&mut current, &serde_json::json!({"accountSecrets": null})).is_err());
+        assert_eq!(current["accountSecrets"]["a"], "keep");
+    }
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn save_profile_secrets(
@@ -261,40 +337,7 @@ pub async fn save_profile_secrets(
     let data = data.0;
     let mut all_secrets = load_profile_secrets_inner(&app).await?;
 
-    if let (Some(all_obj), Some(data_obj)) = (all_secrets.as_object_mut(), data.as_object()) {
-        for (key, value) in data_obj {
-            if key != "action" && key != "secrets" {
-                if matches!(key.as_str(), "profileCookies" | "accountSecrets") {
-                    let target = all_obj
-                        .entry(key.clone())
-                        .or_insert_with(|| Value::Object(serde_json::Map::new()));
-                    if let (Some(existing), Some(incoming)) =
-                        (target.as_object_mut(), value.as_object())
-                    {
-                        for (entry_key, entry_value) in incoming {
-                            existing.insert(entry_key.clone(), entry_value.clone());
-                        }
-                    } else {
-                        all_obj.insert(key.clone(), value.clone());
-                    }
-                } else {
-                    all_obj.insert(key.clone(), value.clone());
-                }
-            } else if key == "secrets" {
-                if let Some(secrets_obj) = value.as_object() {
-                    for (secret_key, secret_value) in secrets_obj {
-                        all_obj.insert(secret_key.clone(), secret_value.clone());
-                    }
-                }
-            }
-        }
-    } else if data.is_object() {
-        all_secrets = data.clone();
-    } else {
-        return Err(crate::error::AppError::Custom(
-            "Profile secrets payload must be an object".to_string(),
-        ));
-    }
+    merge_secrets(&mut all_secrets, &data)?;
 
     let api_key = all_secrets.get("apiKey").and_then(Value::as_str).map(str::to_string);
     let json_str = serde_json::to_string(&all_secrets)?;

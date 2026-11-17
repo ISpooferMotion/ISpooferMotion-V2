@@ -65,9 +65,7 @@ export function useStudioConnection() {
           if (!cancelled) {
             success = result.synced === true;
             setStudioConnected(success);
-            if (result.studioPlaceName && result.studioPlaceName.trim() !== '') {
-              setStudioPlaceName(result.studioPlaceName);
-            }
+            setStudioPlaceName(result.studioPlaceName?.trim() || null);
             setScanStatus((prev) => {
               const next = result.scanStatus || null;
               if (prev === next) return prev;
@@ -97,11 +95,13 @@ export function useStudioConnection() {
         } else if (!cancelled) {
           setStudioConnected(false);
           setScanStatus(null);
+          setStudioPlaceName(null);
         }
       } catch {
         if (!cancelled) {
           setStudioConnected(false);
           setScanStatus(null);
+          setStudioPlaceName(null);
         }
       } finally {
         inFlight = false;

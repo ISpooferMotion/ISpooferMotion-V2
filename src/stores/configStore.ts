@@ -195,6 +195,7 @@ interface ConfigState {
 }
 
 export const useConfigStore = create<ConfigState>((set, get) => {
+  let previousSecretsSave: Promise<void> = Promise.resolve();
   let saved: string | null = null;
   try {
     saved =
@@ -286,11 +287,19 @@ export const useConfigStore = create<ConfigState>((set, get) => {
       }
     },
     updateAccountsList: (accounts) => {
+      let removedSecrets = false;
       set((state) => {
         const n = { ...state.config, accounts };
+        const keptIds = new Set(accounts.map((account) => account.id));
+        const accountSecrets = Object.fromEntries(
+          Object.entries(state.accountSecrets).filter(([id]) => keptIds.has(id)),
+        );
+        removedSecrets =
+          Object.keys(accountSecrets).length !== Object.keys(state.accountSecrets).length;
         saveToStorage(n);
-        return { config: n };
+        return { config: n, accountSecrets };
       });
+      if (removedSecrets) void get().saveSecrets();
     },
     updateCategory: (cat, vals) => {
       set((state) => {
@@ -325,14 +334,21 @@ export const useConfigStore = create<ConfigState>((set, get) => {
           >;
         }
         const s: ProfileSecrets = await invoke('load_profile_secrets');
+        let removedStaleSecrets = false;
         set((state) => {
+          const accountIds = new Set(state.config.accounts.map((account) => account.id));
+          const incomingSecrets = Object.entries(s.accountSecrets || {});
+          const accountSecrets = Object.fromEntries(
+            incomingSecrets.filter(([accountId]) => accountIds.has(accountId)),
+          );
+          removedStaleSecrets = incomingSecrets.length !== Object.keys(accountSecrets).length;
           const selectedUser = state.config.spoofing.selectedUser;
           const profileCookie =
             selectedUser !== 'none' && typeof s.profileCookies?.[selectedUser] === 'string'
               ? s.profileCookies[selectedUser]
               : '';
           return {
-            accountSecrets: s.accountSecrets || {},
+            accountSecrets,
             secretsLoaded: true,
             config: {
               ...state.config,
@@ -350,17 +366,17 @@ export const useConfigStore = create<ConfigState>((set, get) => {
             },
           };
         });
+        if (removedStaleSecrets) await get().saveSecrets();
       } catch (e) {
         console.warn('Failed to load profile secrets from backend', e);
 
         set({ secretsLoaded: true });
       }
     },
-    saveSecrets: async () => {
-      if (!isTauriRuntime()) return;
+    saveSecrets: () => {
+      if (!isTauriRuntime() || !get().secretsLoaded) return Promise.resolve();
 
-      if (!get().secretsLoaded) return;
-      try {
+      const next = previousSecretsSave.then(async () => {
         const { invoke } = await import('@tauri-apps/api/core');
         const state = get();
         const c = state.config.spoofing;
@@ -377,9 +393,11 @@ export const useConfigStore = create<ConfigState>((set, get) => {
             accountSecrets: state.accountSecrets,
           },
         });
-      } catch (e) {
-        console.error('Failed to save secrets:', e);
-      }
+      });
+      previousSecretsSave = next.catch((error) => {
+        console.error('Failed to save secrets:', error);
+      });
+      return previousSecretsSave;
     },
     updateAccountSecret: async (accountId: string, cookie?: string, apiKey?: string) => {
       set((state) => {

@@ -98,9 +98,15 @@ local function flushRecords(records: { Record }): boolean
 		return true
 	end
 
-	local ok = postJson("/scan-records", { records = records })
-	table.clear(records)
-	pendingRecordBytes = 0
+	local ok, response = postJson("/scan-records", { records = records, scanId = activeScanId, chunkId = scanChunkId + 1 })
+	if ok and response and response.success == false then
+		return false
+	end
+	if ok then
+		scanChunkId += 1
+		table.clear(records)
+		pendingRecordBytes = 0
+	end
 	return ok
 end
 

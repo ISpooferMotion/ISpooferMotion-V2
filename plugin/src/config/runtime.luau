@@ -35,6 +35,8 @@ local MAX_HTTP_RESPONSE_BYTES = 1000000
 BASE_URL = nil
 polling = false
 
+local activeScanId: string? = nil
+local scanChunkId: number = 0
 local scanRunning = false
 local patchRunning = false
 local manualReplaceRunning = false

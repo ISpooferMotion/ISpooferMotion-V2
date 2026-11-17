@@ -15,6 +15,10 @@ pub struct PollQuery {
     pub place_name: Option<String>,
 }
 
+fn belongs_to_scan(guard: &super::messages::AssetServerStateData, payload: &Value) -> bool {
+    guard.scan_id.as_deref() == payload.get("scanId").and_then(Value::as_str)
+}
+
 pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> {
     let guard = state.data.read().await;
 
@@ -39,7 +43,16 @@ pub async fn handle_scan_start(
 ) -> Json<Value> {
     let mut guard = state.data.write().await;
     guard.last_plugin_poll_time = Some(Instant::now());
+    guard.scan_id = payload
+        .get("scanId")
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty() && id.len() <= 64)
+        .map(ToString::to_string);
+    guard.received_scan_chunks.clear();
+    guard.scan_completion_in_progress = false;
+    guard.last_scan_completion = None;
     guard.scan_generation = guard.scan_generation.saturating_add(1);
+    guard.assets_revision = guard.assets_revision.saturating_add(1);
     guard.pending_studio_records = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let incoming_place_id = payload
         .get("placeId")
@@ -80,6 +93,12 @@ pub async fn handle_scan_progress(
     Json(mut payload): Json<Value>,
 ) -> Json<Value> {
     let mut guard = state.data.write().await;
+    if !belongs_to_scan(&guard, &payload)
+        || guard.scan_status.is_none()
+        || guard.scan_completion_in_progress
+    {
+        return Json(serde_json::json!({"success": false, "superseded": true}));
+    }
     guard.last_plugin_poll_time = Some(Instant::now());
     if let Some(obj) = payload.as_object_mut() {
         obj.insert("scanning".to_string(), Value::Bool(true));
@@ -96,6 +115,16 @@ pub async fn handle_scan_records(
         return Json(serde_json::json!({"success": true}));
     };
 
+    {
+        let guard = state.data.read().await;
+        if !belongs_to_scan(&guard, &payload)
+            || guard.scan_status.is_none()
+            || guard.scan_completion_in_progress
+        {
+            return Json(serde_json::json!({"success": false, "superseded": true}));
+        }
+    }
+
     let mut parsed_records = Vec::with_capacity(records_value.len());
     for record in records_value {
         if let Ok(parsed) = serde_json::from_value::<StudioRecord>(record.clone()) {
@@ -106,7 +135,18 @@ pub async fn handle_scan_records(
     }
 
     let mut guard = state.data.write().await;
+    if !belongs_to_scan(&guard, &payload)
+        || guard.scan_status.is_none()
+        || guard.scan_completion_in_progress
+    {
+        return Json(serde_json::json!({"success": false, "superseded": true}));
+    }
     guard.last_plugin_poll_time = Some(Instant::now());
+    if let Some(chunk_id) = payload.get("chunkId").and_then(Value::as_u64) {
+        if !guard.received_scan_chunks.insert(chunk_id) {
+            return Json(serde_json::json!({"success": true, "duplicate": true}));
+        }
+    }
 
     let mut truncated = false;
     {
@@ -131,9 +171,30 @@ pub async fn handle_scan_records(
     Json(serde_json::json!({"success": true}))
 }
 
-pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> {
+pub async fn handle_scan_complete(
+    State(state): State<AppState>,
+    Json(payload): Json<Value>,
+) -> Json<Value> {
     let (records, mappings, scan_generation) = {
         let mut guard = state.data.write().await;
+        if !belongs_to_scan(&guard, &payload)
+            || guard.scan_generation == 0
+            || guard.aborted_scan_generation >= guard.scan_generation
+        {
+            return Json(serde_json::json!({"ok": false, "superseded": true}));
+        }
+        if guard.completed_scan_generation >= guard.scan_generation {
+            return Json(
+                guard
+                    .last_scan_completion
+                    .clone()
+                    .unwrap_or_else(|| serde_json::json!({"ok": false, "superseded": true})),
+            );
+        }
+        if guard.scan_completion_in_progress {
+            return Json(serde_json::json!({"ok": false, "inProgress": true}));
+        }
+        guard.scan_completion_in_progress = true;
         guard.last_plugin_poll_time = Some(Instant::now());
         let extracted_records = std::mem::take(
             &mut *guard
@@ -183,6 +244,14 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
         Vec::new()
     };
 
+    let mut guard = state.data.write().await;
+    if guard.scan_generation != scan_generation
+        || guard.aborted_scan_generation >= scan_generation
+        || guard.completed_scan_generation >= scan_generation
+        || !belongs_to_scan(&guard, &payload)
+    {
+        return Json(serde_json::json!({"ok": false, "superseded": true}));
+    }
     let patch_count = patches.len();
     log::info!(
         "handle_scan_complete: records={record_count} mappings={mapping_count} patches={patch_count}"
@@ -208,11 +277,6 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
         );
     }
 
-    let mut guard = state.data.write().await;
-    if guard.scan_generation != scan_generation || guard.aborted_scan_generation >= scan_generation
-    {
-        return Json(serde_json::json!({"ok": false, "superseded": true}));
-    }
     (
         guard.last_animations,
         guard.last_sounds,
@@ -222,6 +286,7 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
     ) = stores;
     guard.scan_status = None;
     guard.completed_scan_generation = guard.scan_generation;
+    guard.assets_revision = guard.assets_revision.saturating_add(1);
     if !mappings.is_empty() {
         if patches.is_empty() {
             let _ = state.app_handle.emit(
@@ -242,7 +307,7 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
     }
     let kf_warnings = count_keyframe_warnings(&guard.last_script_refs);
     guard.keyframe_warning_count = kf_warnings;
-    Json(serde_json::json!({
+    let completion = serde_json::json!({
         "ok": true,
         "recordsTruncated": guard.scan_records_truncated,
         "keyframeWarningCount": kf_warnings,
@@ -253,13 +318,27 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
             "meshes": guard.last_meshes.assets.len(),
             "scriptRefs": guard.last_script_refs.assets.len()
         }
-    }))
+    });
+    guard.last_scan_completion = Some(completion.clone());
+    guard.scan_completion_in_progress = false;
+    Json(completion)
 }
 
-pub async fn handle_scan_abort(State(state): State<AppState>) -> Json<Value> {
+pub async fn handle_scan_abort(
+    State(state): State<AppState>,
+    Json(payload): Json<Value>,
+) -> Json<Value> {
     let mut guard = state.data.write().await;
+    if !belongs_to_scan(&guard, &payload)
+        || guard.scan_generation == 0
+        || guard.completed_scan_generation >= guard.scan_generation
+    {
+        return Json(serde_json::json!({"success": false, "superseded": true}));
+    }
     guard.scan_status = None;
     guard.aborted_scan_generation = guard.scan_generation;
+    guard.scan_completion_in_progress = false;
+    guard.assets_revision = guard.assets_revision.saturating_add(1);
     guard.pending_studio_records = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     guard.last_sounds.scanning = false;
     guard.last_animations.scanning = false;
@@ -516,6 +595,7 @@ macro_rules! request_handler {
                     "total": 0
                 }));
             }
+            guard.assets_revision = guard.assets_revision.saturating_add(1);
             guard.notify.notify_waiters();
             Json(serde_json::json!({"success": true}))
         }
@@ -601,7 +681,9 @@ macro_rules! legacy_assets_handler {
             State(state): State<AppState>,
             Json(payload): Json<Value>,
         ) -> Json<Value> {
-            append_legacy_assets(&mut state.data.write().await.$field, &payload);
+            let mut guard = state.data.write().await;
+            append_legacy_assets(&mut guard.$field, &payload);
+            guard.assets_revision = guard.assets_revision.saturating_add(1);
             Json(serde_json::json!({"success": true}))
         }
     };
@@ -620,6 +702,7 @@ macro_rules! legacy_complete_handler {
             guard.$field.scanning = false;
             guard.$field.complete = true;
             guard.$field.timestamp = Some(Instant::now());
+            guard.assets_revision = guard.assets_revision.saturating_add(1);
             Json(serde_json::json!({"success": true}))
         }
     };
@@ -640,6 +723,17 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::time::Instant;
+
+    #[test]
+    fn scan_id_rejects_late_packets_from_another_scan() {
+        let mut state = super::super::messages::AssetServerStateData::default();
+        state.scan_id = Some("scan-a".into());
+        assert!(belongs_to_scan(&state, &json!({"scanId": "scan-a"})));
+        assert!(!belongs_to_scan(&state, &json!({"scanId": "scan-b"})));
+        assert!(!belongs_to_scan(&state, &json!({})));
+        state.scan_id = None;
+        assert!(belongs_to_scan(&state, &json!({})));
+    }
 
     #[test]
     fn test_clear_stale_incomplete_not_stale() {

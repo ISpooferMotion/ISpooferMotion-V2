@@ -12,12 +12,24 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const hasStorage =
-    typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function';
+const readSetting = (key: string) => {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const saveSetting = (key: string, value: string) => {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    return;
+  }
+};
 
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    const saved = hasStorage ? localStorage.getItem('theme') : null;
+    const saved = readSetting('theme');
     if (saved === 'light' || saved === 'dark') return saved;
     return typeof window !== 'undefined' &&
       window.matchMedia &&
@@ -27,7 +39,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   const [accentColor, setAccentColor] = useState<string>(() => {
-    return (hasStorage ? localStorage.getItem('accentColor') : null) || '#10b981';
+    return readSetting('accentColor') || '#10b981';
   });
 
   useEffect(() => {
@@ -39,17 +51,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.classList.remove('light');
       root.classList.add('dark');
     }
-    if (hasStorage && typeof localStorage.setItem === 'function') {
-      localStorage.setItem('theme', themeMode);
-    }
+    saveSetting('theme', themeMode);
   }, [themeMode]);
 
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty('--primary', accentColor);
-    if (hasStorage && typeof localStorage.setItem === 'function') {
-      localStorage.setItem('accentColor', accentColor);
-    }
+    saveSetting('accentColor', accentColor);
   }, [accentColor]);
 
   return (

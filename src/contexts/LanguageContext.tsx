@@ -8,18 +8,30 @@ interface LanguageState {
   t: (keyPath: string) => string;
 }
 
+const readLanguage = () => {
+  try {
+    return window.localStorage.getItem('language');
+  } catch {
+    return null;
+  }
+};
+
+const saveLanguage = (language: string) => {
+  try {
+    window.localStorage.setItem('language', language);
+  } catch {
+    return;
+  }
+};
+
 const getInitialLang = () => {
-  const hasStorage =
-    typeof localStorage !== 'undefined' && typeof localStorage.getItem === 'function';
-  const savedLang = hasStorage ? localStorage.getItem('language') : null;
+  const savedLang = readLanguage();
   if (savedLang) return savedLang;
 
   const systemLang = navigator.language ? navigator.language.split('-')[0] : 'en';
   const supported = ['en', 'es', 'ru', 'fr'];
   if (supported.includes(systemLang)) {
-    if (hasStorage && typeof localStorage.setItem === 'function') {
-      localStorage.setItem('language', systemLang);
-    }
+    saveLanguage(systemLang);
     return systemLang;
   }
   return 'en';
@@ -28,9 +40,7 @@ const getInitialLang = () => {
 export const useLanguage = create<LanguageState>((set, get) => ({
   lang: getInitialLang(),
   setLang: (newLang: string) => {
-    if (typeof localStorage !== 'undefined' && typeof localStorage.setItem === 'function') {
-      localStorage.setItem('language', newLang);
-    }
+    saveLanguage(newLang);
     set({ lang: newLang });
   },
   t: (keyPath: string) => getTranslation(get().lang, keyPath),

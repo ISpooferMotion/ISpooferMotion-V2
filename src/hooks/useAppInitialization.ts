@@ -16,17 +16,23 @@ export function useAppInitialization() {
   useEffect(() => {
     if (!isTauriRuntime()) return;
 
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const checkStatus = async () => {
       try {
         const isUp: boolean = await invoke('check_roblox_api_status');
-        setIsRobloxApiDown(!isUp);
-      } catch (e) {
-        setIsRobloxApiDown(true);
+        if (!cancelled) setIsRobloxApiDown(!isUp);
+      } catch {
+        if (!cancelled) setIsRobloxApiDown(true);
+      } finally {
+        if (!cancelled) timer = setTimeout(() => void checkStatus(), 60000);
       }
     };
-    checkStatus();
-    const interval = setInterval(checkStatus, 60000);
-    return () => clearInterval(interval);
+    void checkStatus();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   const telemetryEnabled = useConfigStore((s) => s.config.general.telemetryEnabled);
@@ -90,24 +96,41 @@ export function useAppInitialization() {
   useEffect(() => {
     if (!isTauriRuntime() || !telemetryEnabled) return;
 
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let controller: AbortController | undefined;
     const sendHeartbeat = async () => {
+      const request = new AbortController();
+      controller = request;
+      const deadline = setTimeout(() => request.abort(), 15000);
       try {
         const baseUrl =
           import.meta.env.VITE_API_BASE_URL === undefined
             ? 'https://ispoofermotion.com'
             : import.meta.env.VITE_API_BASE_URL;
         const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+        if (cancelled) return;
         await tauriFetch(`${baseUrl}/api/dev/heartbeat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ source: 'spoofer' }),
+          signal: request.signal,
         });
-      } catch (e) {}
+      } catch {
+        return;
+      } finally {
+        clearTimeout(deadline);
+        if (controller === request) controller = undefined;
+        if (!cancelled) timer = setTimeout(() => void sendHeartbeat(), 60000);
+      }
     };
 
-    sendHeartbeat();
-    const interval = setInterval(sendHeartbeat, 60000);
-    return () => clearInterval(interval);
+    void sendHeartbeat();
+    return () => {
+      cancelled = true;
+      controller?.abort();
+      if (timer) clearTimeout(timer);
+    };
   }, [telemetryEnabled]);
 
   useEffect(() => {

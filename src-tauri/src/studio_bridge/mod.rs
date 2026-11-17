@@ -454,6 +454,16 @@ pub async fn get_studio_health_status() -> AnyValue {
 #[tauri::command]
 #[specta::specta]
 #[must_use]
+pub async fn get_studio_asset_revision() -> u64 {
+    let Some(data) = bridge_data() else {
+        return 0;
+    };
+    data.read().await.assets_revision
+}
+
+#[tauri::command]
+#[specta::specta]
+#[must_use]
 pub async fn get_studio_asset_snapshots() -> AnyValue {
     let Some(data) = bridge_data() else {
         return AnyValue(json!({
