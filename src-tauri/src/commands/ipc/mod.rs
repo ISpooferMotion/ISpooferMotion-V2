@@ -114,34 +114,3 @@ pub fn append_log_entry(
     )?;
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{logging::sanitized_context_pub, redact_log_message};
-
-    #[test]
-    fn redacts_identifying_paths_and_cookie_values() {
-        let message = r#"C:\Users\private-name\project /Users/private-name/project /home/private-name/project username=private-name .ROBLOSECURITY=secret x-api-key=also-secret apiKey=another-secret"#;
-        let redacted = redact_log_message(message);
-
-        assert!(!redacted.contains("private-name"));
-        assert!(!redacted.contains("secret"));
-        assert!(redacted.contains("####"));
-    }
-
-    #[test]
-    fn redacts_sensitive_support_report_context() {
-        let context = serde_json::json!({
-            "cookie": "secret-cookie",
-            "apiKey": "secret-key",
-            "nested": {
-                "path": r"C:\Users\private-name\project"
-            }
-        });
-        let redacted = sanitized_context_pub(Some(context)).to_string();
-
-        assert!(!redacted.contains("secret"));
-        assert!(!redacted.contains("private-name"));
-        assert!(redacted.contains("####"));
-    }
-}

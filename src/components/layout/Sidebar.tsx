@@ -1,11 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Crown, History, ScanLine, Settings, Terminal, Users } from 'lucide-react';
+import { History, ScanLine, Settings, Terminal, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
 import { cn } from '../../lib/utils';
-import { openV3PurchasePage } from '../modals/V3PromoModal';
 import ProfilePopup from './ProfilePopup';
 
 export default function Sidebar({
@@ -105,14 +104,6 @@ export default function Sidebar({
       </nav>
 
       <div className="pt-2 mt-auto space-y-1">
-        <button
-          type="button"
-          onClick={() => void openV3PurchasePage()}
-          className="flex h-10 w-full items-center gap-3 rounded-[4.5px] px-[15px] text-left text-text-secondary transition-colors hover:bg-bg-elevated/70 hover:text-text-primary"
-        >
-          <Crown size={18} className="shrink-0 opacity-70" />
-          <span className="text-[13px] font-medium tracking-wide">Purchase V3</span>
-        </button>
         <ProfilePopup />
       </div>
     </aside>

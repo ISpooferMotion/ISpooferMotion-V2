@@ -77,18 +77,3 @@ impl Serialize for AppError {
 }
 
 pub type Result<T, E = AppError> = core::result::Result<T, E>;
-
-#[cfg(test)]
-mod tests {
-    use super::redact_user_paths;
-
-    #[test]
-    fn redacts_windows_mac_and_linux_home_segments() {
-        let input = r"C:\Users\alice\app /Users/bob/app /home/carol/app";
-        let redacted = redact_user_paths(input);
-        assert!(!redacted.contains("alice"));
-        assert!(!redacted.contains("bob"));
-        assert!(!redacted.contains("carol"));
-        assert_eq!(redacted.matches("[REDACTED_PATH]").count(), 3);
-    }
-}

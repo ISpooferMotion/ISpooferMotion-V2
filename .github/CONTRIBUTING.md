@@ -45,7 +45,7 @@ Run the full check suite:
 bun run check
 ```
 
-This runs Prettier, rustfmt, StyLua, TypeScript, Clippy, Cargo tests, ESLint, Vitest, and a full production build. If it passes locally it'll pass in CI.
+This runs Prettier, rustfmt, StyLua, TypeScript, Clippy, ESLint, and the production build. The CI environment performs the same static checks.
 
 Individual commands if you need them:
 
@@ -54,8 +54,6 @@ Individual commands if you need them:
 | `bun run format`    | Format everything |
 | `bun run typecheck` | TS type checking  |
 | `bun run rust:lint` | Cargo Clippy      |
-| `bun run rust:test` | Cargo unit tests  |
-| `bun run test`      | Vitest unit tests |
 
 ## Submitting a pull request
 

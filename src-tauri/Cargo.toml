@@ -85,7 +85,6 @@ full_moon = { version = "2.2.0", features = ["luau", "roblox"] }
 tauri-plugin-updater = "2.10.1"
 rfd = "0.17.2"
 tauri-plugin-process = "2"
-tauri-plugin-playwright = "0.4.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [

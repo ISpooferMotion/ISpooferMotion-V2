@@ -27,7 +27,6 @@ end
 --!nocheck
 --!nolint
 
-
 local SCAN_CHUNK_BYTES: number = 500000
 local SCAN_MAX_TAGS_PER_OBJECT: number = 100
 local SCAN_MAX_TAG_BYTES: number = 100

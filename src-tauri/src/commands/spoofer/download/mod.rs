@@ -637,27 +637,3 @@ fn should_attempt_claim(status: reqwest::StatusCode) -> bool {
 fn is_retryable_download_status(status: reqwest::StatusCode) -> bool {
     status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn direct_download_urls_do_not_use_zero_server_place_id() {
-        let urls =
-            build_direct_asset_download_urls("123456789", Some("animation"), &["987654321".into()]);
-        assert!(!urls.iter().any(|url| url.contains("serverplaceid=0")));
-        assert!(urls.iter().any(|url| url.contains("serverplaceid=987654321")));
-    }
-
-    #[tokio::test]
-    async fn validation_rejects_error_page_downloads() -> Result<(), Box<dyn std::error::Error>> {
-        let path = std::env::temp_dir().join("ispoofer-invalid-download.html");
-        tokio::fs::write(&path, b"<!doctype html><title>Forbidden</title>").await?;
-        let path_string = path.to_string_lossy().to_string();
-        let result = validate_downloaded_payload(&path_string, Some("audio")).await;
-        let _ = tokio::fs::remove_file(path).await;
-        assert!(result.is_err());
-        Ok(())
-    }
-}

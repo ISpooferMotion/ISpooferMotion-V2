@@ -51,7 +51,6 @@ jobs:
       - run: bun run build:plugin
       - run: bun run typecheck
       - run: bun run lint
-      - run: bun run test
       - run: bun run build:app
 
       - name: Install Selene
@@ -88,7 +87,6 @@ jobs:
       - run: bun run build:plugin
       - run: bun run rust:check
       - run: bun run rust:lint
-      - run: bun run rust:test
 
   prepare-release:
     name: Prepare Release

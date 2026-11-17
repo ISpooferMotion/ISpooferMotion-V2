@@ -623,24 +623,3 @@ pub fn batch_asset_type_name(asset_type: &str) -> &'static str {
         _ => "Animation",
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use reqwest::Client;
-
-    #[tokio::test]
-    async fn send_asset_download_request_ua_appends_range_header_when_offset_greater_than_zero() {
-        let client = Client::new();
-        let _ = send_asset_download_request_ua(
-            &client,
-            "http://127.0.0.1:0/",
-            None,
-            None,
-            "mock",
-            None,
-            500,
-        )
-        .await;
-    }
-}

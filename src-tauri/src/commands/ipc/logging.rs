@@ -69,11 +69,6 @@ fn sanitized_context(context: Option<Value>) -> Value {
     context
 }
 
-#[cfg(test)]
-pub(super) fn sanitized_context_pub(context: Option<Value>) -> Value {
-    sanitized_context(context)
-}
-
 #[tauri::command]
 #[specta::specta]
 pub async fn append_debug_log(

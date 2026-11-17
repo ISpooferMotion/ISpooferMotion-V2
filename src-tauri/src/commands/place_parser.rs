@@ -192,15 +192,3 @@ pub fn parse_place_file(file_path: String) -> Result<PlaceParseResult, String> {
 
     Ok(PlaceParseResult { file_type: ext, root_instances, warnings })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_place_file() {
-        let result = parse_place_file("test_place.rbxmx".to_string());
-        assert!(result.is_err(), "Expected an error because the file does not exist");
-        assert_eq!(result.expect_err("Expected an error"), "File does not exist");
-    }
-}

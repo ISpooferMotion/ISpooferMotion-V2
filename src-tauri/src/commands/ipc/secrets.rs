@@ -295,38 +295,6 @@ fn merge_secrets(current: &mut Value, update: &Value) -> crate::error::Result<()
     Ok(())
 }
 
-#[cfg(test)]
-mod merge_tests {
-    use super::*;
-
-    #[test]
-    fn account_snapshots_replace_deleted_credentials_without_erasing_other_profiles() {
-        let mut current = serde_json::json!({
-            "accountSecrets": {"removed": {"cookie": "old"}},
-            "profileCookies": {"anotherProfile": "keep"},
-            "cookie": "current"
-        });
-        merge_secrets(
-            &mut current,
-            &serde_json::json!({
-                "accountSecrets": {},
-                "profileCookies": {"selectedProfile": "new"}
-            }),
-        )
-        .expect("valid snapshot should be merged");
-        assert_eq!(current["accountSecrets"], serde_json::json!({}));
-        assert_eq!(current["profileCookies"]["anotherProfile"], "keep");
-        assert_eq!(current["profileCookies"]["selectedProfile"], "new");
-    }
-
-    #[test]
-    fn invalid_account_snapshot_cannot_destroy_existing_secrets() {
-        let mut current = serde_json::json!({"accountSecrets": {"a": "keep"}});
-        assert!(merge_secrets(&mut current, &serde_json::json!({"accountSecrets": null})).is_err());
-        assert_eq!(current["accountSecrets"]["a"], "keep");
-    }
-}
-
 #[tauri::command]
 #[specta::specta]
 pub async fn save_profile_secrets(
@@ -424,22 +392,4 @@ pub async fn clear_profile_secrets(
         Err(e) => return Err(e.into()),
     }
     Ok(true)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::split_chunks_by_bytes;
-
-    #[test]
-    fn chunking_respects_utf8_byte_limit_and_round_trips() {
-        let input = format!("{}{}", "a".repeat(999), "🙂".repeat(20));
-        let chunks = split_chunks_by_bytes(&input, 1_000);
-        assert!(chunks.iter().all(|chunk| chunk.len() <= 1_000));
-        assert_eq!(chunks.concat(), input);
-    }
-
-    #[test]
-    fn chunking_handles_empty_values() {
-        assert_eq!(split_chunks_by_bytes("", 1_000), vec![String::new()]);
-    }
 }

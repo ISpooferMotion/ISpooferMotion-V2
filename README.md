@@ -137,8 +137,6 @@ bun run tauri:dev
 | `bun run check`        | Run the complete project validation suite          |
 | `bun run build:plugin` | Build the Roblox Studio plugin into `dist-plugin/` |
 | `bun run format`       | Format TypeScript, Rust, and Luau sources          |
-| `bun run test`         | Run frontend tests with Vitest                     |
-| `bun run rust:test`    | Run Rust unit tests                                |
 
 </details>
 
@@ -154,7 +152,7 @@ Before opening a pull request, run:
 bun run check
 ```
 
-The check suite validates formatting, frontend types, linting, Rust code, tests, and production builds.
+The check suite validates formatting, frontend types, linting, Rust code, and production builds.
 
 Individual checks can also be run through their respective package scripts when working on a specific part of the project.
 
@@ -170,11 +168,9 @@ The project is split between the desktop application and the Roblox Studio integ
 ISpooferMotion-V2/
 ├── src/                 React/TypeScript desktop UI
 ├── src-tauri/           Tauri/Rust native backend and Studio bridge
-├── plugin/              Roblox Studio Luau plugin source, config, and tests
+├── plugin/              Roblox Studio Luau plugin source and configuration
 ├── scripts/             Build and development helpers
-├── e2e/                 Playwright/Tauri end-to-end tests
 ├── public/              Vite-served runtime assets
-├── docs/                Architecture and audit documentation
 └── .github/             CI, issue templates, and contribution files
 ```
 

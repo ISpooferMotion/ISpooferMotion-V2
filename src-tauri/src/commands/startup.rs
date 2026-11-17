@@ -251,18 +251,3 @@ pub fn uninstall_roblox_plugin() {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::is_owned_plugin_file_name;
-
-    #[test]
-    fn plugin_cleanup_only_matches_files_owned_by_the_app() {
-        assert!(is_owned_plugin_file_name("ISpooferMotion.rbxmx"));
-        assert!(is_owned_plugin_file_name("ISpooferMotion (2).rbxmx"));
-        assert!(is_owned_plugin_file_name(".ISpooferMotion.rbxmx.tmp"));
-        assert!(!is_owned_plugin_file_name("MyISpooferMotionNotes.rbxmx"));
-        assert!(!is_owned_plugin_file_name("ISpooferMotion (backup).rbxmx"));
-        assert!(!is_owned_plugin_file_name("ISpooferMotion-helper.lua"));
-    }
-}

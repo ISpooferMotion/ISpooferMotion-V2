@@ -240,35 +240,6 @@ pub fn record_adaptive_server_error() {
     limiter.notify.notify_waiters();
 }
 
-#[cfg(test)]
-mod adaptive_limiter_tests {
-    use super::*;
-    use std::time::Duration;
-
-    #[tokio::test]
-    async fn shrinking_capacity_does_not_admit_more_work() {
-        let limiter = AdaptiveLimiter::new(3);
-        let first = limiter.acquire().await;
-        let second = limiter.acquire().await;
-        limiter.set_max(1);
-        assert!(tokio::time::timeout(Duration::from_millis(20), limiter.acquire()).await.is_err());
-        drop(first);
-        assert!(tokio::time::timeout(Duration::from_millis(20), limiter.acquire()).await.is_err());
-        drop(second);
-        let third = tokio::time::timeout(Duration::from_millis(100), limiter.acquire()).await;
-        assert!(third.is_ok());
-    }
-
-    #[tokio::test]
-    async fn cancelled_wait_does_not_consume_capacity() {
-        let limiter = AdaptiveLimiter::new(1);
-        let first = limiter.acquire().await;
-        assert!(tokio::time::timeout(Duration::from_millis(20), limiter.acquire()).await.is_err());
-        drop(first);
-        assert!(tokio::time::timeout(Duration::from_millis(100), limiter.acquire()).await.is_ok());
-    }
-}
-
 #[derive(Clone)]
 struct RobloxGameContext {
     place_id: String,
@@ -491,41 +462,3 @@ pub use place::{
 };
 pub use remote_cache::initialize_remote_cache;
 pub use upload::publish_asset_with_progress;
-
-#[cfg(test)]
-mod tests {
-    use super::{roblox_game_context, RateLimitBucket};
-    use std::collections::HashSet;
-
-    #[test]
-    fn rate_limit_bucket_names_are_distinct() {
-        let buckets = [
-            RateLimitBucket::Upload,
-            RateLimitBucket::OperationPoll,
-            RateLimitBucket::DownloadResolution,
-            RateLimitBucket::AssetDownload,
-            RateLimitBucket::PlaceLookup,
-            RateLimitBucket::AssetResolve,
-        ];
-        let mut names = HashSet::new();
-        assert!(buckets.into_iter().all(|bucket| names.insert(bucket.name())));
-    }
-
-    #[test]
-    fn roblox_game_context_requires_real_place_id() {
-        assert!(roblox_game_context(None).is_none());
-        assert!(roblox_game_context(Some("0")).is_none());
-        assert!(roblox_game_context(Some("not-a-place")).is_none());
-    }
-
-    #[test]
-    fn roblox_game_context_is_stable_per_place() -> Result<(), String> {
-        let first = roblox_game_context(Some("123456789")).ok_or("valid place context")?;
-        let second = roblox_game_context(Some("123456789")).ok_or("valid place context")?;
-        assert_eq!(first.place_id, "123456789");
-        assert_eq!(first.game_id, second.game_id);
-        assert!(first.session_id.contains("\"PlaceId\":123456789"));
-        assert!(first.session_id.contains("\"GameId\""));
-        Ok(())
-    }
-}

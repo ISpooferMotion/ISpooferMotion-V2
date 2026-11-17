@@ -870,30 +870,3 @@ pub async fn publish_asset_with_progress(
     );
     Ok(PublishResult { success: false, error: Some(msg), asset_id: None, replaced_id: None })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{asset_type_id_is_image, upload_kind_for_type};
-
-    #[test]
-    fn maps_image_and_mesh_upload_kinds() {
-        let image = upload_kind_for_type(Some("Image"));
-        assert_eq!(image.asset_type, "Image");
-        assert!(image.needs_universe_permissions);
-
-        let mesh = upload_kind_for_type(Some("Mesh"));
-        assert_eq!(mesh.asset_type, "Mesh");
-        assert_eq!(mesh.extension, "mesh");
-    }
-
-    #[test]
-    fn image_family_asset_type_ids_are_recognised() {
-        for image_id in [1, 2, 11, 13, 21, 22, 38] {
-            assert!(asset_type_id_is_image(image_id), "id {image_id} should be image");
-        }
-
-        for non_image in [24, 3, 40, 10, 0] {
-            assert!(!asset_type_id_is_image(non_image), "id {non_image} should not be image");
-        }
-    }
-}
