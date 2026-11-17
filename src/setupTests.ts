@@ -57,5 +57,8 @@ vi.mock('@tauri-apps/api/window', () => ({
     minimize: vi.fn(),
     maximize: vi.fn(),
     toggleMaximize: vi.fn(),
+    isAlwaysOnTop: vi.fn().mockResolvedValue(false),
+    setAlwaysOnTop: vi.fn().mockResolvedValue(undefined),
+    hide: vi.fn().mockResolvedValue(undefined),
   }),
 }));

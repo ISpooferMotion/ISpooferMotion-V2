@@ -4,7 +4,7 @@ use tauri::{AppHandle, Manager};
 
 #[tauri::command]
 #[specta::specta]
-pub async fn close_splashscreen(app: AppHandle) {
+pub async fn close_splashscreen(app: AppHandle) -> bool {
     if app.get_webview_window("main").is_none() {
         match tauri::WebviewWindowBuilder::new(
             &app,
@@ -33,8 +33,14 @@ pub async fn close_splashscreen(app: AppHandle) {
         }
     }
 
-    if let Some(splashscreen) = app.get_webview_window("splashscreen") {
-        let _ = splashscreen.close();
+    if app.get_webview_window("main").is_some() {
+        if let Some(splashscreen) = app.get_webview_window("splashscreen") {
+            let _ = splashscreen.close();
+        }
+        true
+    } else {
+        log::error!("Main window was not created; keeping splash screen available");
+        false
     }
 }
 

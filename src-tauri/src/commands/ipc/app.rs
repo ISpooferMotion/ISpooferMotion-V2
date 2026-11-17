@@ -73,7 +73,8 @@ pub fn get_runtime_info() -> AnyValue {
         "appVersion": APP_VERSION,
         "platform": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
-        "runtime": "tauri"
+        "runtime": "tauri",
+        "trayAvailable": crate::tray_available()
     }))
 }
 

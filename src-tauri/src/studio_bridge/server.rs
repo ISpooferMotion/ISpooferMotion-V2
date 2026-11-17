@@ -54,6 +54,7 @@ pub async fn handle_scan_start(
     guard.scan_generation = guard.scan_generation.saturating_add(1);
     guard.assets_revision = guard.assets_revision.saturating_add(1);
     guard.pending_studio_records = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    guard.pending_record_bytes = 0;
     let incoming_place_id = payload
         .get("placeId")
         .and_then(|value| {
@@ -143,26 +144,41 @@ pub async fn handle_scan_records(
     }
     guard.last_plugin_poll_time = Some(Instant::now());
     if let Some(chunk_id) = payload.get("chunkId").and_then(Value::as_u64) {
-        if !guard.received_scan_chunks.insert(chunk_id) {
+        if guard.received_scan_chunks.contains(&chunk_id) {
             return Json(serde_json::json!({"success": true, "duplicate": true}));
         }
+        if guard.received_scan_chunks.len() >= super::MAX_STUDIO_SCAN_CHUNKS {
+            guard.scan_records_truncated = true;
+            return Json(serde_json::json!({"success": true, "truncated": true}));
+        }
+        guard.received_scan_chunks.insert(chunk_id);
     }
 
     let mut truncated = false;
     {
-        let mut pending =
-            guard.pending_studio_records.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        let current_len = pending.len();
-        if current_len < super::MAX_STUDIO_RECORDS {
-            let available = super::MAX_STUDIO_RECORDS - current_len;
-            if parsed_records.len() > available {
-                parsed_records.truncate(available);
+        let records = std::sync::Arc::clone(&guard.pending_studio_records);
+        let mut pending = records.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut used_bytes = guard.pending_record_bytes;
+        for record in parsed_records {
+            if pending.len() >= super::MAX_STUDIO_RECORDS {
                 truncated = true;
+                break;
             }
-            pending.extend(parsed_records);
-        } else {
-            truncated = true;
+            let bytes = std::mem::size_of::<StudioRecord>()
+                + record.token.len()
+                + record.class_name.len()
+                + record.name.len()
+                + record.full_name.len()
+                + record.property.len()
+                + record.value.len();
+            if bytes > super::MAX_STUDIO_SCAN_BYTES.saturating_sub(used_bytes) {
+                truncated = true;
+                continue;
+            }
+            used_bytes += bytes;
+            pending.push(record);
         }
+        guard.pending_record_bytes = used_bytes;
     }
 
     if truncated {
@@ -202,6 +218,7 @@ pub async fn handle_scan_complete(
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
+        guard.pending_record_bytes = 0;
         guard.studio_records = std::sync::Arc::new(extracted_records);
         (
             std::sync::Arc::clone(&guard.studio_records),
@@ -340,6 +357,7 @@ pub async fn handle_scan_abort(
     guard.scan_completion_in_progress = false;
     guard.assets_revision = guard.assets_revision.saturating_add(1);
     guard.pending_studio_records = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    guard.pending_record_bytes = 0;
     guard.last_sounds.scanning = false;
     guard.last_animations.scanning = false;
     guard.last_images.scanning = false;
@@ -388,6 +406,7 @@ pub async fn handle_poll(
                     guard.studio_records = std::sync::Arc::new(Vec::new());
                     guard.pending_studio_records =
                         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+                    guard.pending_record_bytes = 0;
                     guard.stored_patches.clear();
                     if !guard.stored_mappings.is_empty() {
                         guard.request_sounds = true;

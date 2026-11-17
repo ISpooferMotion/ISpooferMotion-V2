@@ -1,22 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Crown,
-  History,
-  ScanLine,
-  Settings,
-  Terminal,
-  Users,
-} from 'lucide-react';
+import { Crown, History, ScanLine, Settings, Terminal, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useStudioConnectionState } from '../../contexts/StudioConnectionContext';
 import { cn } from '../../lib/utils';
 import { openV3PurchasePage } from '../modals/V3PromoModal';
-import { Button } from '../ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import ProfilePopup from './ProfilePopup';
 
 export default function Sidebar({
@@ -28,202 +17,104 @@ export default function Sidebar({
 }) {
   const { t } = useLanguage();
   const { studioConnected } = useStudioConnectionState();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [logoHovered, setLogoHovered] = useState(false);
   const [appVersion, setAppVersion] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
     invoke<string>('get_app_version')
-      .then((v) => setAppVersion(v))
-      .catch(() => setAppVersion(''));
+      .then((version) => {
+        if (!cancelled) setAppVersion(version);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const tabs = [
-    { id: 'spoofing', label: t('nav.spoofing'), icon: <ScanLine size={18} /> },
-    { id: 'activity', label: t('nav.activity'), icon: <History size={18} /> },
-    { id: 'accounts', label: t('nav.accounts'), icon: <Users size={18} /> },
-    { id: 'settings', label: t('nav.settings'), icon: <Settings size={18} /> },
-    { id: 'console', label: t('nav.console'), icon: <Terminal size={18} /> },
+    { id: 'spoofing', label: t('nav.spoofing'), icon: ScanLine },
+    { id: 'activity', label: t('nav.activity'), icon: History },
+    { id: 'accounts', label: t('nav.accounts'), icon: Users },
+    { id: 'settings', label: t('nav.settings'), icon: Settings },
+    { id: 'console', label: t('nav.console'), icon: Terminal },
   ];
 
   return (
-    <TooltipProvider delay={200}>
-      <div
-        className={cn(
-          'h-full bg-bg-surface/30 border-r border-border-subtle p-2 flex flex-col shrink-0 relative z-20',
-          isCollapsed ? 'w-16' : 'w-[220px]',
-        )}
-      >
-        <div
-          className={cn(
-            'flex items-center gap-2 mb-2 pl-[12px] pr-3 h-10 shrink-0 justify-between',
-          )}
-        >
-          <div
-            className={cn('flex items-center gap-2 min-w-0', isCollapsed && 'cursor-pointer')}
-            onClick={() => {
-              if (isCollapsed) {
-                setIsCollapsed(false);
-                setLogoHovered(false);
-              }
-            }}
-            onMouseEnter={() => isCollapsed && setLogoHovered(true)}
-            onMouseLeave={() => setLogoHovered(false)}
-            title={isCollapsed ? 'Expand' : undefined}
-          >
-            <div className="w-7 h-7 flex items-center justify-center shrink-0 relative">
-              {isCollapsed && logoHovered ? (
-                <div>
-                  <ChevronRight size={18} className="text-primary" />
-                </div>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <img
-                    src="/ism_logo_theme_swap.svg"
-                    className="w-full h-full object-contain select-none pointer-events-none"
-                    alt="ISpooferMotion"
-                    draggable={false}
-                  />
-                </div>
+    <aside className="h-full w-[220px] shrink-0 border-r border-border-subtle bg-bg-surface/30 p-2 flex flex-col relative z-20">
+      <div className="flex h-10 shrink-0 items-center gap-2 mb-2 px-3">
+        <img
+          src="/ism_logo_theme_swap.svg"
+          className="w-7 h-7 object-contain select-none shrink-0"
+          alt="ISpooferMotion"
+          draggable={false}
+        />
+        <div className="flex flex-col leading-tight min-w-0">
+          <span className="text-[12px] font-semibold tracking-tight text-foreground truncate">
+            ISpooferMotion
+          </span>
+          <div className="flex items-center gap-1">
+            <span
+              role="status"
+              aria-label={studioConnected ? t('misc.syncedToStudio') : t('misc.notSyncedToStudio')}
+              className={cn(
+                'w-1.5 h-1.5 rounded-full shrink-0',
+                studioConnected
+                  ? 'bg-primary shadow-[0_0_6px_var(--primary)]'
+                  : 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]',
               )}
-            </div>
-            {!isCollapsed && (
-              <div className="flex flex-col leading-tight min-w-0">
-                <span className="text-[12px] font-semibold tracking-tight text-foreground truncate">
-                  ISpooferMotion
-                </span>
-                <div className="flex items-center gap-1">
-                  <span
-                    title={studioConnected ? t('misc.syncedToStudio') : t('misc.notSyncedToStudio')}
-                    className={
-                      'w-1.5 h-1.5 rounded-full shrink-0 ' +
-                      (studioConnected
-                        ? 'bg-primary shadow-[0_0_6px_var(--primary)]'
-                        : 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]')
-                    }
-                  />
-                  <span className="text-[10px] text-muted-foreground truncate">
-                    {appVersion ? `v${appVersion}` : 'v?'}
-                  </span>
-                </div>
-              </div>
-            )}
+            />
+            <span className="text-[10px] text-muted-foreground truncate">
+              {appVersion ? `v${appVersion}` : 'v?'}
+            </span>
           </div>
-          {!isCollapsed && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-7 h-7 text-muted-foreground hover:bg-bg-elevated/70 shrink-0"
-              onClick={() => setIsCollapsed(true)}
-              aria-label="Collapse"
-            >
-              <ChevronLeft size={16} />
-            </Button>
-          )}
-        </div>
-
-        <div className="flex-1 flex flex-col gap-1 min-h-0 overflow-y-auto scrollbar-hide">
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-
-            const buttonContent = (
-              <div
-                role="button"
-                tabIndex={0}
-                aria-label={tab.label}
-                aria-current={isActive ? 'page' : undefined}
-                onClick={() => onTabChange(tab.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onTabChange(tab.id);
-                  }
-                }}
-                className={cn(
-                  'w-full text-left h-10 transition-colors duration-150 flex items-center gap-3 rounded-md relative outline-none cursor-pointer [-webkit-tap-highlight-color:transparent] pl-[15px] pr-3',
-                  isActive
-                    ? 'bg-bg-elevated text-text-primary border border-border-strong shadow-subtle'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated/70 border border-transparent',
-                )}
-              >
-                <div
-                  className={cn(
-                    'transition-opacity shrink-0',
-                    isActive ? 'opacity-100' : 'opacity-60',
-                  )}
-                >
-                  {tab.icon}
-                </div>
-                {!isCollapsed && (
-                  <span
-                    className={cn(
-                      'text-[13px] tracking-wide whitespace-nowrap overflow-hidden',
-                      isActive ? 'font-semibold' : 'font-medium',
-                    )}
-                  >
-                    {tab.label}
-                  </span>
-                )}
-              </div>
-            );
-
-            return isCollapsed ? (
-              <Tooltip key={tab.id}>
-                <TooltipTrigger>{buttonContent}</TooltipTrigger>
-                <TooltipContent side="right" className="font-semibold text-xs py-1 px-2">
-                  {tab.label}
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <div key={tab.id} data-tutorial-target={`${tab.id}-tab`}>
-                {buttonContent}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="pt-2 mt-auto space-y-1">
-          {isCollapsed ? (
-            <Tooltip>
-              <TooltipTrigger>
-                <button
-                  type="button"
-                  aria-label="Purchase V3"
-                  onClick={() => void openV3PurchasePage()}
-                  className="flex h-10 w-full items-center justify-center rounded-[4.5px] text-text-secondary transition-colors hover:bg-bg-elevated/70 hover:text-text-primary"
-                >
-                  <Crown size={18} className="opacity-70" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="font-semibold text-xs py-1 px-2">
-                Purchase V3
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void openV3PurchasePage()}
-              className="flex h-10 w-full items-center gap-3 rounded-[4.5px] px-[15px] text-left text-text-secondary transition-colors hover:bg-bg-elevated/70 hover:text-text-primary"
-            >
-              <Crown size={18} className="shrink-0 opacity-70" />
-              <span className="text-[13px] font-medium tracking-wide">Purchase V3</span>
-            </button>
-          )}
-
-          {isCollapsed ? (
-            <Tooltip>
-              <TooltipTrigger>
-                <ProfilePopup collapsed />
-              </TooltipTrigger>
-              <TooltipContent side="right" className="font-semibold text-xs py-1 px-2">
-                {t('nav.accounts')}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <ProfilePopup />
-          )}
         </div>
       </div>
-    </TooltipProvider>
+
+      <nav
+        aria-label="Main navigation"
+        className="flex-1 flex flex-col gap-1 min-h-0 overflow-y-auto scrollbar-hide"
+      >
+        {tabs.map(({ id, label, icon: Icon }) => {
+          const isActive = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              data-tutorial-target={`${id}-tab`}
+              aria-current={isActive ? 'page' : undefined}
+              onClick={() => onTabChange(id)}
+              className={cn(
+                'w-full text-left h-10 transition-colors duration-150 flex items-center gap-3 rounded-md relative outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer pl-[15px] pr-3',
+                isActive
+                  ? 'bg-bg-elevated text-text-primary border border-border-strong shadow-subtle'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated/70 border border-transparent',
+              )}
+            >
+              <Icon size={18} className={cn('shrink-0', !isActive && 'opacity-60')} />
+              <span
+                className={cn(
+                  'text-[13px] tracking-wide truncate',
+                  isActive ? 'font-semibold' : 'font-medium',
+                )}
+              >
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="pt-2 mt-auto space-y-1">
+        <button
+          type="button"
+          onClick={() => void openV3PurchasePage()}
+          className="flex h-10 w-full items-center gap-3 rounded-[4.5px] px-[15px] text-left text-text-secondary transition-colors hover:bg-bg-elevated/70 hover:text-text-primary"
+        >
+          <Crown size={18} className="shrink-0 opacity-70" />
+          <span className="text-[13px] font-medium tracking-wide">Purchase V3</span>
+        </button>
+        <ProfilePopup />
+      </div>
+    </aside>
   );
 }

@@ -24,11 +24,13 @@ import {
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 
+import { ErrorBoundary } from './components/core/ErrorBoundary';
 import { Button } from './components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
 import { TooltipProvider } from './components/ui/tooltip';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { cn } from './lib/utils';
 import { playRobloxAudio, stopRobloxAudio } from './utils/robloxAudio';
 import type { ParsedAssetRef } from './utils/robloxPlaceParser/types';
@@ -69,19 +71,31 @@ function PreviewApp() {
   }, [assetId]);
 
   useEffect(() => {
-    const unlistenPromise = listen<ParsedAssetRef>('preview-asset-change', (event) => {
+    let mounted = true;
+    let unlisten: (() => void) | undefined;
+    void listen<ParsedAssetRef>('preview-asset-change', (event) => {
       if (event.payload) {
         setAsset(event.payload);
         try {
           localStorage.setItem('preview-current-asset', JSON.stringify(event.payload));
         } catch {}
       }
-    });
-
-    void emit('preview-window-ready');
+    })
+      .then(async (stopListening) => {
+        if (!mounted) {
+          stopListening();
+          return;
+        }
+        unlisten = stopListening;
+        await emit('preview-window-ready');
+      })
+      .catch((error) => {
+        console.warn('Failed to establish preview event connection', error);
+      });
 
     return () => {
-      unlistenPromise.then((fn) => fn());
+      mounted = false;
+      unlisten?.();
     };
   }, []);
 
@@ -93,8 +107,11 @@ function PreviewApp() {
 
     setLoading(true);
     setError(false);
+    setThumbnailUrl(null);
+    let cancelled = false;
     invoke<string | null>('fetch_roblox_thumbnail', { assetId })
       .then((url) => {
+        if (cancelled) return;
         if (url) {
           setThumbnailUrl(url);
         } else if (isImage) {
@@ -104,27 +121,37 @@ function PreviewApp() {
         }
       })
       .catch(() => {
+        if (cancelled) return;
         if (isImage) {
           setThumbnailUrl(`https://assetdelivery.roblox.com/v1/asset/?id=${assetId}`);
         } else {
           setError(true);
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [assetId, isImage, isMesh]);
 
   const togglePin = async () => {
     const nextPinned = !isPinned;
-    setIsPinned(nextPinned);
     try {
       await getCurrentWindow().setAlwaysOnTop(nextPinned);
+      setIsPinned(nextPinned);
     } catch (e) {
       console.warn('Failed to toggle always on top', e);
     }
   };
 
   const handleMinimize = () => {
-    getCurrentWindow().minimize();
+    void getCurrentWindow()
+      .minimize()
+      .catch((error) => {
+        console.warn('Failed to minimize preview', error);
+      });
   };
 
   const handleClose = async () => {
@@ -134,7 +161,11 @@ function PreviewApp() {
     try {
       await getCurrentWindow().destroy();
     } catch {
-      await getCurrentWindow().close();
+      try {
+        await getCurrentWindow().close();
+      } catch (error) {
+        console.warn('Failed to close preview', error);
+      }
     }
   };
 
@@ -177,7 +208,8 @@ function PreviewApp() {
                 ? 'bg-primary text-primary-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground hover:bg-bg-surface',
             )}
-            title={isPinned ? 'Unpin Window' : 'Always On Top (Pinned)'}
+            title={isPinned ? 'Unpin Window' : 'Pin Window (Always on Top)'}
+            aria-pressed={isPinned}
           >
             {isPinned ? <Pin size={11} /> : <PinOff size={11} />}
             <span>{isPinned ? 'Pinned' : 'Pin'}</span>
@@ -187,6 +219,7 @@ function PreviewApp() {
             onClick={handleMinimize}
             className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-bg-surface transition-colors cursor-pointer"
             title="Minimize window"
+            aria-label="Minimize preview window"
           >
             <Minus size={12} />
           </button>
@@ -195,6 +228,7 @@ function PreviewApp() {
             onClick={handleClose}
             className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
             title="Close / Dock Preview"
+            aria-label="Close preview window"
           >
             <X size={12} />
           </button>
@@ -374,12 +408,16 @@ function PreviewApp() {
 
 ReactDOM.createRoot(document.getElementById('preview-root')!).render(
   <React.StrictMode>
-    <LanguageProvider>
-      <ConfigProvider>
-        <TooltipProvider>
-          <PreviewApp />
-        </TooltipProvider>
-      </ConfigProvider>
-    </LanguageProvider>
+    <ErrorBoundary>
+      <LanguageProvider>
+        <ConfigProvider>
+          <ThemeProvider>
+            <TooltipProvider>
+              <PreviewApp />
+            </TooltipProvider>
+          </ThemeProvider>
+        </ConfigProvider>
+      </LanguageProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

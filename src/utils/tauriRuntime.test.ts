@@ -9,6 +9,7 @@ describe('tauriRuntime', () => {
 
   afterEach(() => {
     delete (window as any).__TAURI_INTERNALS__;
+    delete (window as any).__IS_BROWSER_PREVIEW__;
   });
 
   it('returns false for isTauriRuntime when not in Tauri', () => {
@@ -18,6 +19,12 @@ describe('tauriRuntime', () => {
   it('returns true for isTauriRuntime when in Tauri', () => {
     (window as any).__TAURI_INTERNALS__ = { invoke: () => {}, transformCallback: () => {} };
     expect(isTauriRuntime()).toBe(true);
+  });
+
+  it('does not mistake the browser preview mock for a native runtime', () => {
+    (window as any).__TAURI_INTERNALS__ = { invoke: () => {}, transformCallback: () => {} };
+    (window as any).__IS_BROWSER_PREVIEW__ = true;
+    expect(isTauriRuntime()).toBe(false);
   });
 
   it('isMemoryInjectionSupported returns false outside tauri', async () => {

@@ -127,6 +127,20 @@ describe('ErrorBoundary', () => {
     consoleError.mockRestore();
   });
 
+  it('reports a failed crash report without claiming it was sent', async () => {
+    vi.mocked(apiClient.fetchTelemetry).mockRejectedValueOnce(new Error('Offline'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <ErrorBoundary>
+        <ThrowError shouldThrow />
+      </ErrorBoundary>,
+    );
+
+    expect(await screen.findByText(/crash report could not be sent/i)).toBeInTheDocument();
+    consoleError.mockRestore();
+  });
+
   it('does not send telemetry if disabled', async () => {
     useConfigStore.setState({
       config: {

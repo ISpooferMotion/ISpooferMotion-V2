@@ -15,7 +15,7 @@
     "build": "run-s build:app build:plugin",
     "tauri": "tauri",
     "tauri:build": "tauri build",
-    "tauri:dev": "bun scripts/clear-dev-state.mjs && tauri dev --config src-tauri/tauri.dev.conf.json",
+    "tauri:dev": "bun scripts/clear-dev-state.mjs && tauri dev",
     "format": "run-s format:prettier format:rust format:stylua",
     "format:check": "run-s format:prettier:check format:rust:check format:stylua:check",
     "format:prettier": "prettier --write .",

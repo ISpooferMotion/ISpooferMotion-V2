@@ -10,7 +10,7 @@ export default function CredentialsCard() {
   return (
     <SettingCard
       icon={KeyRound}
-      title={t('spoof.options') || 'Credentials & Authentication'}
+      title={t('config.credentials')}
       description="Manage Roblox session cookies and Open Cloud API credentials for downloading and uploading."
     >
       <CredentialsSection />

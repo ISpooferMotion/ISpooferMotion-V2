@@ -23,15 +23,15 @@ export const Toast = () => {
   const Icon = level === 'success' ? CheckCircle2 : level === 'error' ? XCircle : Info;
   const colour =
     level === 'success'
-      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
       : level === 'error'
-        ? 'border-red-500/40 bg-red-500/10 text-red-100'
-        : 'border-blue-500/40 bg-blue-500/10 text-blue-100';
+        ? 'border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200'
+        : 'border-blue-500/40 bg-blue-500/10 text-blue-800 dark:text-blue-200';
 
   return (
     <div
-      role="status"
-      aria-live="polite"
+      role={level === 'error' ? 'alert' : 'status'}
+      aria-live={level === 'error' ? 'assertive' : 'polite'}
       className="fixed bottom-4 right-4 z-[100] pointer-events-auto"
     >
       <div

@@ -15,6 +15,7 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  reportStatus?: 'pending' | 'sent' | 'failed' | 'disabled';
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -32,8 +33,10 @@ export class ErrorBoundary extends Component<Props, State> {
       try {
         const { telemetryEnabled } = useConfigStore.getState().config.general;
         if (!telemetryEnabled) {
+          this.setState({ reportStatus: 'disabled' });
           return;
         }
+        this.setState({ reportStatus: 'pending' });
 
         let appVersion = 'Unknown';
         let osInfo = 'Web Browser';
@@ -68,8 +71,10 @@ export class ErrorBoundary extends Component<Props, State> {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
+        this.setState({ reportStatus: 'sent' });
       } catch (e) {
         console.error('Failed to submit crash report:', e);
+        this.setState({ reportStatus: 'failed' });
       }
     })();
   }
@@ -100,9 +105,13 @@ export class ErrorBoundary extends Component<Props, State> {
           </h1>
           <p className="text-text-muted max-w-md">
             {getTranslation(useLanguage.getState().lang, 'misc.errorBoundaryDesc')}{' '}
-            {useConfigStore.getState().config.general.telemetryEnabled
+            {this.state.reportStatus === 'sent'
               ? getTranslation(useLanguage.getState().lang, 'misc.crashReportSent')
-              : getTranslation(useLanguage.getState().lang, 'misc.crashReportDisabled')}
+              : this.state.reportStatus === 'disabled'
+                ? getTranslation(useLanguage.getState().lang, 'misc.crashReportDisabled')
+                : this.state.reportStatus === 'failed'
+                  ? 'The crash report could not be sent.'
+                  : 'Attempting to send a crash report...'}
           </p>
           <div className="bg-bg-card border border-border p-4 rounded-xl mt-4 max-w-2xl text-left overflow-auto max-h-48 text-sm w-full font-mono shadow-inner">
             <div className="text-red-400 font-semibold mb-2">
@@ -111,7 +120,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
           <button
             onClick={() => window.location.reload()}
-            className="mt-6 px-6 py-3 bg-primary text-primary-content font-semibold rounded-xl hover:bg-primary-hover transition-colors shadow-lg active:scale-95"
+            className="mt-6 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary-hover transition-colors shadow-lg active:scale-95"
           >
             {getTranslation(useLanguage.getState().lang, 'misc.reloadApplication')}
           </button>

@@ -58,11 +58,18 @@ describe('Sidebar', () => {
   it('applies active styling to the active tab', () => {
     render(<Sidebar activeTab="activity" onTabChange={() => {}} />);
 
-    const activityBtn = screen.getByText('Activity').closest('[role="button"]');
-    const spoofingBtn = screen.getByText('Spoofing').closest('[role="button"]');
+    const activityBtn = screen.getByText('Activity').closest('button');
+    const spoofingBtn = screen.getByText('Spoofing').closest('button');
 
     expect(activityBtn).toHaveClass('bg-bg-elevated');
     expect(spoofingBtn).not.toHaveClass('bg-bg-elevated');
+  });
+
+  it('keeps navigation permanently expanded', () => {
+    render(<Sidebar activeTab="spoofing" onTabChange={() => {}} />);
+
+    expect(screen.queryByRole('button', { name: 'Collapse' })).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
   });
 
   it('opens the V3 pricing page from the sidebar', () => {

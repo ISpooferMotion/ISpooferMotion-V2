@@ -217,6 +217,11 @@ export const useConfigStore = create<ConfigState>((set, get) => {
         permissions: mergeKnownKeys(DEFAULT_APP_CONFIG.permissions, p.permissions),
         ui: {
           ...mergeKnownKeys(DEFAULT_APP_CONFIG.ui, p.ui),
+          activeTab: ['spoofing', 'activity', 'accounts', 'settings', 'console'].includes(
+            p.ui?.activeTab,
+          )
+            ? p.ui.activeTab
+            : DEFAULT_APP_CONFIG.ui.activeTab,
           settingsSections: mergeSections(
             p.ui?.settingsSections,
             DEFAULT_APP_CONFIG.ui.settingsSections,

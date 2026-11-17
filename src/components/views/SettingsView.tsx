@@ -31,7 +31,7 @@ export default function SettingsView() {
   const isManualScroll = useRef(false);
 
   const tabs = [
-    { id: 'credentials', label: t('spoof.options') || 'Credentials', icon: <KeyRound size={15} /> },
+    { id: 'credentials', label: t('config.credentials'), icon: <KeyRound size={15} /> },
     { id: 'permissions', label: 'Permissions', icon: <ShieldCheck size={15} /> },
     { id: 'appearance', label: t('settings.appearance'), icon: <Palette size={15} /> },
     { id: 'behavior', label: t('settings.behavior'), icon: <Laptop size={15} /> },
@@ -111,15 +111,15 @@ export default function SettingsView() {
 
   return (
     <div className="w-full h-full overflow-hidden">
-      <div className="w-full h-full p-4 lg:p-6 flex">
-        <div className="w-52 shrink-0 flex flex-col gap-1 pr-4 border-r border-border-subtle overflow-y-auto scrollbar-hide">
+      <div className="w-full h-full p-4 lg:p-6 flex max-[900px]:flex-col">
+        <div className="w-52 shrink-0 flex flex-col gap-1 pr-4 border-r border-border-subtle overflow-y-auto scrollbar-hide max-[900px]:w-full max-[900px]:flex-row max-[900px]:overflow-x-auto max-[900px]:overflow-y-hidden max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:pb-2 max-[900px]:pr-0">
           {tabs.map((tb) => (
             <button
               key={tb.id}
               type="button"
               onClick={() => handleTabClick(tb.id)}
               className={cn(
-                'flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all',
+                'flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all max-[900px]:w-auto max-[900px]:shrink-0 max-[900px]:whitespace-nowrap',
                 tab === tb.id
                   ? 'bg-primary/10 text-primary font-semibold'
                   : 'text-text-secondary hover:bg-bg-surface hover:text-text-primary',
@@ -135,7 +135,7 @@ export default function SettingsView() {
 
         <div
           id="settings-scroll-container"
-          className="flex-1 overflow-y-auto pl-6 flex flex-col gap-6 pb-32 scroll-smooth"
+          className="flex-1 min-w-0 min-h-0 overflow-y-auto pl-6 flex flex-col gap-6 pb-32 scroll-smooth max-[900px]:pl-0 max-[900px]:pt-4"
         >
           <div id="section-credentials" className="scroll-mt-4">
             <CredentialsCard />

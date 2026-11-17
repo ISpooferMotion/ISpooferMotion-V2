@@ -21,12 +21,13 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { cn } from '../../lib/utils';
 import { useSpooferStore } from '../../stores/spooferStore';
+import { isTauriRuntime } from '../../utils/tauriRuntime';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
@@ -55,18 +56,36 @@ export default function Titlebar() {
   const setIsPropertiesOpen = useSpooferStore((s) => s.setIsPropertiesOpen) ?? (() => {});
   const [isPinned, setIsPinned] = useState(false);
 
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    let cancelled = false;
+    getCurrentWindow()
+      .isAlwaysOnTop()
+      .then((pinned) => {
+        if (!cancelled) setIsPinned(pinned);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const togglePin = async () => {
     const next = !isPinned;
-    setIsPinned(next);
     try {
       await getCurrentWindow().setAlwaysOnTop(next);
+      setIsPinned(next);
     } catch (e) {
       console.warn('Failed to toggle pin', e);
     }
   };
 
   const handleMinimize = () => {
-    getCurrentWindow().minimize();
+    void getCurrentWindow()
+      .minimize()
+      .catch((error) => {
+        console.warn('Failed to minimize window', error);
+      });
   };
 
   const handleClose = async () => {
@@ -75,11 +94,22 @@ export default function Titlebar() {
       const previewWin = await WebviewWindow.getByLabel('asset-preview');
       if (previewWin) await previewWin.destroy();
     } catch {}
-    if (config.general.hideToTrayOnClose) {
-      await getCurrentWindow().hide();
-      return;
+    try {
+      if (config.general.hideToTrayOnClose) {
+        const runtime = await invoke<{ trayAvailable?: boolean }>('get_runtime_info').catch(
+          () => null,
+        );
+        if (runtime?.trayAvailable) {
+          await getCurrentWindow().hide();
+        } else {
+          await getCurrentWindow().minimize();
+        }
+      } else {
+        await invoke('quit_app');
+      }
+    } catch (error) {
+      console.error('Failed to close window', error);
     }
-    await invoke('quit_app');
   };
 
   const toggleFilter = (val: string) => {
@@ -371,6 +401,7 @@ export default function Titlebar() {
                 variant="ghost"
                 size="icon"
                 onClick={handleMinimize}
+                aria-label="Minimize window"
                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
               />
             }
@@ -387,6 +418,8 @@ export default function Titlebar() {
                 variant="ghost"
                 size="icon"
                 onClick={togglePin}
+                aria-label={isPinned ? 'Unpin window' : 'Pin window always on top'}
+                aria-pressed={isPinned}
                 className={cn(
                   'h-8 w-8 transition-colors',
                   isPinned
@@ -410,6 +443,7 @@ export default function Titlebar() {
                 variant="ghost"
                 size="icon"
                 onClick={handleClose}
+                aria-label="Close window"
                 className="h-8 w-8 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
               />
             }

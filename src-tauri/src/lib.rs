@@ -5,7 +5,14 @@ pub mod error;
 pub mod studio_bridge;
 pub mod utils;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
+
+static TRAY_AVAILABLE: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn tray_available() -> bool {
+    TRAY_AVAILABLE.load(Ordering::Relaxed)
+}
 
 macro_rules! specta_commands {
     () => {
@@ -164,34 +171,41 @@ pub fn run() {
                 let _ = app.deep_link().register_all();
             }
 
-            app.handle().plugin(
-                tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build(),
-            )?;
+            if let Err(error) = app
+                .handle()
+                .plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())
+            {
+                eprintln!("Unable to initialize file logging: {error}");
+            }
 
             tauri::async_runtime::spawn(crate::studio_bridge::start_server(app.handle().clone()));
 
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-            let _tray = TrayIconBuilder::new()
-                .icon(
-                    app.default_window_icon()
-                        .cloned()
-                        .expect("default window icon should be bundled for tray setup"),
-                )
-                .tooltip("ISpooferMotion")
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        if let Some(window) = tray.app_handle().get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
+            if let Some(icon) = app.default_window_icon().cloned() {
+                match TrayIconBuilder::new()
+                    .icon(icon)
+                    .tooltip("ISpooferMotion")
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            if let Some(window) = tray.app_handle().get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
                         }
-                    }
-                })
-                .build(app)?;
+                    })
+                    .build(app)
+                {
+                    Ok(_) => TRAY_AVAILABLE.store(true, Ordering::Relaxed),
+                    Err(error) => log::warn!("Unable to create system tray icon: {error}"),
+                }
+            } else {
+                log::warn!("No bundled tray icon available");
+            }
 
             Ok(())
         })

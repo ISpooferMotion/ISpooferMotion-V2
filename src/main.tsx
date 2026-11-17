@@ -17,7 +17,13 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { StudioConnectionProvider } from './contexts/StudioConnectionContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 
-const savedTheme = localStorage.getItem('theme') || 'dark';
+const savedTheme = (() => {
+  try {
+    return localStorage.getItem('theme') || 'dark';
+  } catch {
+    return 'dark';
+  }
+})();
 
 if (savedTheme === 'dark') {
   document.documentElement.classList.add('dark');
@@ -65,23 +71,23 @@ function TitleAttributeGuard({ children }: { children: React.ReactNode }) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <LanguageProvider>
-      <ConfigProvider>
-        <StudioConnectionProvider>
-          <ThemeProvider>
-            <TitleAttributeGuard>
-              <TooltipProvider>
-                <main className="text-text-primary bg-bg-base min-h-screen h-full font-sans transition-colors duration-300">
-                  <ErrorBoundary>
+    <ErrorBoundary>
+      <LanguageProvider>
+        <ConfigProvider>
+          <StudioConnectionProvider>
+            <ThemeProvider>
+              <TitleAttributeGuard>
+                <TooltipProvider>
+                  <main className="text-text-primary bg-bg-base min-h-screen h-full font-sans transition-colors duration-300">
                     <App />
                     <Toast />
-                  </ErrorBoundary>
-                </main>
-              </TooltipProvider>
-            </TitleAttributeGuard>
-          </ThemeProvider>
-        </StudioConnectionProvider>
-      </ConfigProvider>
-    </LanguageProvider>
+                  </main>
+                </TooltipProvider>
+              </TitleAttributeGuard>
+            </ThemeProvider>
+          </StudioConnectionProvider>
+        </ConfigProvider>
+      </LanguageProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

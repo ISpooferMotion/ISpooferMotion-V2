@@ -1,4 +1,7 @@
 export function isTauriRuntime() {
+  if ((window as Window & { __IS_BROWSER_PREVIEW__?: boolean }).__IS_BROWSER_PREVIEW__) {
+    return false;
+  }
   const internals = (
     window as Window & {
       __TAURI_INTERNALS__?: { invoke?: unknown; transformCallback?: unknown };

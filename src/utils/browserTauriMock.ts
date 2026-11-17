@@ -35,19 +35,27 @@ export function installBrowserTauriMock() {
     __TAURI_INTERNALS__?: {
       invoke?: unknown;
       transformCallback?: unknown;
+      metadata?: { currentWindow: { label: string } };
+    };
+    __TAURI_EVENT_PLUGIN_INTERNALS__?: {
+      unregisterListener: (event: string, eventId: number) => void;
     };
   };
 
   if (w.__TAURI_INTERNALS__) return;
 
   w.__TAURI_INTERNALS__ = {
+    metadata: { currentWindow: { label: 'main' } },
     invoke: async (cmd: string, _args?: unknown) => {
       if (cmd in MOCK_COMMANDS) return MOCK_COMMANDS[cmd];
-
-      if (typeof cmd === 'string' && cmd.startsWith('plugin:event|')) return null;
+      if (cmd === 'plugin:window|is_always_on_top') return false;
+      if (cmd.startsWith('plugin:event|')) return 0;
       return null;
     },
     transformCallback: () => callbackId++,
+  };
+  w.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+    unregisterListener: () => {},
   };
 
   (window as unknown as { __IS_BROWSER_PREVIEW__?: boolean }).__IS_BROWSER_PREVIEW__ = true;

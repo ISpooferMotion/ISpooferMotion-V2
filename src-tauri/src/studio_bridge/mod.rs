@@ -40,6 +40,8 @@ const PLUGIN_PORT_END: u16 = 14289;
 const PLUGIN_PORT_FALLBACK_END: u16 = 14320;
 const STUDIO_PROTOCOL_VERSION: u8 = 3;
 const MAX_STUDIO_RECORDS: usize = 2_000_000;
+const MAX_STUDIO_SCAN_BYTES: usize = 256 * 1024 * 1024;
+const MAX_STUDIO_SCAN_CHUNKS: usize = 262_144;
 const MAX_SCRIPT_SOURCE_BYTES: usize = 8_000_000;
 
 static ACTIVE_BRIDGE_PORT: OnceLock<RwLock<Option<u16>>> = OnceLock::new();
