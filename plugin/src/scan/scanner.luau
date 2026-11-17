@@ -370,26 +370,26 @@ local function scanAssets(): ()
 	captured += #records
 	flushScanRecordsOrError(records)
 
-	local completeOk, response = false, nil
+	local completeOk, completion = false, nil
 	for _ = 1, 20 do
-		completeOk, response = postJson("/scan-complete", { scanId = activeScanId })
-		if completeOk and response and response.ok == true then
+		completeOk, completion = postJson("/scan-complete", { scanId = activeScanId })
+		if completeOk and completion and completion.ok == true then
 			break
 		end
-		if not completeOk or not response or response.inProgress ~= true then
+		if not completeOk or not completion or completion.inProgress ~= true then
 			break
 		end
 		task.wait(1)
 	end
-	if not completeOk or not response or response.ok ~= true then
+	if not completeOk or not completion or completion.ok ~= true then
 		error("Could not finalize Studio scan")
 	end
 
-	local totals = response and response.totals or {}
+	local totals = completion and completion.totals or {}
 
-	if response and response.recordsTruncated then
-		local truncatedCount = tonumber(response.truncatedCount) or 0
-		local keepCount = tonumber(response.keptCount) or 0
+	if completion and completion.recordsTruncated then
+		local truncatedCount = tonumber(completion.truncatedCount) or 0
+		local keepCount = tonumber(completion.keptCount) or 0
 		if truncatedCount > 0 then
 			logToPlugin(
 				"[Warning] "

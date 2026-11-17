@@ -229,14 +229,16 @@ local function createPluginGui()
 				.. "\n]]"
 			logScript.Parent = serverStorage
 
-			local exportSuccess, err = pcall(function()
-				plugin:OpenScript(logScript)
+			local exportSuccess, opened, err = pcall(function()
+				return game:GetService("ScriptEditorService"):OpenScriptDocumentAsync(logScript)
 			end)
 
-			if exportSuccess then
+			if exportSuccess and opened then
 				openLogsButton.Text = "Opened!"
 			else
-				warn("ISpooferMotion Open Logs Failed: " .. tostring(err))
+				warn(
+					"ISpooferMotion Open Logs Failed: " .. tostring(exportSuccess and err or opened)
+				)
 				openLogsButton.Text = "Error"
 			end
 
@@ -671,15 +673,14 @@ local function createPluginGui()
 			return
 		end
 
-		local _G_plugin = _G.ISpooferMotionPlugin
-		if _G_plugin and _G_plugin.runManualReplacements then
+		if runManualReplacementsAsync then
 			manualRunning = true
 			runManualBtn.Text = "Starting..."
 			setBg(runManualBtn, Color3.fromHex("#18181b"))
 
 			local startTime = os.clock()
 
-			_G_plugin.runManualReplacements(txt, function(progress, total, replaced, isDone)
+			runManualReplacementsAsync(txt, function(progress, total, replaced, isDone)
 				if isDone then
 					manualRunning = false
 					if runManualBtn and runManualBtn.Parent then

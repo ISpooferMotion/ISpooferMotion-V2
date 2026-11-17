@@ -11,6 +11,7 @@ local togglePluginGui: any
 local logToPlugin: any
 local polling: any
 local BASE_URL: any
+local runManualReplacementsAsync: any
 
 --#include "src/version/version.luau"
 --#include "src/config/runtime.luau"
@@ -478,7 +479,7 @@ local function runManualReplacements(
 	end
 end
 
-local function runManualReplacementsAsync(
+runManualReplacementsAsync = function(
 	text: string,
 	progressCallback: ((number, number, number, boolean) -> ())?,
 	customBatchSize: number?
