@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: AAD4D9C38771DA7B43FE13BB
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 #[tauri::command]
 #[specta::specta]
 pub async fn check_roblox_api_status() -> crate::error::Result<bool> {
@@ -12,5 +8,3 @@ pub async fn check_roblox_api_status() -> crate::error::Result<bool> {
         Err(_) => Ok(false),
     }
 }
-
-// ISM-V2-PROVENANCE-END: AAD4D9C38771DA7B43FE13BB

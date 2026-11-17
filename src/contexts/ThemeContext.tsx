@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 5EF960A192025462F6276A6F
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import type React from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
 
@@ -70,5 +66,3 @@ export const useThemeAccent = (): ThemeContextType => {
   }
   return context;
 };
-
-// ISM-V2-PROVENANCE-END: 5EF960A192025462F6276A6F

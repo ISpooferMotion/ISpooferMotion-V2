@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 4CBA1A469089E1242C638A4D
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import * as tauriCore from '@tauri-apps/api/core';
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -107,6 +103,52 @@ describe('useStudioAssetPoll', () => {
 
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
-});
+  it('detects changes to a middle asset without changes to the first or last', async () => {
+    const onComplete = vi.fn();
+    const completed = {
+      anims: {
+        assets: [{ assetId: '1' }, { assetId: '2' }, { assetId: '3' }],
+        scanning: false,
+        complete: true,
+      },
+      sounds: { assets: [], scanning: false, complete: true },
+      images: { assets: [], scanning: false, complete: true },
+      meshes: { assets: [], scanning: false, complete: true },
+      scriptRefs: { assets: [], scanning: false, complete: true },
+    };
+    vi.mocked(tauriCore.invoke)
+      .mockResolvedValueOnce(completed)
+      .mockResolvedValue({
+        ...completed,
+        anims: {
+          ...completed.anims,
+          assets: [{ assetId: '1' }, { assetId: 'changed' }, { assetId: '3' }],
+        },
+      });
 
-// ISM-V2-PROVENANCE-END: 4CBA1A469089E1242C638A4D
+    renderHook(() => useStudioAssetPoll(true, onComplete));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(10100);
+    expect(onComplete).toHaveBeenCalledTimes(2);
+  });
+  it('retries delivering a completed scan if the callback fails', async () => {
+    const onComplete = vi.fn().mockImplementationOnce(() => {
+      throw new Error('temporary UI failure');
+    });
+    const completed = {
+      anims: { assets: [{ assetId: '123' }], scanning: false, complete: true },
+      sounds: { assets: [], scanning: false, complete: true },
+      images: { assets: [], scanning: false, complete: true },
+      meshes: { assets: [], scanning: false, complete: true },
+      scriptRefs: { assets: [], scanning: false, complete: true },
+    };
+    vi.mocked(tauriCore.invoke).mockResolvedValue(completed);
+
+    renderHook(() => useStudioAssetPoll(true, onComplete));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(onComplete).toHaveBeenCalledTimes(2);
+  });
+});

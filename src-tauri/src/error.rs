@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: C6A28AD0A5166531AA68FF21
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use serde::{Serialize, Serializer};
 
 #[derive(thiserror::Error, Debug, specta::Type)]
@@ -96,5 +92,3 @@ mod tests {
         assert_eq!(redacted.matches("[REDACTED_PATH]").count(), 3);
     }
 }
-
-// ISM-V2-PROVENANCE-END: C6A28AD0A5166531AA68FF21

@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: B1BC652F564C949DFAC86FF8
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 #![allow(clippy::needless_pass_by_value)]
 pub mod processor;
 pub mod state;
@@ -54,5 +50,3 @@ pub fn force_reset_spoofer_job() {
         *control = state::SpooferControl::default();
     }
 }
-
-// ISM-V2-PROVENANCE-END: B1BC652F564C949DFAC86FF8

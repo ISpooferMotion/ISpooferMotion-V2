@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 40BB395D0168D36C6F0AFEAD
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { describe, expect, it } from 'vitest';
 
 import { cn } from './utils';
@@ -24,5 +20,3 @@ describe('cn', () => {
     expect(cn('a', null, undefined, 'b')).toBe('a b');
   });
 });
-
-// ISM-V2-PROVENANCE-END: 40BB395D0168D36C6F0AFEAD

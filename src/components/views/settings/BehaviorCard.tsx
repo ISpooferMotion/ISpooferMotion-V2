@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 530CF0F437304CA4518D028C
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { invoke } from '@tauri-apps/api/core';
 import { HelpCircle, Laptop } from 'lucide-react';
 
@@ -98,5 +94,3 @@ export default function BehaviorCard() {
     </SettingCard>
   );
 }
-
-// ISM-V2-PROVENANCE-END: 530CF0F437304CA4518D028C

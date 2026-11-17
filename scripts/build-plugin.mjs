@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 3591A5757F9157D469ED3637
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -21,9 +17,7 @@ if (
   nextVersionSource === currentVersionSource &&
   !currentVersionSource.includes(`"${packageJson.version}"`)
 ) {
-  throw new Error(
-    'Could not update plugin version without replacing its provenance-watermarked source file.',
-  );
+  throw new Error('Could not update the Roblox plugin version.');
 }
 writeFileSync(versionLuauPath, nextVersionSource, 'utf8');
 
@@ -53,11 +47,7 @@ function expandPluginIncludes(source, fromFile, stack = []) {
       resolvedInclude,
     ]);
 
-    return [
-      `-- BEGIN include: ${includePath}`,
-      expandedSource.trimEnd(),
-      `-- END include: ${includePath}`,
-    ].join('\n');
+    return expandedSource.trimEnd();
   });
 }
 
@@ -108,5 +98,3 @@ async function buildPlugin() {
 }
 
 buildPlugin();
-
-// ISM-V2-PROVENANCE-END: 3591A5757F9157D469ED3637

@@ -1,11 +1,6 @@
 --!nocheck
 --!nolint
--- ISM-V2-PROVENANCE: 33F1FF7A963313EE0003431E
--- Repository provenance: ISpooferMotion V2 / IncredibroXP.
--- Attribution marker only; preserve any upstream author/license notices.
 
--- luacheck: ignore
----@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 
 local function countBundledClasses(propertyMap: { [string]: { string } }): number
 	local count = 0
@@ -104,4 +99,4 @@ end
 local _ = countBundledClasses
 local _ = contentValueToString
 
--- ISM-V2-PROVENANCE-END: 33F1FF7A963313EE0003431E
+

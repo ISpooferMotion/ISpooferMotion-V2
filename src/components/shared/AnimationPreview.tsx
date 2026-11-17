@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 85730426A798FF2B1CA2BAE6
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { invoke } from '@tauri-apps/api/core';
 import { Check, ChevronDown, Clapperboard, Loader2, Pause, Play, RotateCcw, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -793,5 +789,3 @@ export default function AnimationPreview({
     document.body,
   );
 }
-
-// ISM-V2-PROVENANCE-END: 85730426A798FF2B1CA2BAE6

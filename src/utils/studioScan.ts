@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 6DBB448EFA9A4131E808590C
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { invoke } from '@tauri-apps/api/core';
 
 import { fetchPluginBridge } from './pluginBridge';
@@ -9,34 +5,51 @@ import { fetchPluginBridge } from './pluginBridge';
 const SCAN_STALL_MS = 300_000;
 const SCAN_POLL_MS = 1500;
 
-async function waitForStudioScanComplete(): Promise<void> {
-  let lastProgressScanned: number | undefined;
-  let lastProgressTime = Date.now();
-  let lastSyncedTime = Date.now();
-  while (Date.now() - lastProgressTime < SCAN_STALL_MS) {
-    try {
-      const health = await invoke<{
-        scanStatus?: { scanning?: boolean; scanned?: number } | null;
-        synced?: boolean;
-      }>('get_studio_health_status');
-      if (!health.scanStatus || !health.scanStatus.scanning) {
-        return;
-      }
+interface StudioHealth {
+  scanStatus?: { scanning?: boolean; scanned?: number } | null;
+  synced?: boolean;
+  scanGeneration?: number;
+  completedScanGeneration?: number;
+  abortedScanGeneration?: number;
+}
 
-      const scanned = health.scanStatus.scanned;
-      if (scanned !== undefined && scanned !== lastProgressScanned) {
-        lastProgressScanned = scanned;
-        lastProgressTime = Date.now();
-      }
-      if (health.synced) {
-        lastSyncedTime = Date.now();
-      } else if (Date.now() - lastSyncedTime > 5000) {
+const readStudioHealth = () => invoke<StudioHealth>('get_studio_health_status');
+
+async function waitForStudioScanComplete(previousGeneration: number): Promise<void> {
+  const startedAt = Date.now();
+  let lastProgressScanned: number | undefined;
+  let lastProgressTime = startedAt;
+  let lastSyncedTime = startedAt;
+
+  while (Date.now() - lastProgressTime < SCAN_STALL_MS) {
+    const health = await readStudioHealth();
+    const now = Date.now();
+
+    if ((health.abortedScanGeneration ?? 0) > previousGeneration) {
+      throw new Error('Studio cancelled the scan before it finished.');
+    }
+    if ((health.completedScanGeneration ?? 0) > previousGeneration) {
+      return;
+    }
+    if (health.synced) {
+      lastSyncedTime = now;
+    } else if (now - lastSyncedTime > 5000) {
+      throw new Error(
+        'Roblox Studio is not connected or the ISpooferMotion plugin is disabled. Please open Studio and try again.',
+      );
+    }
+    if ((health.scanGeneration ?? 0) <= previousGeneration) {
+      if (now - startedAt > 20000) {
         throw new Error(
-          'Roblox Studio is not connected or the ISpooferMotion plugin is disabled. Please open Studio and try again.',
+          'Studio did not start the requested scan. Please check the plugin and retry.',
         );
       }
-    } catch (e) {
-      throw e instanceof Error ? e : new Error(String(e));
+    } else {
+      const scanned = health.scanStatus?.scanned;
+      if (scanned !== undefined && scanned !== lastProgressScanned) {
+        lastProgressScanned = scanned;
+        lastProgressTime = now;
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, SCAN_POLL_MS));
   }
@@ -66,13 +79,17 @@ export async function triggerStudioScan(options?: ScanOptions): Promise<void> {
   }
 
   const port = activePort;
+  const previousGeneration = (await readStudioHealth()).scanGeneration ?? 0;
 
   if (options) {
-    await fetchPluginBridge('/scan-options', port, {
+    const optionsResponse = await fetchPluginBridge('/scan-options', port, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(options),
     });
+    if (!optionsResponse.ok) {
+      throw new Error('Could not configure the Studio scan. Please try again.');
+    }
   }
 
   const allTypes = options?.scanTypes ?? ['sounds', 'animations', 'images', 'meshes', 'scripts'];
@@ -96,7 +113,5 @@ export async function triggerStudioScan(options?: ScanOptions): Promise<void> {
     }
   }
 
-  await waitForStudioScanComplete();
+  await waitForStudioScanComplete(previousGeneration);
 }
-
-// ISM-V2-PROVENANCE-END: 6DBB448EFA9A4131E808590C

@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 2537C108CC14FC350179DF99
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { invoke } from '@tauri-apps/api/core';
 
 import { addDebugLog } from './debugLogger';
@@ -41,5 +37,3 @@ export async function queueStudioReplacements(
     throw new Error('No valid asset mappings were found to send to Studio.');
   }
 }
-
-// ISM-V2-PROVENANCE-END: 2537C108CC14FC350179DF99

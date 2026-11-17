@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 8588835C421CD5D799BB06E4
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { invoke } from '@tauri-apps/api/core';
 import { useEffect, useRef } from 'react';
 
@@ -31,22 +27,26 @@ export function useStudioAssetPoll(
     let idle = false;
     let inFlight = false;
     let lastSnapshot = '';
-    let intervalId: ReturnType<typeof setInterval> | undefined;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
     const hashAssets = (assets?: PluginAsset[]) => {
-      if (!assets || assets.length === 0) return '0';
-
-      const first = assets[0].assetId || assets[0].name || '';
-      const last = assets[assets.length - 1].assetId || assets[assets.length - 1].name || '';
-      return `${assets.length}:${first}:${last}`;
+      let hash = 2166136261;
+      for (const asset of assets ?? []) {
+        const value = JSON.stringify(asset);
+        for (let i = 0; i < value.length; i++) {
+          hash = Math.imul(hash ^ value.charCodeAt(i), 16777619);
+        }
+        hash = Math.imul(hash ^ 255, 16777619);
+      }
+      return `${assets?.length ?? 0}:${hash >>> 0}`;
     };
 
     const bundleSnapshot = (bundle: StudioScanBundle) =>
       `${hashAssets(bundle.anims.assets)}-${hashAssets(bundle.sounds.assets)}-${hashAssets(bundle.images.assets)}-${hashAssets(bundle.meshes.assets)}-${hashAssets(bundle.scriptRefs.assets)}`;
 
     const schedulePoll = (delayMs: number) => {
-      if (intervalId) clearInterval(intervalId);
-      intervalId = setInterval(() => void poll(), delayMs);
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = setTimeout(() => void poll(), delayMs);
     };
 
     const poll = async () => {
@@ -70,7 +70,7 @@ export function useStudioAssetPoll(
         if (!allDone) {
           idle = false;
           lastSnapshot = '';
-          if (intervalId) schedulePoll(2000);
+          schedulePoll(2000);
           return;
         }
 
@@ -83,11 +83,12 @@ export function useStudioAssetPoll(
           return;
         }
 
+        onCompleteRef.current(bundle);
         lastSnapshot = snapshot;
         idle = true;
-        onCompleteRef.current(bundle);
         schedulePoll(10000);
       } catch {
+        if (!cancelled) schedulePoll(2000);
       } finally {
         inFlight = false;
       }
@@ -99,9 +100,7 @@ export function useStudioAssetPoll(
     return () => {
       cancelled = true;
       idle = true;
-      if (intervalId) clearInterval(intervalId);
+      if (pollTimer) clearTimeout(pollTimer);
     };
   }, [studioConnected]);
 }
-
-// ISM-V2-PROVENANCE-END: 8588835C421CD5D799BB06E4

@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 04D00AD3646841CF3AA0F2C3
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
@@ -20,5 +16,3 @@ function Label({ className, ...props }: React.ComponentProps<'label'>) {
 }
 
 export { Label };
-
-// ISM-V2-PROVENANCE-END: 04D00AD3646841CF3AA0F2C3

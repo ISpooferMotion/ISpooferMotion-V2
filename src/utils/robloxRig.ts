@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: D6BCE81C825E1A19E36E4732
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 export interface RigBone {
   name: string;
   parent: string | null;
@@ -210,5 +206,3 @@ export function detectRigType(poseNames: Set<string>): RigType {
   }
   return 'R6';
 }
-
-// ISM-V2-PROVENANCE-END: D6BCE81C825E1A19E36E4732

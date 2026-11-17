@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 5D86A4EA6219CC3AF50AB6A7
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use rbx_dom_weak::types::Variant;
 use rbx_dom_weak::WeakDom;
 use serde::Serialize;
@@ -175,5 +171,3 @@ pub fn parse_animation_data(xml: String) -> Result<Option<RobloxAnimationClip>, 
 
     Ok(Some(RobloxAnimationClip { loop_flag, priority, duration, keyframes }))
 }
-
-// ISM-V2-PROVENANCE-END: 5D86A4EA6219CC3AF50AB6A7

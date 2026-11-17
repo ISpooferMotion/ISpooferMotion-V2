@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: D70593F566396EAC3906C22A
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import * as tauriCore from '@tauri-apps/api/core';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -243,5 +239,3 @@ describe('useAppInitialization', () => {
     expect(addEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
   });
 });
-
-// ISM-V2-PROVENANCE-END: D70593F566396EAC3906C22A

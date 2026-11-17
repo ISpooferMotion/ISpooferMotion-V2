@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: E2E1B99A2E3171FA713FBAD6
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use crate::commands::AnyValue;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -107,5 +103,3 @@ pub async fn open_job_log(app: AppHandle, log_path: String) -> crate::error::Res
         .map_err(|err| err.to_string())?;
     Ok(true)
 }
-
-// ISM-V2-PROVENANCE-END: E2E1B99A2E3171FA713FBAD6

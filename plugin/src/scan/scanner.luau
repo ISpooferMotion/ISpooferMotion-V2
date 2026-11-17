@@ -1,6 +1,5 @@
--- ISM-V2-PROVENANCE: CF2DCF31DADE6B9CAD6059D0
--- Repository provenance: ISpooferMotion V2 / IncredibroXP.
--- Attribution marker only; preserve any upstream author/license notices.
+
+
 
 local function resolveInstancePath(pathStr: string): Instance?
 	local clean = string.gsub(pathStr, "^game%.", "")
@@ -31,8 +30,6 @@ end
 --!nocheck
 --!nolint
 
--- luacheck: ignore
----@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 
 local SCAN_CHUNK_BYTES: number = 500000
 local SCAN_MAX_TAGS_PER_OBJECT: number = 100
@@ -446,4 +443,4 @@ local function scan(): ()
 	end
 end
 
--- ISM-V2-PROVENANCE-END: CF2DCF31DADE6B9CAD6059D0
+

@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: A7ED418668EA439B5BD479C3
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { invoke } from '@tauri-apps/api/core';
 import { Check, ChevronRight, Loader2, Plus, UserCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -250,5 +246,3 @@ export default function ProfilePopup({ collapsed = false }: { collapsed?: boolea
     </Popover>
   );
 }
-
-// ISM-V2-PROVENANCE-END: A7ED418668EA439B5BD479C3

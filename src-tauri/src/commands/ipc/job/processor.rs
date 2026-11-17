@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 5299D358A527D741E8163A8C
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use futures::stream::{self, StreamExt};
 use std::collections::{HashMap, HashSet};
 use std::fs::{File, OpenOptions};
@@ -1122,8 +1118,6 @@ pub async fn process_spoofer_action(
             .open_path(base_downloads_dir.to_string_lossy().to_string(), None::<String>);
     }
 
-    // Discovered asset/place pairs are valid even if a different asset in the
-    // job fails; the server independently verifies each submitted mapping.
     {
         let discoveries = ctx
             .discoveries
@@ -1212,5 +1206,3 @@ mod tests {
         assert_eq!(selected_account_id(&serde_json::json!({ "name": "cody" })), None);
     }
 }
-
-// ISM-V2-PROVENANCE-END: 5299D358A527D741E8163A8C

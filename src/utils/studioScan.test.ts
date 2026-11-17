@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 7464FDE7F53BD46CC2414E80
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import * as tauriCore from '@tauri-apps/api/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -36,9 +32,12 @@ describe('studioScan', () => {
     vi.mocked(tauriCore.invoke).mockImplementation(() => {
       callCount++;
       if (callCount === 1) {
-        return Promise.resolve({ scanStatus: { scanning: true }, synced: true });
+        return Promise.resolve({ scanGeneration: 0, synced: true });
       }
-      return Promise.resolve({ scanStatus: { scanning: false }, synced: true });
+      if (callCount === 2) {
+        return Promise.resolve({ scanGeneration: 1, scanStatus: { scanning: true }, synced: true });
+      }
+      return Promise.resolve({ scanGeneration: 1, completedScanGeneration: 1, synced: true });
     });
 
     const scanPromise = triggerStudioScan();
@@ -55,7 +54,7 @@ describe('studioScan', () => {
       '5555',
       expect.any(Object),
     );
-    expect(tauriCore.invoke).toHaveBeenCalledTimes(2);
+    expect(tauriCore.invoke).toHaveBeenCalledTimes(3);
   });
 
   it('throws error if a fetch fails', async () => {
@@ -69,10 +68,9 @@ describe('studioScan', () => {
     vi.mocked(pluginBridge.findPluginBridgePort).mockResolvedValue('5555');
     vi.mocked(pluginBridge.fetchPluginBridge).mockResolvedValue({ ok: true } as Response);
 
-    vi.mocked(tauriCore.invoke).mockResolvedValue({
-      scanStatus: { scanning: true },
-      synced: false,
-    });
+    vi.mocked(tauriCore.invoke)
+      .mockResolvedValueOnce({ scanGeneration: 0 })
+      .mockResolvedValue({ scanGeneration: 1, scanStatus: { scanning: true }, synced: false });
 
     const scanPromise = triggerStudioScan();
     const expectPromise = expect(scanPromise).rejects.toThrow(/Roblox Studio is not connected/);
@@ -88,7 +86,9 @@ describe('studioScan', () => {
     vi.mocked(pluginBridge.findPluginBridgePort).mockResolvedValue('5555');
     vi.mocked(pluginBridge.fetchPluginBridge).mockResolvedValue({ ok: true } as Response);
 
-    vi.mocked(tauriCore.invoke).mockResolvedValue({ scanStatus: { scanning: true }, synced: true });
+    vi.mocked(tauriCore.invoke)
+      .mockResolvedValueOnce({ scanGeneration: 0 })
+      .mockResolvedValue({ scanGeneration: 1, scanStatus: { scanning: true }, synced: true });
 
     const scanPromise = triggerStudioScan();
     const expectPromise = expect(scanPromise).rejects.toThrow(/no progress for 5 minutes/);
@@ -97,6 +97,31 @@ describe('studioScan', () => {
 
     await expectPromise;
   });
-});
+  it('does not claim success when the plugin has not started a scan', async () => {
+    vi.mocked(pluginBridge.findPluginBridgePort).mockResolvedValue('5555');
+    vi.mocked(pluginBridge.fetchPluginBridge).mockResolvedValue({ ok: true } as Response);
+    vi.mocked(tauriCore.invoke).mockResolvedValue({ scanGeneration: 0, synced: true });
 
-// ISM-V2-PROVENANCE-END: 7464FDE7F53BD46CC2414E80
+    const result = expect(triggerStudioScan()).rejects.toThrow(/did not start/);
+    await vi.advanceTimersByTimeAsync(22500);
+    await result;
+  });
+
+  it('reports a scan aborted by Studio', async () => {
+    vi.mocked(pluginBridge.findPluginBridgePort).mockResolvedValue('5555');
+    vi.mocked(pluginBridge.fetchPluginBridge).mockResolvedValue({ ok: true } as Response);
+    vi.mocked(tauriCore.invoke)
+      .mockResolvedValueOnce({ scanGeneration: 0 })
+      .mockResolvedValue({ scanGeneration: 1, abortedScanGeneration: 1, synced: true });
+
+    await expect(triggerStudioScan()).rejects.toThrow(/cancelled the scan/);
+  });
+
+  it('rejects scan settings that the bridge did not accept', async () => {
+    vi.mocked(pluginBridge.findPluginBridgePort).mockResolvedValue('5555');
+    vi.mocked(pluginBridge.fetchPluginBridge).mockResolvedValue({ ok: false } as Response);
+    vi.mocked(tauriCore.invoke).mockResolvedValue({ scanGeneration: 0 });
+
+    await expect(triggerStudioScan({ scanTypes: ['animations'] })).rejects.toThrow(/configure/);
+  });
+});

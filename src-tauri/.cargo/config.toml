@@ -1,6 +1,5 @@
-# ISM-V2-PROVENANCE: 677C4BEFC36C0BA831723153
-# Repository provenance: ISpooferMotion V2 / IncredibroXP.
-# Attribution marker only; preserve any upstream author/license notices.
+
+
 
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "link-args=/STACK:8388608"]
@@ -11,4 +10,4 @@ rustflags = ["-C", "link-args=/STACK:8388608"]
 [target.i686-pc-windows-msvc]
 rustflags = ["-C", "link-args=/STACK:8388608"]
 
-# ISM-V2-PROVENANCE-END: 677C4BEFC36C0BA831723153
+

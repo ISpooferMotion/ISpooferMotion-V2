@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 93B5CD27D053165209BE8190
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { Loader2, Users, UserSquare2 } from 'lucide-react';
 
 import type { AppConfig } from '../../../contexts/ConfigContext';
@@ -285,5 +281,3 @@ export function GroupDropdown({
     </div>
   );
 }
-
-// ISM-V2-PROVENANCE-END: 93B5CD27D053165209BE8190

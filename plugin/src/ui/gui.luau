@@ -1,12 +1,7 @@
 --!nolint UnknownGlobal
 --!nocheck
 --!nolint
--- ISM-V2-PROVENANCE: 9D8FE01660370E56EC18022E
--- Repository provenance: ISpooferMotion V2 / IncredibroXP.
--- Attribution marker only; preserve any upstream author/license notices.
 
--- luacheck: ignore
----@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 
 local CoreGui = game:GetService("CoreGui")
 local gui = nil
@@ -236,7 +231,7 @@ local function createPluginGui()
 			logScript.Parent = serverStorage
 
 			local exportSuccess, err = pcall(function()
-				-- selene: allow(deprecated)
+
 				plugin:OpenScript(logScript)
 			end)
 
@@ -677,7 +672,7 @@ local function createPluginGui()
 		if txt == "" then
 			return
 		end
-		-- selene: allow(global_usage)
+
 		local _G_plugin = _G.ISpooferMotionPlugin
 		if _G_plugin and _G_plugin.runManualReplacements then
 			manualRunning = true
@@ -904,4 +899,4 @@ function setPluginBatchSize(size)
 	end
 end
 
--- ISM-V2-PROVENANCE-END: 9D8FE01660370E56EC18022E
+

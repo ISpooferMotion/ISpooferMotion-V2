@@ -1,8 +1,3 @@
-// ISM-V2-PROVENANCE: 218E7581DF730F056D304C06
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
-import { defineConfig, devices } from '@playwright/test';
 import type { PlaywrightTestConfig } from '@playwright/test';
 
 process.env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS ??= '--remote-debugging-port=9222';
@@ -16,7 +11,7 @@ const config: PlaywrightTestConfig = {
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1, // Tauri tests must run serially on the same app instance usually
+  workers: 1,
   reporter: 'html',
   use: {
     actionTimeout: 0,
@@ -31,11 +26,8 @@ const config: PlaywrightTestConfig = {
   projects: [
     {
       name: 'cdp',
-      use: { mode: 'cdp' },
     },
   ],
 };
 
 export default config;
-
-// ISM-V2-PROVENANCE-END: 218E7581DF730F056D304C06

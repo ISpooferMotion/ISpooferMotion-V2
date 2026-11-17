@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 0803A72FF6D33B20DFE4154A
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { isMemoryInjectionSupported, isTauriRuntime } from './tauriRuntime';
@@ -48,5 +44,3 @@ describe('tauriRuntime', () => {
     expect(await module.isMemoryInjectionSupported()).toBe(false);
   });
 });
-
-// ISM-V2-PROVENANCE-END: 0803A72FF6D33B20DFE4154A

@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 53A2352916ED450A02281875
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tokio::time::sleep;
@@ -124,5 +120,3 @@ mod tests {
         finish_spoofer_job("job_1");
     }
 }
-
-// ISM-V2-PROVENANCE-END: 53A2352916ED450A02281875

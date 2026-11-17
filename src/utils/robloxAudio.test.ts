@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: C9F30FFB8D31151D069D67F1
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import * as tauriCore from '@tauri-apps/api/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -99,6 +95,20 @@ describe('robloxAudio', () => {
 
     stopRobloxAudio();
   });
-});
+  it('does not report an error when stopped while loading', async () => {
+    let rejectRequest!: (reason: Error) => void;
+    vi.mocked(tauriCore.invoke).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectRequest = reject;
+        }),
+    );
 
-// ISM-V2-PROVENANCE-END: C9F30FFB8D31151D069D67F1
+    const pending = playRobloxAudio('123', dummyConfig);
+    stopRobloxAudio();
+    rejectRequest(new Error('cancelled'));
+
+    expect(await pending).toBe(false);
+    expect(robloxProfiles.logIsm).not.toHaveBeenCalledWith('error', expect.any(String));
+  });
+});

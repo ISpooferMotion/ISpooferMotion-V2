@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 0E8ED8265C704BD1E7AE44FB
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { Input as InputPrimitive } from '@base-ui/react/input';
 import * as React from 'react';
 
@@ -22,5 +18,3 @@ function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
 }
 
 export { Input };
-
-// ISM-V2-PROVENANCE-END: 0E8ED8265C704BD1E7AE44FB

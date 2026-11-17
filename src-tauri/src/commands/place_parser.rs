@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: FB1B0776C11F24D20039B0AE
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use rbx_dom_weak::types::Variant;
 use rbx_dom_weak::WeakDom;
 use serde::Serialize;
@@ -208,5 +204,3 @@ mod tests {
         assert_eq!(result.expect_err("Expected an error"), "File does not exist");
     }
 }
-
-// ISM-V2-PROVENANCE-END: FB1B0776C11F24D20039B0AE

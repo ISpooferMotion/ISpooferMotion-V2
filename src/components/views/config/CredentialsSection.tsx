@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 5107E0AA9D93807EB381D4E2
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { invoke } from '@tauri-apps/api/core';
 import { ExternalLink, Loader2, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -391,5 +387,3 @@ export default function CredentialsSection() {
     </div>
   );
 }
-
-// ISM-V2-PROVENANCE-END: 5107E0AA9D93807EB381D4E2

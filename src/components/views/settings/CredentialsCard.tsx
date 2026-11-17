@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: A46AC3C1FEBBCDFAC07F5894
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { KeyRound } from 'lucide-react';
 
 import { useLanguage } from '../../../contexts/LanguageContext';
@@ -21,5 +17,3 @@ export default function CredentialsCard() {
     </SettingCard>
   );
 }
-
-// ISM-V2-PROVENANCE-END: A46AC3C1FEBBCDFAC07F5894

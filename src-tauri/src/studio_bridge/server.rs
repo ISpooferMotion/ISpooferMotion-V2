@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 3E417535E57F15541357D75B
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use axum::extract::{Json, Query, State};
 use serde::Deserialize;
 use serde_json::Value;
@@ -28,6 +24,9 @@ pub async fn handle_studio_health(State(state): State<AppState>) -> Json<Value> 
         "synced": synced,
         "protocolVersion": STUDIO_PROTOCOL_VERSION,
         "scanStatus": guard.scan_status,
+        "scanGeneration": guard.scan_generation,
+        "completedScanGeneration": guard.completed_scan_generation,
+        "abortedScanGeneration": guard.aborted_scan_generation,
         "studioPlaceId": guard.studio_place_id,
         "studioPlaceName": guard.studio_place_name,
         "batchSize": guard.batch_size
@@ -40,6 +39,7 @@ pub async fn handle_scan_start(
 ) -> Json<Value> {
     let mut guard = state.data.write().await;
     guard.last_plugin_poll_time = Some(Instant::now());
+    guard.scan_generation = guard.scan_generation.saturating_add(1);
     guard.pending_studio_records = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let incoming_place_id = payload
         .get("placeId")
@@ -132,7 +132,7 @@ pub async fn handle_scan_records(
 }
 
 pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> {
-    let (records, mappings) = {
+    let (records, mappings, scan_generation) = {
         let mut guard = state.data.write().await;
         guard.last_plugin_poll_time = Some(Instant::now());
         let extracted_records = std::mem::take(
@@ -142,7 +142,11 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
         guard.studio_records = std::sync::Arc::new(extracted_records);
-        (std::sync::Arc::clone(&guard.studio_records), guard.stored_mappings.clone())
+        (
+            std::sync::Arc::clone(&guard.studio_records),
+            guard.stored_mappings.clone(),
+            guard.scan_generation,
+        )
     };
     let record_count = records.len();
     let mapping_count = mappings.len();
@@ -205,6 +209,10 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
     }
 
     let mut guard = state.data.write().await;
+    if guard.scan_generation != scan_generation || guard.aborted_scan_generation >= scan_generation
+    {
+        return Json(serde_json::json!({"ok": false, "superseded": true}));
+    }
     (
         guard.last_animations,
         guard.last_sounds,
@@ -213,6 +221,7 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
         guard.last_script_refs,
     ) = stores;
     guard.scan_status = None;
+    guard.completed_scan_generation = guard.scan_generation;
     if !mappings.is_empty() {
         if patches.is_empty() {
             let _ = state.app_handle.emit(
@@ -250,6 +259,7 @@ pub async fn handle_scan_complete(State(state): State<AppState>) -> Json<Value> 
 pub async fn handle_scan_abort(State(state): State<AppState>) -> Json<Value> {
     let mut guard = state.data.write().await;
     guard.scan_status = None;
+    guard.aborted_scan_generation = guard.scan_generation;
     guard.pending_studio_records = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     guard.last_sounds.scanning = false;
     guard.last_animations.scanning = false;
@@ -296,7 +306,6 @@ pub async fn handle_poll(
             {
                 let place_changed = guard.studio_place_id.as_deref().is_some_and(|old| old != id);
                 if place_changed {
-                    // A Studio place change invalidates every object token from the previous scan.
                     guard.studio_records = std::sync::Arc::new(Vec::new());
                     guard.pending_studio_records =
                         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -421,9 +430,6 @@ pub async fn handle_replace_ids(
         return Json(serde_json::json!({ "ok": false, "truncated": over_limit }));
     }
 
-    // Replacement patches depend on scan-generation object tokens owned by the plugin.
-    // Force a fresh scan instead of planning against cached records that may belong to a
-    // previous Studio place or pre-reload object graph.
     let mut guard = state.data.write().await;
     guard.stored_mappings = mappings;
     guard.stored_patches.clear();
@@ -715,5 +721,3 @@ mod tests {
         assert_eq!(snap.assets[0], json!("test"));
     }
 }
-
-// ISM-V2-PROVENANCE-END: 3E417535E57F15541357D75B

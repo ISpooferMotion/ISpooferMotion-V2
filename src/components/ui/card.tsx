@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: EE09413629CC212D500D5037
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
@@ -90,5 +86,3 @@ function CardFooter({ className, ...props }: React.ComponentProps<'div'>) {
 }
 
 export { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle };
-
-// ISM-V2-PROVENANCE-END: EE09413629CC212D500D5037

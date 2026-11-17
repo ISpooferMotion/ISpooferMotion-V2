@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 8ADCABC752A6CE89A03163B3
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { ClipboardPaste, Plus, Replace } from 'lucide-react';
 import { useState } from 'react';
 
@@ -275,5 +271,3 @@ export default function PasteIdsModal({
     </Dialog>
   );
 }
-
-// ISM-V2-PROVENANCE-END: 8ADCABC752A6CE89A03163B3

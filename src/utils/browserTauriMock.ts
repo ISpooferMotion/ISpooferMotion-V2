@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 4F7EB35025572096E83EB0A8
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 const MOCK_COMMANDS: Record<string, unknown> = {
   get_app_version: 'browser-preview',
   get_runtime_info: { platform: 'windows' },
@@ -62,5 +58,3 @@ export function isBrowserPreview(): boolean {
     (window as unknown as { __IS_BROWSER_PREVIEW__?: boolean }).__IS_BROWSER_PREVIEW__,
   );
 }
-
-// ISM-V2-PROVENANCE-END: 4F7EB35025572096E83EB0A8

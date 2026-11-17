@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: A149A3384AD43FB3C6E6A277
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 
 import type { AppConfig } from '../contexts/ConfigContext';
@@ -53,7 +49,9 @@ export const playRobloxAudio = async (assetId: string, config: AppConfig) => {
         currentAudio = null;
         notifyPlaybackChange(null);
       }
-      logIsm('error', `Playback failed for audio ${assetId}`);
+      if (currentToken === playbackToken) {
+        logIsm('error', `Playback failed for audio ${assetId}`);
+      }
     });
 
     audio.addEventListener('ended', () => {
@@ -75,10 +73,8 @@ export const playRobloxAudio = async (assetId: string, config: AppConfig) => {
   } catch (err) {
     if (currentToken === playbackToken) {
       stopRobloxAudio();
+      logIsm('error', `Could not play Roblox audio ${assetId}: ${String(err)}`);
     }
-    logIsm('error', `Could not play Roblox audio ${assetId}: ${String(err)}`);
     return false;
   }
 };
-
-// ISM-V2-PROVENANCE-END: A149A3384AD43FB3C6E6A277

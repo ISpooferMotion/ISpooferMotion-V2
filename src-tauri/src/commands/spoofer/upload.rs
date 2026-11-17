@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: C4DF5ECE96C69554850FAF16
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use super::{
     apply_upload_auth, emit_transfer_update, is_valid_numeric_id, patch_asset_permissions,
     sanitize_filename, set_rate_limit, wait_rate_limit, AppHandle, Manager, PublishResult,
@@ -901,5 +897,3 @@ mod tests {
         }
     }
 }
-
-// ISM-V2-PROVENANCE-END: C4DF5ECE96C69554850FAF16

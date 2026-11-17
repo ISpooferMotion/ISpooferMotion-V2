@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: AEDE73A90D0718D58D514A78
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { create } from 'zustand';
 
 import { getTranslation } from '../utils/i18n';
@@ -43,5 +39,3 @@ export const useLanguage = create<LanguageState>((set, get) => ({
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
-
-// ISM-V2-PROVENANCE-END: AEDE73A90D0718D58D514A78

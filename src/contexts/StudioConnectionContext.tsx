@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 1174CE2C459CD28BDD4A1C2D
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { createContext, useContext } from 'react';
 
 import { type ScanStatus, useStudioConnection } from '../hooks/useStudioConnection';
@@ -34,5 +30,3 @@ export const useStudioConnectionState = () => {
   }
   return context;
 };
-
-// ISM-V2-PROVENANCE-END: 1174CE2C459CD28BDD4A1C2D

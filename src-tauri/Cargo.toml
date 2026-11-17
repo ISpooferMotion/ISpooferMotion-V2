@@ -1,6 +1,5 @@
-# ISM-V2-PROVENANCE: 7882AD5746FF927A9B7E1CCC
-# Repository provenance: ISpooferMotion V2 / IncredibroXP.
-# Attribution marker only; preserve any upstream author/license notices.
+
+
 
 [package]
 name         = "app"
@@ -151,4 +150,4 @@ opt-level     = 3
 strip         = true
 panic         = "abort"
 
-# ISM-V2-PROVENANCE-END: 7882AD5746FF927A9B7E1CCC
+

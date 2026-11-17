@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 222C7FC2D773C547E502907F
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -77,5 +73,3 @@ describe('SettingsView', () => {
     expect(screen.getAllByText('settings.appearance')[0]).toBeInTheDocument();
   });
 });
-
-// ISM-V2-PROVENANCE-END: 222C7FC2D773C547E502907F

@@ -1,7 +1,3 @@
-# ISM-V2-PROVENANCE: 06E7A1FB7D4DCEEB7F14236F
-# Repository provenance: ISpooferMotion V2 / IncredibroXP.
-# Attribution marker only; preserve any upstream author/license notices.
-
 name: CI & Release
 
 on:
@@ -626,5 +622,3 @@ jobs:
               f"Posted Discord release announcement for {release_tag}."
           )
           PY
-
-# ISM-V2-PROVENANCE-END: 06E7A1FB7D4DCEEB7F14236F

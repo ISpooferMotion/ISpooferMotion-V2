@@ -1,6 +1,5 @@
-# ISM-V2-PROVENANCE: 0FAECEF7EBA9BACEE200B033
-# Repository provenance: ISpooferMotion V2 / IncredibroXP.
-# Attribution marker only; preserve any upstream author/license notices.
+
+
 
 std = "roblox"
 
@@ -11,4 +10,4 @@ empty_if = "allow"
 roblox_manual_fromscale_or_fromoffset = "allow"
 unscoped_variables = "allow"
 
-# ISM-V2-PROVENANCE-END: 0FAECEF7EBA9BACEE200B033
+

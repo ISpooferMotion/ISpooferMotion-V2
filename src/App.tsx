@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 93DF29DBB5BED14DC7F80799
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { lazy, Suspense, useEffect, useState } from 'react';
 
 import Sidebar from './components/layout/Sidebar';
@@ -132,5 +128,3 @@ export default function App() {
     </div>
   );
 }
-
-// ISM-V2-PROVENANCE-END: 93DF29DBB5BED14DC7F80799

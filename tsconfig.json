@@ -19,8 +19,7 @@
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "framer-motion": ["./node_modules/framer-motion"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["./src"],

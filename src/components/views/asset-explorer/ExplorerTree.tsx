@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 2A3D6577A57DF2E11DDA1AB1
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import {
   AlertCircle,
   Check,
@@ -56,7 +52,8 @@ export const getAssetKey = (
   const type = 'type' in asset && asset.type ? asset.type : 'asset';
   const path = 'path' in asset && asset.path ? asset.path : '';
   const prop = 'propertyName' in asset && asset.propertyName ? asset.propertyName : '';
-  const id = 'assetId' in asset && asset.assetId ? asset.assetId : ((asset as any).id ?? '');
+  const id =
+    'assetId' in asset && asset.assetId ? asset.assetId : 'id' in asset ? (asset.id ?? '') : '';
   if (path || prop) {
     return `${type}:${path}:${prop}:${id}`;
   }
@@ -722,5 +719,3 @@ export const ExplorerTreeNode = memo(function ExplorerTreeNode({
     </div>
   );
 });
-
-// ISM-V2-PROVENANCE-END: 2A3D6577A57DF2E11DDA1AB1

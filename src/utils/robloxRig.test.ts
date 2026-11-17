@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 21798C710D048998C1151990
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { describe, expect, it } from 'vitest';
 
 import { detectRigType, getBones } from './robloxRig';
@@ -27,5 +23,3 @@ describe('robloxRig', () => {
     expect(detectRigType(new Set(['Torso', 'Head']))).toBe('R6');
   });
 });
-
-// ISM-V2-PROVENANCE-END: 21798C710D048998C1151990

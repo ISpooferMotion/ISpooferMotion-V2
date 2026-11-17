@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: F386577732787B76E14DC9A0
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 'use client';
 
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
@@ -137,5 +133,3 @@ export {
   DialogTitle,
   DialogTrigger,
 };
-
-// ISM-V2-PROVENANCE-END: F386577732787B76E14DC9A0

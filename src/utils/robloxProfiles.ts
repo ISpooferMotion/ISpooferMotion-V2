@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: D7CECE0466157CB73DAAD1B1
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { invoke } from '@tauri-apps/api/core';
 
 export interface RobloxUserInfo {
@@ -130,5 +126,3 @@ export const validateCookieProfile = async (cookie: string): Promise<CookieValid
   mergeCachedUser(user);
   return { user, cookie: trimmedCookie };
 };
-
-// ISM-V2-PROVENANCE-END: D7CECE0466157CB73DAAD1B1

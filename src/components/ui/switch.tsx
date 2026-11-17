@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 4CD586898845C171C5C048F7
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { Switch as SwitchPrimitive } from '@base-ui/react/switch';
 
 import { cn } from '@/lib/utils';
@@ -32,5 +28,3 @@ function Switch({
 }
 
 export { Switch };
-
-// ISM-V2-PROVENANCE-END: 4CD586898845C171C5C048F7

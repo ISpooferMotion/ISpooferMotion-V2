@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 5DF552969721B059C8E5278A
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { invoke } from '@tauri-apps/api/core';
 import { ArrowUpRight, Check } from 'lucide-react';
 
@@ -94,5 +90,3 @@ export function V3PromoModal({
 export async function openV3PurchasePage() {
   await openV3Pricing();
 }
-
-// ISM-V2-PROVENANCE-END: 5DF552969721B059C8E5278A

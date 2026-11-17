@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 11A5FA2256C32E86900764A8
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { invoke } from '@tauri-apps/api/core';
 import {
   ChevronLeft,
@@ -231,5 +227,3 @@ export default function Sidebar({
     </TooltipProvider>
   );
 }
-
-// ISM-V2-PROVENANCE-END: 11A5FA2256C32E86900764A8

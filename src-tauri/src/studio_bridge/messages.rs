@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: A013C7D2F68C1515FC874EF0
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
@@ -57,6 +53,9 @@ pub struct AssetServerStateData {
     pub last_plugin_poll_time: Option<Instant>,
     pub skip_owned_check: bool,
     pub scan_status: Option<Value>,
+    pub scan_generation: u64,
+    pub completed_scan_generation: u64,
+    pub aborted_scan_generation: u64,
     pub studio_place_id: Option<String>,
     pub studio_place_name: Option<String>,
     pub keyframe_warning_count: usize,
@@ -87,6 +86,9 @@ impl Default for AssetServerStateData {
             last_plugin_poll_time: None,
             skip_owned_check: false,
             scan_status: None,
+            scan_generation: 0,
+            completed_scan_generation: 0,
+            aborted_scan_generation: 0,
             studio_place_id: None,
             studio_place_name: None,
             keyframe_warning_count: 0,
@@ -1508,5 +1510,3 @@ mod tests {
         assert_eq!(patches[0]["value"], "rbxassetid://99999");
     }
 }
-
-// ISM-V2-PROVENANCE-END: A013C7D2F68C1515FC874EF0

@@ -1,12 +1,7 @@
 --!nolint UnknownGlobal
 --!nocheck
 --!nolint
--- ISM-V2-PROVENANCE: 69F7455FE84F0BC888F04DC0
--- Repository provenance: ISpooferMotion V2 / IncredibroXP.
--- Attribution marker only; preserve any upstream author/license notices.
 
--- luacheck: ignore
----@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 
 local BLOCKED_SET_PROPERTIES: { [string]: boolean } = {
 	Parent = true,
@@ -118,14 +113,14 @@ local NUMBER_ASSET_PROPERTIES: { [string]: boolean } = {
 local function buildContentValue(value: any): any
 	local uri = toAssetUri(value) or tostring(value)
 	local ok, contentObj = pcall(function()
-		-- luacheck: ignore
+
 		return (Content :: any).fromUri(uri)
 	end)
 	if ok and contentObj then
 		return contentObj
 	end
 	local ok2, contentObj2 = pcall(function()
-		-- luacheck: ignore
+
 		return (Content :: any).new(uri)
 	end)
 	if ok2 and contentObj2 then
@@ -693,4 +688,4 @@ local function applyPatches(patches: any)
 	end
 end
 
--- ISM-V2-PROVENANCE-END: 69F7455FE84F0BC888F04DC0
+

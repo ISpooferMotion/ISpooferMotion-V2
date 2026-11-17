@@ -1,11 +1,6 @@
 --!nocheck
 --!nolint
--- ISM-V2-PROVENANCE: 112E62C2148CF5878CFB55E6
--- Repository provenance: ISpooferMotion V2 / IncredibroXP.
--- Attribution marker only; preserve any upstream author/license notices.
 
--- luacheck: ignore
----@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 
 local function applyMeshPartInPlace(
 	meshObj: MeshPart,
@@ -114,4 +109,4 @@ local function applyMeshPartInPlace(
 	return true, nil
 end
 
--- ISM-V2-PROVENANCE-END: 112E62C2148CF5878CFB55E6
+

@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: A7FE21DAF2ECA0B9F928917E
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import {
@@ -257,5 +253,3 @@ export default function ResultsModal({
     </Dialog>
   );
 }
-
-// ISM-V2-PROVENANCE-END: A7FE21DAF2ECA0B9F928917E

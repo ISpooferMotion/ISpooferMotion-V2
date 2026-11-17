@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 8DCC5305075C90C717A30072
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import '@testing-library/jest-dom';
 
 import { vi } from 'vitest';
@@ -63,5 +59,3 @@ vi.mock('@tauri-apps/api/window', () => ({
     toggleMaximize: vi.fn(),
   }),
 }));
-
-// ISM-V2-PROVENANCE-END: 8DCC5305075C90C717A30072

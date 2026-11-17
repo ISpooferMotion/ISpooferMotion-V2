@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 4F499A62283216EFEB878CF8
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 pub(crate) fn parse_replacements_map(
     replacements_map: &crate::commands::AnyValue,
 ) -> Vec<serde_json::Value> {
@@ -183,5 +179,3 @@ mod tests {
         assert_eq!(parsed[0]["newId"], "yes");
     }
 }
-
-// ISM-V2-PROVENANCE-END: 4F499A62283216EFEB878CF8

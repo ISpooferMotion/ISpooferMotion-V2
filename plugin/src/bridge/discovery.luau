@@ -1,11 +1,6 @@
 --!nocheck
 --!nolint
--- ISM-V2-PROVENANCE: 1F2260D615B813823CCA0848
--- Repository provenance: ISpooferMotion V2 / IncredibroXP.
--- Attribution marker only; preserve any upstream author/license notices.
 
--- luacheck: ignore
----@diagnostic disable: undefined-global, unused-local, unused-function, lowercase-global
 
 local DISCOVERY_REQUEST_TIMEOUT_SECS = 2
 
@@ -163,4 +158,4 @@ local function discoverServer(): (boolean, boolean, string?)
 	return false, false, reason
 end
 
--- ISM-V2-PROVENANCE-END: 1F2260D615B813823CCA0848
+

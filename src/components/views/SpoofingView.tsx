@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 5249384DBECCA4BB552501C7
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { readText as readClipboardText } from '@tauri-apps/plugin-clipboard-manager';
@@ -1350,5 +1346,3 @@ export default function SpoofingView() {
     </div>
   );
 }
-
-// ISM-V2-PROVENANCE-END: 5249384DBECCA4BB552501C7

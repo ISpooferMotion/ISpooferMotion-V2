@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 9935E4B22E71FAC8BA0F35A3
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use aho_corasick::AhoCorasick;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashMap;
@@ -690,5 +686,3 @@ mod tests {
         assert!(is_bounded_numeric_match(buf, 6, 7));
     }
 }
-
-// ISM-V2-PROVENANCE-END: 9935E4B22E71FAC8BA0F35A3

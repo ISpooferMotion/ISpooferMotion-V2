@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: C88BFEA2C4BF6A8A7684E43B
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
 
 import { cn } from '@/lib/utils';
@@ -54,5 +50,3 @@ function TooltipContent({
 }
 
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger };
-
-// ISM-V2-PROVENANCE-END: C88BFEA2C4BF6A8A7684E43B

@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 9CE88C968BD9918F65E79F73
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 import { ArrowDownUp } from 'lucide-react';
 
 import { useConfig } from '../../../contexts/ConfigContext';
@@ -50,5 +46,3 @@ export default function UploadSection() {
     </SettingCard>
   );
 }
-
-// ISM-V2-PROVENANCE-END: 9CE88C968BD9918F65E79F73

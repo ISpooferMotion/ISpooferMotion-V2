@@ -1,9 +1,7 @@
 --!nocheck
 --!nolint
 --# selene: allow(unused_variable, global_usage)
--- ISM-V2-PROVENANCE: 90F850DFEFCA9069DBBF1085
--- Repository provenance: ISpooferMotion V2 / IncredibroXP.
--- Attribution marker only; preserve any upstream author/license notices.
+
 
 local ASSET_PROPERTIES: { [string]: { string } } = {}
 local STRING_SCAN_PROPERTIES: { [string]: { string } } = {}
@@ -511,4 +509,4 @@ plugin.Unloading:Connect(function()
 	hidePluginGui()
 end)
 
--- ISM-V2-PROVENANCE-END: 90F850DFEFCA9069DBBF1085
+

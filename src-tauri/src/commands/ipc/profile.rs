@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: D82C37EB4F2B6319C46C6C37
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use super::{build_roblox_cookie_header, AppHandle, COOKIE, USER_AGENT};
 use validator::Validate;
 
@@ -193,5 +189,3 @@ pub async fn fetch_audio_quota(
     let data: Value = resp.json().await?;
     Ok(AnyValue(data))
 }
-
-// ISM-V2-PROVENANCE-END: D82C37EB4F2B6319C46C6C37

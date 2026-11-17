@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: FE9EA32041BCCF64A3A93C95
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
@@ -264,5 +260,3 @@ mod tests {
         assert!(!is_owned_plugin_file_name("ISpooferMotion-helper.lua"));
     }
 }
-
-// ISM-V2-PROVENANCE-END: FE9EA32041BCCF64A3A93C95

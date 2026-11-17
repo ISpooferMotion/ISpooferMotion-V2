@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 9A05B1A534BDDA56F7B1BC53
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use axum::{
     extract::Request,
     http::{Method, StatusCode},
@@ -29,5 +25,3 @@ pub async fn require_json_for_post(req: Request, next: Next) -> Result<Response,
     }
     Ok(next.run(req).await)
 }
-
-// ISM-V2-PROVENANCE-END: 9A05B1A534BDDA56F7B1BC53

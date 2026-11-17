@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: 2CD481EA31AC294F5439D44E
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 pub mod messages;
 pub mod middleware;
 pub mod server;
@@ -90,10 +86,6 @@ pub async fn queue_replace_mappings_internal(mappings: Vec<Value>) -> bool {
         return false;
     }
 
-    // Always plan replacement patches from a fresh Studio scan. The object tokens
-    // in studio_records are only valid for the scan generation that produced them;
-    // reusing older records after a place reload/change can queue patches that can
-    // never resolve inside the plugin.
     let mut guard = data.write().await;
     guard.stored_mappings = mappings;
     guard.stored_patches.clear();
@@ -440,7 +432,7 @@ pub async fn get_port_diagnostic() -> AnyValue {
 pub async fn get_studio_health_status() -> AnyValue {
     let Some(data) = bridge_data() else {
         return AnyValue(
-            json!({ "synced": false, "protocolVersion": STUDIO_PROTOCOL_VERSION, "scanStatus": null, "studioPlaceId": null, "studioPlaceName": null }),
+            json!({ "synced": false, "protocolVersion": STUDIO_PROTOCOL_VERSION, "scanStatus": null, "scanGeneration": 0, "completedScanGeneration": 0, "abortedScanGeneration": 0, "studioPlaceId": null, "studioPlaceName": null }),
         );
     };
     let guard = data.read().await;
@@ -451,6 +443,9 @@ pub async fn get_studio_health_status() -> AnyValue {
         "synced": synced,
         "protocolVersion": STUDIO_PROTOCOL_VERSION,
         "scanStatus": guard.scan_status,
+        "scanGeneration": guard.scan_generation,
+        "completedScanGeneration": guard.completed_scan_generation,
+        "abortedScanGeneration": guard.aborted_scan_generation,
         "studioPlaceId": guard.studio_place_id,
         "studioPlaceName": guard.studio_place_name
     }))
@@ -484,5 +479,3 @@ pub async fn set_batch_size(size: u32) {
         data.write().await.batch_size = Some(size);
     }
 }
-
-// ISM-V2-PROVENANCE-END: 2CD481EA31AC294F5439D44E

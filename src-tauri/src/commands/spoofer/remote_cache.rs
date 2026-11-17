@@ -1,7 +1,3 @@
-// ISM-V2-PROVENANCE: FD167A51BD3ECC14043971AF
-// Repository provenance: ISpooferMotion V2 / IncredibroXP.
-// Attribution marker only; preserve any upstream author/license notices.
-
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -10,8 +6,7 @@ use std::time::Duration;
 
 const MAX_WRITE_ATTEMPTS: usize = 3;
 const BASE_RETRY_DELAY_MS: u64 = 250;
-// ISM-Web permits 30 V2 writes per minute per client. Leave headroom for
-// multiple discoveries and retries without blocking the spoofing job.
+
 const MIN_WRITE_INTERVAL_MS: u64 = 2_100;
 const RETRY_COOLDOWN: Duration = Duration::from_secs(60);
 
@@ -155,7 +150,7 @@ async fn write_remote_context(
 
         if require_active_url {
             throttle_write().await;
-            // Contributions can be disabled while a write is waiting its turn.
+
             if read_push_url().as_deref() != Some(url) {
                 return Err("community cache contributions were disabled".into());
             }
@@ -169,8 +164,6 @@ async fn write_remote_context(
             .await
         {
             Ok(response) if response.status().is_success() => {
-                // ISM-Web acknowledges writes with { success: true }; a 2xx
-                // response alone does not mean the mapping was accepted.
                 if response.status() == reqwest::StatusCode::NO_CONTENT {
                     return Ok(());
                 }
@@ -206,8 +199,6 @@ async fn write_remote_context(
     Err("community cache write exhausted its retry budget".to_string())
 }
 
-// Persist the queue before accepting a discovery. A failed upload, lost
-// connection, rate limit, or closed application must not silently discard it.
 async fn load_pending(path: &Path) -> Result<HashMap<String, String>, String> {
     match tokio::fs::read(path).await {
         Ok(bytes) => serde_json::from_slice(&bytes)
@@ -240,7 +231,6 @@ async fn queue_entries(path: &Path, discoveries: HashMap<String, String>) -> Res
         }
     }
     if accepted > 0 {
-        // One atomic write for the whole job, even for large discovery batches.
         save_pending(path, &entries).await?;
         notify_worker();
     }
@@ -254,8 +244,7 @@ async fn run_writer() {
             NOTIFY.get_or_init(tokio::sync::Notify::new).notified().await;
             continue;
         };
-        // A notification is registered before reading the queue to avoid
-        // missing discoveries enqueued during a filesystem operation.
+
         let wake = NOTIFY.get_or_init(tokio::sync::Notify::new).notified();
         let pending = {
             let _guard = queue_lock().lock().await;
@@ -297,8 +286,6 @@ async fn run_writer() {
                 let _guard = queue_lock().lock().await;
                 match load_pending(&path).await {
                     Ok(mut current) => {
-                        // A new discovery for this asset may have been queued in
-                        // parallel; never acknowledge the newer mapping away.
                         if current.get(&context.asset_id) == Some(&context.place_id) {
                             current.remove(&context.asset_id);
                             if let Err(error) = save_pending(&path, &current).await {
@@ -314,8 +301,7 @@ async fn run_writer() {
             Err(error) => {
                 blocked_until
                     .insert(context.asset_id.clone(), tokio::time::Instant::now() + RETRY_COOLDOWN);
-                // Retain rejected entries for later diagnostics/retries. Other
-                // discoveries remain eligible rather than being starved.
+
                 if read_push_url().as_deref() == Some(url.as_str()) {
                     log::warn!("Could not contribute discovery {}: {error}", context.asset_id);
                 }
@@ -370,9 +356,6 @@ pub async fn initialize_remote_cache(
     let pending_path = app_dir.join("remote_cache_pending.json");
     set_pending_path(pending_path.clone());
 
-    // Legacy local discoveries are moved into the same durable queue, not
-    // uploaded in an unthrottled burst. Mark migration only AFTER the queue
-    // has been written, so interrupted starts never lose records.
     let legacy = app_dir.join("local_remote_cache.json");
     let migrated = app_dir.join("local_remote_cache_migrated.lock");
     if !migrated.exists() {
@@ -565,5 +548,3 @@ mod tests {
         assert!(validate_cache_url("not a URL").is_err());
     }
 }
-
-// ISM-V2-PROVENANCE-END: FD167A51BD3ECC14043971AF
