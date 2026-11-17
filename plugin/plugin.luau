@@ -2,7 +2,6 @@
 --!nolint
 --# selene: allow(unused_variable, global_usage)
 
-
 local ASSET_PROPERTIES: { [string]: { string } } = {}
 local STRING_SCAN_PROPERTIES: { [string]: { string } } = {}
 
@@ -508,5 +507,3 @@ plugin.Unloading:Connect(function()
 	BASE_URL = nil
 	hidePluginGui()
 end)
-
-

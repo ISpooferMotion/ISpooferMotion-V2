@@ -1,6 +1,3 @@
-
-
-
 local function resolveInstancePath(pathStr: string): Instance?
 	local clean = string.gsub(pathStr, "^game%.", "")
 	local parts = string.split(clean, ".")
@@ -271,7 +268,8 @@ local function scanAssets(): ()
 	end)
 
 	activeScanId = HttpService:GenerateGUID(false)
-	local started, response = postJson("/scan-start", { placeId = placeId, placeName = placeName, scanId = activeScanId })
+	local started, response =
+		postJson("/scan-start", { placeId = placeId, placeName = placeName, scanId = activeScanId })
 	if not started or (response and response.success == false) then
 		pcall(function()
 			postJson("/scan-abort", { scanId = activeScanId })
@@ -457,5 +455,3 @@ local function scan(): ()
 	end
 	activeScanId = nil
 end
-
-

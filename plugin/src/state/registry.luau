@@ -1,7 +1,6 @@
 --!nocheck
 --!nolint
 
-
 local objectRegistry: { [string]: Instance } = {}
 
 local objectTokens: { [Instance]: string } = {}
@@ -61,5 +60,3 @@ local function replaceRegisteredObject(token: string, obj: Instance)
 	objectRegistry[normalizedToken] = obj
 	objectTokens[obj] = normalizedToken
 end
-
-

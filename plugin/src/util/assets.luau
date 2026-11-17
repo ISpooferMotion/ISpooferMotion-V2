@@ -1,7 +1,6 @@
 --!nocheck
 --!nolint
 
-
 local function countBundledClasses(propertyMap: { [string]: { string } }): number
 	local count = 0
 	for _ in pairs(propertyMap) do
@@ -98,5 +97,3 @@ end
 
 local _ = countBundledClasses
 local _ = contentValueToString
-
-

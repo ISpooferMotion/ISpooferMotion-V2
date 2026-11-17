@@ -460,7 +460,8 @@ pub async fn get_studio_asset_revision() -> u64 {
     let Some(data) = bridge_data() else {
         return 0;
     };
-    data.read().await.assets_revision
+    let revision = data.read().await.assets_revision;
+    revision
 }
 
 #[tauri::command]

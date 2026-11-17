@@ -2,7 +2,6 @@
 --!nocheck
 --!nolint
 
-
 local CoreGui = game:GetService("CoreGui")
 local gui = nil
 local statusText = nil
@@ -231,7 +230,6 @@ local function createPluginGui()
 			logScript.Parent = serverStorage
 
 			local exportSuccess, err = pcall(function()
-
 				plugin:OpenScript(logScript)
 			end)
 
@@ -898,5 +896,3 @@ function setPluginBatchSize(size)
 		end)
 	end
 end
-
-

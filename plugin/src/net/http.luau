@@ -1,7 +1,6 @@
 --!nocheck
 --!nolint
 
-
 local function decodeJsonResponseBody(response: any): (boolean, any)
 	if not response then
 		return false, nil
@@ -101,5 +100,3 @@ local function postJson(endpoint: string, payload: any): (boolean, any)
 
 	return false, nil
 end
-
-

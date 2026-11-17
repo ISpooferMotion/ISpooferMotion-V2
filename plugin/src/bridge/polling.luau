@@ -1,7 +1,6 @@
 --!nocheck
 --!nolint
 
-
 local function requestPollEndpoint(baseUrl: string, endpoint: string): (boolean, any, number?)
 	local ok, response = pcall(function()
 		return HttpService:RequestAsync({
@@ -419,5 +418,3 @@ function startPolling(): ()
 		end
 	end)
 end
-
-

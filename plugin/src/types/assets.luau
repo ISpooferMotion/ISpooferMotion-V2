@@ -1,7 +1,6 @@
 --!nocheck
 --!nolint
 
-
 type Record = {
 	token: string,
 	className: string,
@@ -29,5 +28,3 @@ type Patch = {
 	meshId: string?,
 	textureId: string?,
 }
-
-

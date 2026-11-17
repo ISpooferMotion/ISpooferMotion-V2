@@ -1,7 +1,6 @@
 --!nocheck
 --!nolint
 
-
 local EMBEDDED_ASSET_PROPS = {
 	Text = true,
 	PlaceholderText = true,
@@ -61,5 +60,3 @@ local SERVICES_TO_SCAN = {
 	"SoundService",
 	"Teams",
 }
-
-

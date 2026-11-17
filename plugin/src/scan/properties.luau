@@ -1,7 +1,6 @@
 --!nocheck
 --!nolint
 
-
 local MAX_RECORD_VALUE_BYTES: number = 1000000
 local MAX_RECORD_TEXT_VALUE_BYTES: number = 100000
 local recordKeys: { [string]: boolean } = {}
@@ -98,7 +97,10 @@ local function flushRecords(records: { Record }): boolean
 		return true
 	end
 
-	local ok, response = postJson("/scan-records", { records = records, scanId = activeScanId, chunkId = scanChunkId + 1 })
+	local ok, response = postJson(
+		"/scan-records",
+		{ records = records, scanId = activeScanId, chunkId = scanChunkId + 1 }
+	)
 	if ok and response and response.success == false then
 		return false
 	end
@@ -440,5 +442,3 @@ local function scanSpecialInstanceAssets(
 		end
 	end
 end
-
-

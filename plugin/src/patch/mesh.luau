@@ -1,7 +1,6 @@
 --!nocheck
 --!nolint
 
-
 local function applyMeshPartInPlace(
 	meshObj: MeshPart,
 	targetMeshUri: string,
@@ -108,5 +107,3 @@ local function applyMeshPartInPlace(
 
 	return true, nil
 end
-
-

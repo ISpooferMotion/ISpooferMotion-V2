@@ -3,7 +3,7 @@
 
 [package]
 name         = "app"
-version      = "2.7.2"
+version      = "2.8.0"
 authors      = ["IncredibroXP <incredibroxpdev@gmail.com>"]
 description  = "Animation spoofing utility for Roblox"
 edition      = "2021"

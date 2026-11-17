@@ -2,7 +2,6 @@
 --!nocheck
 --!nolint
 
-
 local BLOCKED_SET_PROPERTIES: { [string]: boolean } = {
 	Parent = true,
 	ClassName = true,
@@ -113,14 +112,12 @@ local NUMBER_ASSET_PROPERTIES: { [string]: boolean } = {
 local function buildContentValue(value: any): any
 	local uri = toAssetUri(value) or tostring(value)
 	local ok, contentObj = pcall(function()
-
 		return (Content :: any).fromUri(uri)
 	end)
 	if ok and contentObj then
 		return contentObj
 	end
 	local ok2, contentObj2 = pcall(function()
-
 		return (Content :: any).new(uri)
 	end)
 	if ok2 and contentObj2 then
@@ -687,5 +684,3 @@ local function applyPatches(patches: any)
 		setPluginGuiStatus("Waiting for new scan or replacements...")
 	end
 end
-
-

@@ -2,7 +2,6 @@
 --!nolint
 --# selene: allow(global_usage, shadowing, unused_variable)
 
-
 local tests_passed = 0
 local tests_failed = 0
 
@@ -193,5 +192,3 @@ print(string.format("\nResults: %d passed, %d failed", tests_passed, tests_faile
 if tests_failed > 0 then
 	error("Test suite failed")
 end
-
-

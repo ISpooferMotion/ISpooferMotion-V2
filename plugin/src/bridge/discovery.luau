@@ -1,7 +1,6 @@
 --!nocheck
 --!nolint
 
-
 local DISCOVERY_REQUEST_TIMEOUT_SECS = 2
 
 local MAX_CONCURRENT_PROBES = 8
@@ -157,5 +156,3 @@ local function discoverServer(): (boolean, boolean, string?)
 	end
 	return false, false, reason
 end
-
-
